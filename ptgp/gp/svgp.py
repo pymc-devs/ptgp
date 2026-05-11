@@ -1,6 +1,7 @@
 import dataclasses
 
 import numpy as np
+import pytensor.assumptions as pa
 import pytensor.tensor as pt
 
 from ptgp.conditionals import base_conditional
@@ -98,11 +99,15 @@ def init_variational_params(M, q_mu_init=None, q_sqrt_init=None):
     Examples
     --------
     >>> vp = init_variational_params(M=8)
-    >>> svgp = SVGP(kernel=..., likelihood=..., inducing_variable=...,
-    ...             variational_params=vp)
+    >>> svgp = SVGP(kernel=..., likelihood=..., inducing_variable=..., variational_params=vp)
     >>> train_step, _, _ = compile_training_step(
-    ...     elbo, svgp, X, y, model=model,
-    ...     extra_vars=vp.extra_vars, extra_init=vp.extra_init,
+    ...     elbo,
+    ...     svgp,
+    ...     X,
+    ...     y,
+    ...     model=model,
+    ...     extra_vars=vp.extra_vars,
+    ...     extra_init=vp.extra_init,
     ... )
     """
     if q_mu_init is None:
@@ -110,9 +115,7 @@ def init_variational_params(M, q_mu_init=None, q_sqrt_init=None):
     else:
         q_mu_init = np.asarray(q_mu_init, dtype=np.float64)
         if q_mu_init.shape != (M,):
-            raise ValueError(
-                f"q_mu_init must have shape ({M},); got {q_mu_init.shape}."
-            )
+            raise ValueError(f"q_mu_init must have shape ({M},); got {q_mu_init.shape}.")
     if q_sqrt_init is None:
         q_sqrt_init = np.eye(M, dtype=np.float64)
     else:
@@ -121,7 +124,7 @@ def init_variational_params(M, q_mu_init=None, q_sqrt_init=None):
     n_lower = M * (M + 1) // 2
     q_mu = pt.vector("q_mu", shape=(M,), dtype="float64")
     q_sqrt_flat = pt.vector("q_sqrt_flat", shape=(n_lower,), dtype="float64")
-    q_sqrt = pt.assume(
+    q_sqrt = pa.assume(
         _softplus_lower_triangular(q_sqrt_flat, M),
         lower_triangular=True,
     )
@@ -235,8 +238,13 @@ class SVGP:
         Knn = self.kernel(X)
 
         fmean, fcov = base_conditional(
-            Kmn, Kmm, Knn, self.q_mu, self.q_sqrt,
-            white=self.whiten, full_cov=True,
+            Kmn,
+            Kmm,
+            Knn,
+            self.q_mu,
+            self.q_sqrt,
+            white=self.whiten,
+            full_cov=True,
         )
         fmean = fmean + self.mean(X)
         return fmean, fcov

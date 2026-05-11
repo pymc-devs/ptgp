@@ -1,5 +1,5 @@
 import numpy as np
-import pytensor.tensor as pt
+import pytensor.assumptions as pa
 
 
 class Kernel:
@@ -34,7 +34,7 @@ class Kernel:
         """K(X, Y); K(X, X) if Y is None, annotated symmetric and PSD."""
         if Y is None:
             K = self._eval(X, X)
-            return pt.assume(K, symmetric=True, positive_definite=True)
+            return pa.assume(K, symmetric=True, positive_definite=True)
         return self._eval(X, Y)
 
     def _eval(self, X, Y):

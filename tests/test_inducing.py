@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytensor
+import pytensor.assumptions as pa
 import pytensor.tensor as pt
 import pytest
 
@@ -202,7 +203,8 @@ class TestGreedyVariance:
         ip, _ = greedy_variance_init(X, M, kernel, rng=0)
         greedy_err = _nystrom_residual_trace(X, ip.Z, kernel)
         random_errs = [
-            _nystrom_residual_trace(X, random_subsample_init(X, M, rng=s)[0].Z, kernel) for s in range(10)
+            _nystrom_residual_trace(X, random_subsample_init(X, M, rng=s)[0].Z, kernel)
+            for s in range(10)
         ]
         assert greedy_err < np.mean(random_errs)
 
@@ -242,7 +244,7 @@ class TestIntegrationWithSVGP:
         ip, _ = greedy_variance_init(X, 5, kernel, rng=0)
         vp = VariationalParams(
             q_mu=pt.zeros(5),
-            q_sqrt=pt.assume(pt.eye(5), lower_triangular=True),
+            q_sqrt=pa.assume(pt.eye(5), lower_triangular=True),
         )
         svgp = SVGP(
             kernel=kernel,

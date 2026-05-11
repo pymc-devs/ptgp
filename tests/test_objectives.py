@@ -2,10 +2,11 @@
 
 import numpy as np
 import pytensor
+import pytensor.assumptions as pa
 import pytensor.tensor as pt
 import pytest
 
-from ptgp.gp import SVGP, VFE, Unapproximated, VariationalParams, init_variational_params
+from ptgp.gp import SVGP, VFE, Unapproximated, VariationalParams
 from ptgp.inducing import Points
 from ptgp.kernels import ExpQuad
 from ptgp.likelihoods import Gaussian
@@ -35,7 +36,9 @@ class TestMarginalLogLikelihood:
     def test_finite(self, regression_data):
         X, y = regression_data
         gp = Unapproximated(kernel=ExpQuad(input_dim=1, ls=1.0), mean=Zero(), sigma=0.1)
-        mll = _eval(marginal_log_likelihood(gp, pt.as_tensor_variable(X), pt.as_tensor_variable(y)).mll)
+        mll = _eval(
+            marginal_log_likelihood(gp, pt.as_tensor_variable(X), pt.as_tensor_variable(y)).mll
+        )
         assert np.isfinite(mll)
 
     def test_better_fit_higher_mll(self, regression_data):
@@ -58,7 +61,7 @@ class TestELBO:
     def _identity_vp(self, M):
         return VariationalParams(
             q_mu=pt.zeros(M),
-            q_sqrt=pt.assume(pt.eye(M), lower_triangular=True),
+            q_sqrt=pa.assume(pt.eye(M), lower_triangular=True),
         )
 
     def test_finite(self, regression_data, inducing_points):
@@ -112,7 +115,7 @@ class TestELBO:
         Luu = np.linalg.cholesky(Kuu + 1e-6 * np.eye(5))
         vp_u = VariationalParams(
             q_mu=pt.zeros(5),
-            q_sqrt=pt.assume(pt.as_tensor_variable(Luu), lower_triangular=True),
+            q_sqrt=pa.assume(pt.as_tensor_variable(Luu), lower_triangular=True),
         )
         svgp_u = SVGP(
             kernel=kernel,
@@ -158,7 +161,9 @@ class TestCollapsedELBO:
             sigma=0.1,
             inducing_variable=Points(pt.as_tensor_variable(inducing_points)),
         )
-        celbo = _eval(collapsed_elbo(vfe_model, pt.as_tensor_variable(X), pt.as_tensor_variable(y)).elbo)
+        celbo = _eval(
+            collapsed_elbo(vfe_model, pt.as_tensor_variable(X), pt.as_tensor_variable(y)).elbo
+        )
         assert np.isfinite(celbo)
 
     def test_collapsed_elbo_less_than_mll(self, regression_data, inducing_points):
@@ -178,6 +183,8 @@ class TestCollapsedELBO:
             sigma=sigma,
             inducing_variable=Points(pt.as_tensor_variable(inducing_points)),
         )
-        celbo = _eval(collapsed_elbo(vfe_model, pt.as_tensor_variable(X), pt.as_tensor_variable(y)).elbo)
+        celbo = _eval(
+            collapsed_elbo(vfe_model, pt.as_tensor_variable(X), pt.as_tensor_variable(y)).elbo
+        )
 
         assert celbo <= mll_val + 1e-6  # collapsed ELBO <= MLL
