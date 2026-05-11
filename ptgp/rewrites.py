@@ -4,6 +4,17 @@ Registered into PyTensor's global registries at import time. See REWRITES.md.
 """
 
 import pytensor.tensor as pt
+
+from pytensor.assumptions.core import (
+    AssumptionKey,
+    FactState,
+    register_assumption,
+)
+from pytensor.assumptions.diagonal import indexes_diagonal
+from pytensor.assumptions.positive_definite import POSITIVE_DEFINITE
+from pytensor.assumptions.specify import SpecifyAssumptions
+from pytensor.assumptions.triangular import LOWER_TRIANGULAR
+from pytensor.assumptions.utils import check_assumption, eye_is_identity, true_if
 from pytensor.compile.mode import optdb
 from pytensor.graph.basic import Constant
 from pytensor.graph.fg import FunctionGraph
@@ -15,25 +26,16 @@ from pytensor.graph.rewriting.basic import (
     node_rewriter,
 )
 from pytensor.scalar.basic import Composite, Mul, Pow, Sqr
-from pytensor.tensor.assumptions.core import (
-    AssumptionKey,
-    FactState,
-    register_assumption,
-)
-from pytensor.tensor.assumptions.diagonal import indexes_diagonal
-from pytensor.tensor.assumptions.positive_definite import POSITIVE_DEFINITE
-from pytensor.tensor.assumptions.specify import SpecifyAssumptions
-from pytensor.tensor.assumptions.triangular import LOWER_TRIANGULAR
-from pytensor.tensor.assumptions.utils import check_assumption, eye_is_identity, true_if
 from pytensor.tensor.basic import (
     Alloc,
     AllocDiag,
-    Eye,
     ExtractDiag,
+    Eye,
     NotScalarConstantError,
     as_tensor_variable,
     get_underlying_scalar_constant_value,
 )
+from pytensor.tensor.blas import Dot22
 from pytensor.tensor.blockwise import Blockwise
 from pytensor.tensor.elemwise import DimShuffle, Elemwise
 from pytensor.tensor.linalg.decomposition.cholesky import Cholesky, cholesky
@@ -41,13 +43,11 @@ from pytensor.tensor.linalg.inverse import MatrixInverse
 from pytensor.tensor.linalg.solvers.general import Solve
 from pytensor.tensor.linalg.solvers.psd import CholeskySolve, cho_solve
 from pytensor.tensor.linalg.solvers.triangular import solve_triangular
-from pytensor.tensor.blas import Dot22
 from pytensor.tensor.linalg.summary import Det, SLogDet
 from pytensor.tensor.math import Dot
 from pytensor.tensor.rewriting.basic import register_specialize
 from pytensor.tensor.rewriting.blockwise import blockwise_of
 from pytensor.tensor.subtensor import AdvancedIncSubtensor, IncSubtensor
-
 
 # ---------------------------------------------------------------------------
 # POSITIVE assumption: a (real) tensor whose every element is strictly > 0.
@@ -66,7 +66,7 @@ def _assume(
     orthogonal=False,
     positive=False,
 ):
-    """Drop-in replacement for ``pt.assume`` that also accepts ``positive=True``."""
+    """Drop-in replacement for ``pytensor.assumptions.assume`` that also accepts ``positive=True``."""
     x = as_tensor_variable(x)
     names = {
         name
@@ -83,15 +83,16 @@ def _assume(
     }
     if not names:
         return x
-    return SpecifyAssumptions(frozenset(names))(x)
+    return SpecifyAssumptions({name: True for name in names})(x)
 
 
 # Patch every public binding of ``assume`` so ``pt.assume(sigma, positive=True)``
 # works regardless of which module the caller imported it from.
 def _install_assume_patch():
+    import pytensor.assumptions as _assumptions_pkg
     import pytensor.tensor as _pt
-    import pytensor.tensor.assumptions as _assumptions_pkg
-    from pytensor.tensor.assumptions import specify as _specify_module
+
+    from pytensor.assumptions import specify as _specify_module
 
     for module in (_pt, _assumptions_pkg, _specify_module):
         module.assume = _assume
@@ -101,7 +102,7 @@ _install_assume_patch()
 
 
 @register_assumption(POSITIVE, Elemwise)
-def _elemwise_positive(op, feature, fgraph, node, input_states):
+def _elemwise_positive(key, op, feature, fgraph, node, input_states):
     """Propagate POSITIVE through a few elementwise ops.
 
     - ``Sqr(x)`` is positive iff ``x`` is positive (strict; rules out x == 0).
@@ -109,34 +110,34 @@ def _elemwise_positive(op, feature, fgraph, node, input_states):
     """
     scalar_op = op.scalar_op
     if isinstance(scalar_op, Sqr):
-        return true_if(bool(input_states[0]))
+        return true_if(input_states[0] is FactState.TRUE)
     if isinstance(scalar_op, Pow):
         # ``positive_base ** real_exponent`` is strictly positive for any real exponent.
-        return true_if(bool(input_states[0]))
+        return true_if(input_states[0] is FactState.TRUE)
     if isinstance(scalar_op, Mul):
-        return true_if(all(bool(s) for s in input_states))
+        return true_if(all(s is FactState.TRUE for s in input_states))
     return [FactState.UNKNOWN] * len(node.outputs)
 
 
 @register_assumption(POSITIVE, DimShuffle)
-def _dimshuffle_positive(op, feature, fgraph, node, input_states):
+def _dimshuffle_positive(key, op, feature, fgraph, node, input_states):
     """POSITIVE survives reshape/broadcast: every element of the input is also an element of the output."""
-    return true_if(bool(input_states[0]))
+    return true_if(input_states[0] is FactState.TRUE)
 
 
 @register_assumption(POSITIVE_DEFINITE, DimShuffle)
-def _dimshuffle_psd(op, feature, fgraph, node, input_states):
+def _dimshuffle_psd(key, op, feature, fgraph, node, input_states):
     """``A.T`` is PSD when ``A`` is PSD (PSD ⇒ symmetric)."""
     if op.is_matrix_transpose:
-        return true_if(bool(input_states[0]))
+        return true_if(input_states[0] is FactState.TRUE)
     return [FactState.UNKNOWN]
 
 
 @register_assumption(POSITIVE, Alloc)
-def _alloc_positive(op, feature, fgraph, node, input_states):
+def _alloc_positive(key, op, feature, fgraph, node, input_states):
     """``Alloc(c, *shape)`` is positive iff the fill value ``c`` is."""
     fill = node.inputs[0]
-    if bool(input_states[0]):
+    if input_states[0] is FactState.TRUE:
         return [FactState.TRUE]
     try:
         if get_underlying_scalar_constant_value(fill) > 0:
@@ -147,7 +148,7 @@ def _alloc_positive(op, feature, fgraph, node, input_states):
 
 
 @register_assumption(POSITIVE, ExtractDiag)
-def _extractdiag_positive(op, feature, fgraph, node, input_states):
+def _extractdiag_positive(key, op, feature, fgraph, node, input_states):
     """``diag(Eye(N))`` is the all-ones vector — strictly positive."""
     if op.offset != 0:
         return [FactState.UNKNOWN]
@@ -220,7 +221,7 @@ def _try_AAT_factor(fgraph, M, lower_only=False):
     If ``lower_only=True``, only return matches where ``A`` is annotated
     ``LOWER_TRIANGULAR`` — required by the slogdet/det/inverse fast paths.
     """
-    if not isinstance(_core_op_of(M), (Dot, Dot22)):
+    if not isinstance(_core_op_of(M), Dot | Dot22):
         return None
     a, b = M.owner.inputs
     if _matrix_transpose_of(b) is a:
@@ -235,7 +236,7 @@ def _try_AAT_factor(fgraph, M, lower_only=False):
 
 
 @register_assumption(POSITIVE_DEFINITE, Dot)
-def _dot_xt_M_x_psd(op, feature, fgraph, node, input_states):
+def _dot_xt_M_x_psd(key, op, feature, fgraph, node, input_states):
     """``X.T @ (M @ X)`` is PSD when ``M`` is PSD."""
     a, b = node.inputs
     X = _matrix_transpose_of(a)
@@ -248,7 +249,7 @@ def _dot_xt_M_x_psd(op, feature, fgraph, node, input_states):
 
 
 @register_assumption(POSITIVE_DEFINITE, Dot)
-def _dot_xt_solve_x_psd(op, feature, fgraph, node, input_states):
+def _dot_xt_solve_x_psd(key, op, feature, fgraph, node, input_states):
     """``X.T @ Solve(M, X)`` ≡ ``X.T @ M^{-1} @ X`` is PSD when ``M`` is PSD."""
     a, b = node.inputs
     X = _matrix_transpose_of(a)
@@ -261,7 +262,7 @@ def _dot_xt_solve_x_psd(op, feature, fgraph, node, input_states):
 
 
 @register_assumption(POSITIVE_DEFINITE, Dot)
-def _dot_xt_chosolve_x_psd(op, feature, fgraph, node, input_states):
+def _dot_xt_chosolve_x_psd(key, op, feature, fgraph, node, input_states):
     """``X.T @ CholeskySolve(L, X)`` ≡ ``X.T @ M^{-1} @ X`` (M = L @ L.T) is PSD."""
     a, b = node.inputs
     X = _matrix_transpose_of(a)
@@ -274,7 +275,7 @@ def _dot_xt_chosolve_x_psd(op, feature, fgraph, node, input_states):
 
 
 @register_assumption(POSITIVE_DEFINITE, AllocDiag)
-def _alloc_diag_psd_symbolic(op, feature, fgraph, node, input_states):
+def _alloc_diag_psd_symbolic(key, op, feature, fgraph, node, input_states):
     """``AllocDiag(positive_vector)`` → PSD (extends upstream rule beyond literal constants)."""
     if op.offset != 0:
         return [FactState.UNKNOWN]
@@ -286,7 +287,7 @@ def _alloc_diag_psd_symbolic(op, feature, fgraph, node, input_states):
 
 @register_assumption(POSITIVE_DEFINITE, AdvancedIncSubtensor)
 @register_assumption(POSITIVE_DEFINITE, IncSubtensor)
-def _set_subtensor_psd(op, feature, fgraph, node, input_states):
+def _set_subtensor_psd(key, op, feature, fgraph, node, input_states):
     """``set_subtensor(zeros, positive_values, diag, diag)`` → PSD diagonal matrix."""
     if not getattr(op, "set_instead_of_inc", False):
         return [FactState.UNKNOWN]
@@ -301,7 +302,7 @@ def _set_subtensor_psd(op, feature, fgraph, node, input_states):
 
 
 @register_assumption(POSITIVE_DEFINITE, Elemwise)
-def _mul_psd_with_symbolic_positive(op, feature, fgraph, node, input_states):
+def _mul_psd_with_symbolic_positive(key, op, feature, fgraph, node, input_states):
     """``c * A`` is PSD when ``c`` is a POSITIVE scalar (possibly symbolic) and ``A`` is PSD."""
     if not isinstance(op.scalar_op, Mul):
         return [FactState.UNKNOWN] * len(node.outputs)
@@ -467,9 +468,7 @@ def matrix_inverse_specialize(fgraph, node):
         if form == "AAT":
             inv_A = cho_solve((L, True), eye)
         else:  # ATA: inv(L.T @ L) = inv(L) @ inv(L.T)
-            inv_A = solve_triangular(
-                L, solve_triangular(L, eye, lower=True, trans="T"), lower=True
-            )
+            inv_A = solve_triangular(L, solve_triangular(L, eye, lower=True, trans="T"), lower=True)
     else:
         if not check_assumption(fgraph, A, POSITIVE_DEFINITE):
             return None
