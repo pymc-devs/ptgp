@@ -28,7 +28,3 @@ dependencies:
     - threadpoolctl
     - typing_extensions
     - pip
-    - pip:
-        - --no-deps
-        - git+https://github.com/jessegrabowski/pytensor@assumption-system
-        - git+https://github.com/pymc-devs/pymc@main
