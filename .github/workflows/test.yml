@@ -44,10 +44,12 @@ jobs:
           environment-name: ptgp-test
           init-shell: ${{ matrix.os == 'windows-latest' && 'cmd.exe' || 'bash' }}
           cache-environment: true
+          post-cleanup: none
       - name: Install ptgp
         run: |
           pip install -e .
           python --version
+          pip check
       - name: Run tests
         run: |
           python -m pytest --color=yes -vv --durations=50 tests/
