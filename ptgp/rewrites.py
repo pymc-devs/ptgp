@@ -61,10 +61,10 @@ def assume(
     diagonal=None,
     lower_triangular=None,
     upper_triangular=None,
-    symmetric=False,
-    positive_definite=False,
-    orthogonal=False,
-    positive=False,
+    symmetric=None,
+    positive_definite=None,
+    orthogonal=None,
+    positive=None,
 ):
     """Drop-in replacement for ``pytensor.assumptions.assume`` that also accepts ``positive=True``."""
     x = as_tensor_variable(x)
