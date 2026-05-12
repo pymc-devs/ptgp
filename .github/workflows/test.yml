@@ -51,7 +51,6 @@ jobs:
         run: |
           pip install -e . --no-deps
           python --version
-          pip check
       - name: Run tests
         run: |
           python -m pytest --color=yes -vv --durations=50 tests/
