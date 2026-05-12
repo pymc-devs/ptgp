@@ -3,6 +3,8 @@ from collections import namedtuple
 import numpy as np
 import pytensor.tensor as pt
 
+from ptgp import assume
+
 MLLTerms = namedtuple("MLLTerms", ["mll", "fit", "logdet"])
 ELBOTerms = namedtuple("ELBOTerms", ["elbo", "var_exp", "kl"])
 CollapsedELBOTerms = namedtuple(
@@ -108,38 +110,39 @@ def collapsed_elbo(vfe, X, y):
     Z = vfe.inducing_variable.Z
     M = Z.shape[0]
 
-    mu       = vfe.mean(X)
+    mu = vfe.mean(X)
     Kff_diag = vfe.kernel.diag(X)
-    Kuf      = vfe.kernel(Z, X)   # M × N
-    Kuu      = vfe.kernel(Z)      # M × M
-    Kuu = pt.assume(
+    Kuf = vfe.kernel(Z, X)  # M × N
+    Kuu = vfe.kernel(Z)  # M × M
+    Kuu = assume(
         Kuu + _DEFAULT_JITTER * pt.eye(M, dtype=Kuu.dtype),
-        positive_definite=True, symmetric=True,
+        positive_definite=True,
+        symmetric=True,
     )
 
-    Lu     = pt.linalg.cholesky(Kuu)
-    A      = pt.linalg.solve_triangular(Lu, Kuf, lower=True)   # M × N
-    Q_diag = pt.sum(A * A, axis=0)                              # N
+    Lu = pt.linalg.cholesky(Kuu)
+    A = pt.linalg.solve_triangular(Lu, Kuf, lower=True)  # M × N
+    Q_diag = pt.sum(A * A, axis=0)  # N
 
     sigma_raw = vfe.likelihood.sigma
     sigma_vec = sigma_raw(X) if callable(sigma_raw) else sigma_raw * pt.ones(N, dtype=Kuu.dtype)
-    sigma2_vec = sigma_vec ** 2
+    sigma2_vec = sigma_vec**2
 
-    diff  = y - mu
-    w     = diff / sigma_vec                          # noise-whitened residuals, N
-    B     = A / sigma_vec[None, :]                    # M × N, column-rescaled
-    inner = pt.eye(M, dtype=Kuu.dtype) + B @ B.T     # eigenvalues ≥ 1
-    inner = pt.assume(inner, positive_definite=True, symmetric=True)
+    diff = y - mu
+    w = diff / sigma_vec  # noise-whitened residuals, N
+    B = A / sigma_vec[None, :]  # M × N, column-rescaled
+    inner = pt.eye(M, dtype=Kuu.dtype) + B @ B.T  # eigenvalues ≥ 1
+    inner = assume(inner, positive_definite=True, symmetric=True)
 
-    Bw   = B @ w
+    Bw = B @ w
     quad = pt.dot(w, w) - Bw @ pt.linalg.inv(inner) @ Bw
 
     _, logdet_inner = pt.linalg.slogdet(inner)
     logdet_cov = pt.sum(pt.log(sigma2_vec)) + logdet_inner
 
-    fit              = -0.5 * (quad + logdet_cov + N * pt.log(2.0 * pt.pi))
+    fit = -0.5 * (quad + logdet_cov + N * pt.log(2.0 * pt.pi))
     nystrom_residual = pt.sum(Kff_diag - Q_diag)
-    trace_penalty    = -0.5 * pt.dot(Kff_diag - Q_diag, 1.0 / sigma2_vec)
+    trace_penalty = -0.5 * pt.dot(Kff_diag - Q_diag, 1.0 / sigma2_vec)
     return CollapsedELBOTerms(
         elbo=fit + trace_penalty,
         fit=fit,
@@ -194,28 +197,29 @@ def fitc_log_marginal_likelihood(vfe, X, y):
 
     mu = vfe.mean(X)
     Kff_diag = vfe.kernel.diag(X)
-    Kuf = vfe.kernel(Z, X)            # M × N
-    Kuu = vfe.kernel(Z)               # M × M
-    Kuu = pt.assume(
+    Kuf = vfe.kernel(Z, X)  # M × N
+    Kuu = vfe.kernel(Z)  # M × M
+    Kuu = assume(
         Kuu + _DEFAULT_JITTER * pt.eye(M, dtype=Kuu.dtype),
-        positive_definite=True, symmetric=True,
+        positive_definite=True,
+        symmetric=True,
     )
 
     Lu = pt.linalg.cholesky(Kuu)
-    A = pt.linalg.solve_triangular(Lu, Kuf, lower=True)   # M × N
-    Q_diag = pt.sum(A * A, axis=0)                        # N
+    A = pt.linalg.solve_triangular(Lu, Kuf, lower=True)  # M × N
+    Q_diag = pt.sum(A * A, axis=0)  # N
 
     # Per-point FITC variance: true marginal minus Nystrom approx plus noise.
     # Guaranteed ≥ σ² > 0 because Kff_ii ≥ Q_ii (Kff - Q is PSD).
-    nu = Kff_diag - Q_diag + sigma2                       # N
+    nu = Kff_diag - Q_diag + sigma2  # N
 
     diff = y - mu
-    beta = diff / nu                                       # N
-    alpha = A @ beta                                       # M
+    beta = diff / nu  # N
+    alpha = A @ beta  # M
 
     # B has eigenvalues ≥ 1 (A diag(ν⁻¹) A^T is PSD), so it is well-conditioned.
     B = pt.eye(M, dtype=Kuu.dtype) + (A / nu[None, :]) @ A.T
-    B = pt.assume(B, positive_definite=True, symmetric=True)
+    B = assume(B, positive_definite=True, symmetric=True)
 
     quad = pt.sum(diff * beta) - alpha @ pt.linalg.inv(B) @ alpha
 
@@ -264,15 +268,18 @@ def dpp_regularizer(vfe, jitter=_DEFAULT_JITTER):
     Tune the strength via a variable::
 
         strength = 1.0
+
+
         def objective(vfe, X, y):
             return collapsed_elbo(vfe, X, y).elbo + strength * dpp_regularizer(vfe)
     """
     Z = vfe.inducing_variable.Z
     M = Z.shape[0]
     Kuu = vfe.kernel(Z)
-    Kuu = pt.assume(
+    Kuu = assume(
         Kuu + jitter * pt.eye(M, dtype=Kuu.dtype),
-        positive_definite=True, symmetric=True,
+        positive_definite=True,
+        symmetric=True,
     )
     _, logdet_Kuu = pt.linalg.slogdet(Kuu)
     return logdet_Kuu
@@ -280,8 +287,7 @@ def dpp_regularizer(vfe, jitter=_DEFAULT_JITTER):
 
 VFEDiagnostics = namedtuple(
     "VFEDiagnostics",
-    ["elbo", "fit", "trace_penalty", "nystrom_residual",
-     "sigma", "fit_per_n", "excess_fit_per_n"],
+    ["elbo", "fit", "trace_penalty", "nystrom_residual", "sigma", "fit_per_n", "excess_fit_per_n"],
 )
 
 
@@ -309,7 +315,7 @@ def vfe_diagnostics(vfe, X, y):
     N = X.shape[0]
     sigma_raw = vfe.likelihood.sigma
     sigma_vec = sigma_raw(X) if callable(sigma_raw) else sigma_raw * pt.ones(N)
-    sigma_mean = pt.mean(sigma_vec)   # scalar; mean of a constant vector = that constant
+    sigma_mean = pt.mean(sigma_vec)  # scalar; mean of a constant vector = that constant
     fit_per_n = terms.fit / N
     excess_fit_per_n = fit_per_n + 0.5 * pt.log(2.0 * np.pi * sigma_mean**2)
     return VFEDiagnostics(

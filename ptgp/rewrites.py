@@ -56,7 +56,7 @@ from pytensor.tensor.subtensor import AdvancedIncSubtensor, IncSubtensor
 POSITIVE = AssumptionKey("positive")
 
 
-def _assume(
+def assume(
     x,
     diagonal=None,
     lower_triangular=None,
@@ -84,21 +84,6 @@ def _assume(
     if not names:
         return x
     return SpecifyAssumptions({name: True for name in names})(x)
-
-
-# Patch every public binding of ``assume`` so ``pt.assume(sigma, positive=True)``
-# works regardless of which module the caller imported it from.
-def _install_assume_patch():
-    import pytensor.assumptions as _assumptions_pkg
-    import pytensor.tensor as _pt
-
-    from pytensor.assumptions import specify as _specify_module
-
-    for module in (_pt, _assumptions_pkg, _specify_module):
-        module.assume = _assume
-
-
-_install_assume_patch()
 
 
 @register_assumption(POSITIVE, Elemwise)

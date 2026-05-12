@@ -2,10 +2,10 @@
 
 import numpy as np
 import pytensor
-import pytensor.assumptions as pa
 import pytensor.tensor as pt
 import pytest
 
+from ptgp import assume
 from ptgp.inducing import (
     KernelHealthDiagnostics,
     KMeansDiagnostics,
@@ -244,7 +244,7 @@ class TestIntegrationWithSVGP:
         ip, _ = greedy_variance_init(X, 5, kernel, rng=0)
         vp = VariationalParams(
             q_mu=pt.zeros(5),
-            q_sqrt=pa.assume(pt.eye(5), lower_triangular=True),
+            q_sqrt=assume(pt.eye(5), lower_triangular=True),
         )
         svgp = SVGP(
             kernel=kernel,

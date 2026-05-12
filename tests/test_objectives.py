@@ -2,10 +2,10 @@
 
 import numpy as np
 import pytensor
-import pytensor.assumptions as pa
 import pytensor.tensor as pt
 import pytest
 
+from ptgp import assume
 from ptgp.gp import SVGP, VFE, Unapproximated, VariationalParams
 from ptgp.inducing import Points
 from ptgp.kernels import ExpQuad
@@ -61,7 +61,7 @@ class TestELBO:
     def _identity_vp(self, M):
         return VariationalParams(
             q_mu=pt.zeros(M),
-            q_sqrt=pa.assume(pt.eye(M), lower_triangular=True),
+            q_sqrt=assume(pt.eye(M), lower_triangular=True),
         )
 
     def test_finite(self, regression_data, inducing_points):
@@ -115,7 +115,7 @@ class TestELBO:
         Luu = np.linalg.cholesky(Kuu + 1e-6 * np.eye(5))
         vp_u = VariationalParams(
             q_mu=pt.zeros(5),
-            q_sqrt=pa.assume(pt.as_tensor_variable(Luu), lower_triangular=True),
+            q_sqrt=assume(pt.as_tensor_variable(Luu), lower_triangular=True),
         )
         svgp_u = SVGP(
             kernel=kernel,

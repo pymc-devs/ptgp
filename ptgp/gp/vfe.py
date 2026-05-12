@@ -31,7 +31,7 @@ class VFE:
         self.inducing_variable = inducing_variable
 
         if callable(sigma):
-            self.sigma_fn = self.likelihood.sigma   # already wrapped with pt.assume
+            self.sigma_fn = self.likelihood.sigma  # already wrapped with ptgp.assume
         else:
             _s = self.likelihood.sigma
             self.sigma_fn = lambda X: pt.ones(X.shape[0]) * _s
@@ -56,23 +56,23 @@ class VFE:
         var : tensor, shape (N*,)
         """
         Z = self.inducing_variable.Z
-        sigma2_vec = self.sigma_fn(X_train) ** 2   # (N,); constant if scalar sigma
+        sigma2_vec = self.sigma_fn(X_train) ** 2  # (N,); constant if scalar sigma
 
-        Kuu      = self.kernel(Z)              # (M, M)
-        Kuf      = self.kernel(Z, X_train)     # (M, N)
-        Kus      = self.kernel(Z, X_new)       # (M, N*)
+        Kuu = self.kernel(Z)  # (M, M)
+        Kuf = self.kernel(Z, X_train)  # (M, N)
+        Kus = self.kernel(Z, X_new)  # (M, N*)
         Kss_diag = self.kernel.diag(X_new)
 
-        diff       = y_train - self.mean(X_train)
-        Kuf_laminv = Kuf / sigma2_vec[None, :]     # each column ÷ σᵢ²
-        Sigma      = Kuu + Kuf_laminv @ Kuf.T
-        Sigma_inv  = pt.linalg.inv(Sigma)
-        alpha      = Sigma_inv @ Kuf_laminv @ diff
+        diff = y_train - self.mean(X_train)
+        Kuf_laminv = Kuf / sigma2_vec[None, :]  # each column ÷ σᵢ²
+        Sigma = Kuu + Kuf_laminv @ Kuf.T
+        Sigma_inv = pt.linalg.inv(Sigma)
+        alpha = Sigma_inv @ Kuf_laminv @ diff
 
-        fmean   = self.mean(X_new) + Kus.T @ alpha
+        fmean = self.mean(X_new) + Kus.T @ alpha
         Kuu_inv = pt.linalg.inv(Kuu)
-        fvar    = Kss_diag - pt.sum(Kus * ((Kuu_inv - Sigma_inv) @ Kus), axis=0)
+        fvar = Kss_diag - pt.sum(Kus * ((Kuu_inv - Sigma_inv) @ Kus), axis=0)
 
         if incl_lik:
-            return fmean, fvar + self.sigma_fn(X_new) ** 2   # per-point noise at X_new
+            return fmean, fvar + self.sigma_fn(X_new) ** 2  # per-point noise at X_new
         return fmean, fvar

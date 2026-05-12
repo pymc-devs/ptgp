@@ -1,6 +1,6 @@
-import pytensor.assumptions as pa
 import pytensor.tensor as pt
 
+from ptgp import assume
 from ptgp.likelihoods.base import Likelihood
 
 LOG2PI = pt.log(2.0 * pt.pi)
@@ -19,9 +19,9 @@ class Gaussian(Likelihood):
 
     def __init__(self, sigma):
         if callable(sigma):
-            self.sigma = lambda X: pa.assume(sigma(X), positive=True)
+            self.sigma = lambda X: assume(sigma(X), positive=True)
         else:
-            self.sigma = pa.assume(sigma, positive=True)
+            self.sigma = assume(sigma, positive=True)
 
     def _log_prob(self, f, y):
         return -0.5 * (LOG2PI + pt.log(self.sigma**2) + (y - f) ** 2 / self.sigma**2)

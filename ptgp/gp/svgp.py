@@ -1,9 +1,9 @@
 import dataclasses
 
 import numpy as np
-import pytensor.assumptions as pa
 import pytensor.tensor as pt
 
+from ptgp import assume
 from ptgp.conditionals import base_conditional
 from ptgp.kl import gauss_kl
 from ptgp.mean import Zero
@@ -124,7 +124,7 @@ def init_variational_params(M, q_mu_init=None, q_sqrt_init=None):
     n_lower = M * (M + 1) // 2
     q_mu = pt.vector("q_mu", shape=(M,), dtype="float64")
     q_sqrt_flat = pt.vector("q_sqrt_flat", shape=(n_lower,), dtype="float64")
-    q_sqrt = pa.assume(
+    q_sqrt = assume(
         _softplus_lower_triangular(q_sqrt_flat, M),
         lower_triangular=True,
     )
