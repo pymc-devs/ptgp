@@ -1,6 +1,6 @@
 import numpy as np
 
-from ptgp import assume
+from ptgp.rewrites import assume
 
 
 class Kernel:

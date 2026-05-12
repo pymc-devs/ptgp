@@ -836,7 +836,7 @@ def _find_sigma_rv(gp_model, model):
     """Locate the PyMC RV for likelihood sigma in gp_model.
 
     Handles two cases: sigma is a bare PyMC RV, or wrapped as
-    ``pytensor.assumptions.assume(sigma_rv, positive=True)``.
+    ``ptgp.assume(sigma_rv, positive=True)``.
     """
     sig = gp_model.likelihood.sigma
     if sig in model.rvs_to_values:
@@ -845,7 +845,7 @@ def _find_sigma_rv(gp_model, model):
         return sig.owner.inputs[0]
     raise ValueError(
         "Cannot identify sigma's PyMC RV from gp_model.likelihood.sigma. "
-        "Ensure sigma is a PyMC RV or pytensor.assumptions.assume of one registered in the model."
+        "Ensure sigma is a PyMC RV or ptgp.assume of one registered in the model."
     )
 
 

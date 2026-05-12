@@ -3,7 +3,7 @@ from collections import namedtuple
 import numpy as np
 import pytensor.tensor as pt
 
-from ptgp import assume
+from ptgp.rewrites import assume
 
 MLLTerms = namedtuple("MLLTerms", ["mll", "fit", "logdet"])
 ELBOTerms = namedtuple("ELBOTerms", ["elbo", "var_exp", "kl"])

@@ -1,7 +1,7 @@
 import pytensor.tensor as pt
 
-from ptgp import assume
 from ptgp.likelihoods.base import Likelihood
+from ptgp.rewrites import assume
 
 LOG2PI = pt.log(2.0 * pt.pi)
 

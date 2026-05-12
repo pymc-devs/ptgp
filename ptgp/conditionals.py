@@ -1,6 +1,6 @@
 import pytensor.tensor as pt
 
-from ptgp import assume
+from ptgp.rewrites import assume
 
 # Diagonal jitter added to Kmm before Cholesky / inversion, to keep it PSD
 # under floating-point noise. Matches GPflow / GPJax / PyMC defaults of 1e-6.

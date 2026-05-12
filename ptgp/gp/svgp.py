@@ -3,10 +3,10 @@ import dataclasses
 import numpy as np
 import pytensor.tensor as pt
 
-from ptgp import assume
 from ptgp.conditionals import base_conditional
 from ptgp.kl import gauss_kl
 from ptgp.mean import Zero
+from ptgp.rewrites import assume
 
 
 def _softplus_lower_triangular(flat, M):
