@@ -20,13 +20,16 @@ concurrency:
 
 jobs:
   test:
+    name: ${{ matrix.name }}
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
+          - name: ubuntu / py3.13
+            os: ubuntu-latest
             python-version: "3.13"
             shell: bash -leo pipefail {0}
-          - os: windows-latest
+          - name: windows / py3.12
+            os: windows-latest
             python-version: "3.12"
             shell: cmd /C call {0}
       fail-fast: false
