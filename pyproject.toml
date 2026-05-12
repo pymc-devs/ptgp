@@ -79,6 +79,7 @@ ignore = [
   "E501",
   "RUF001", # String contains ambiguous character (such as Greek letters)
   "RUF002", # Docstring contains ambiguous character (such as Greek letters)
+  "RUF003", # Comment contains ambiguous character (such as Greek letters)
   "RUF012", # Mutable class attributes should be annotated with `typing.ClassVar`
   "D100",
   "D101",
