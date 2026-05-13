@@ -16,7 +16,6 @@ from pytensor.graph.replace import graph_replace
 from ptgp.objectives import vfe_diagnostics
 from ptgp.optim.optimizers import adam
 
-
 _PHASE_LABEL_RE = re.compile(r"^phase(?P<n>\d+)(?P<sub>[ab]?)(?:_c(?P<c>\d+))?$")
 
 
@@ -159,8 +158,9 @@ def _make_initial_point(model, init="prior_median", rng=None, n_median_samples=5
     return ip
 
 
-def _make_shared_params(model, extra_vars=None, extra_init=None,
-                        init="prior_median", init_rng=None, frozen_vars=None):
+def _make_shared_params(
+    model, extra_vars=None, extra_init=None, init="prior_median", init_rng=None, frozen_vars=None
+):
     """Create shared variables for a PyMC model's value vars and any extras.
 
     If ``frozen_vars`` is given, value vars appearing as keys are initialized
@@ -316,8 +316,10 @@ def compile_training_step(
             for i in range(n_iters):
                 loss = train_step(X, y)
         except KeyboardInterrupt:
-            print(f"[train] interrupted at iter {i}; shared vars hold the "
-                  f"most recently committed values.")
+            print(
+                f"[train] interrupted at iter {i}; shared vars hold the "
+                f"most recently committed values."
+            )
     """
     model = pm.modelcontext(model)
     if optimizer_fn is None:
@@ -499,7 +501,11 @@ def compile_scipy_objective(
     model = pm.modelcontext(model)
 
     shared_params, shared_extras, _ = _make_shared_params(
-        model, extra_vars, extra_init, init=init, init_rng=init_rng,
+        model,
+        extra_vars,
+        extra_init,
+        init=init,
+        init_rng=init_rng,
         frozen_vars=frozen_vars,
     )
 
@@ -522,7 +528,7 @@ def compile_scipy_objective(
     pieces = []
     offset = 0
     for _, shape, size in layout:
-        pieces.append(theta_var[offset:offset + size].reshape(shape))
+        pieces.append(theta_var[offset : offset + size].reshape(shape))
         offset += size
 
     loss = -objective_fn(gp_model, X_var, y_var)
@@ -555,7 +561,7 @@ def compile_scipy_objective(
         theta = np.asarray(theta, dtype=np.float64)
         offset = 0
         for sv, shape, size in layout:
-            sv.set_value(theta[offset:offset + size].reshape(shape))
+            sv.set_value(theta[offset : offset + size].reshape(shape))
             offset += size
 
     return fun, theta0, unpack_to_shared, shared_params, shared_extras
@@ -615,13 +621,24 @@ def compile_scipy_diagnostics(
 
         fun, theta0, unpack, shared_params, _ = compile_scipy_objective(
             lambda gp, X, y: collapsed_elbo(gp, X, y).elbo,
-            vfe, X_var, y_var, model=model,
+            vfe,
+            X_var,
+            y_var,
+            model=model,
         )
         diag_fn = compile_scipy_diagnostics(
-            collapsed_elbo, vfe, X_var, y_var, model=model,
+            collapsed_elbo,
+            vfe,
+            X_var,
+            y_var,
+            model=model,
         )
         result, history = tracked_minimize(
-            fun, theta0, args=(X, y), diag_fn=diag_fn, print_every=10,
+            fun,
+            theta0,
+            args=(X, y),
+            diag_fn=diag_fn,
+            print_every=10,
         )
         unpack(result.x)
         # history[i] is CollapsedELBOTerms(elbo=..., fit=...,
@@ -630,7 +647,11 @@ def compile_scipy_diagnostics(
     model = pm.modelcontext(model)
 
     shared_params, shared_extras, _ = _make_shared_params(
-        model, extra_vars, extra_init, init=init, init_rng=init_rng,
+        model,
+        extra_vars,
+        extra_init,
+        init=init,
+        init_rng=init_rng,
         frozen_vars=frozen_vars,
     )
 
@@ -649,7 +670,7 @@ def compile_scipy_diagnostics(
     pieces = []
     offset = 0
     for _, shape, size in layout:
-        pieces.append(theta_var[offset:offset + size].reshape(shape))
+        pieces.append(theta_var[offset : offset + size].reshape(shape))
         offset += size
 
     terms = diagnostic_fn(gp_model, X_var, y_var)
@@ -669,9 +690,7 @@ def compile_scipy_diagnostics(
         for var, value in frozen_vars.items():
             replace_map[var] = pt.as_tensor_variable(np.asarray(value, dtype=np.float64))
 
-    terms_replaced = [
-        graph_replace(t, replace_map, strict=False) for t in terms_rvs_replaced
-    ]
+    terms_replaced = [graph_replace(t, replace_map, strict=False) for t in terms_rvs_replaced]
 
     fn = pytensor.function(
         [theta_var, X_var, y_var],
@@ -738,20 +757,33 @@ def tracked_minimize(fun, theta0, args, diag_fn=None, print_every=None, **scipy_
 
         fun, theta0, unpack, shared_params, _ = compile_scipy_objective(
             lambda gp, X, y: collapsed_elbo(gp, X, y).elbo,
-            vfe, X_var, y_var, model=model,
+            vfe,
+            X_var,
+            y_var,
+            model=model,
         )
         diag_fn = compile_scipy_diagnostics(
-            collapsed_elbo, vfe, X_var, y_var, model=model,
+            collapsed_elbo,
+            vfe,
+            X_var,
+            y_var,
+            model=model,
         )
         result, history = tracked_minimize(
-            fun, theta0, args=(X, y), diag_fn=diag_fn, print_every=10,
+            fun,
+            theta0,
+            args=(X, y),
+            diag_fn=diag_fn,
+            print_every=10,
         )
         unpack(result.x)
 
         import matplotlib.pyplot as plt
+
         plt.plot([-t.elbo for t in history], label="−ELBO")
         plt.plot([t.trace_penalty for t in history], label="trace penalty")
-        plt.legend(); plt.show()
+        plt.legend()
+        plt.show()
     """
     import scipy.optimize
 
@@ -766,17 +798,13 @@ def tracked_minimize(fun, theta0, args, diag_fn=None, print_every=None, **scipy_
             terms = diag_fn(theta, *args)
             history.append(terms)
             if print_every is not None and iteration[0] % print_every == 0:
-                field_strs = "  ".join(
-                    f"{f}={getattr(terms, f):.6g}" for f in type(terms)._fields
-                )
+                field_strs = "  ".join(f"{f}={getattr(terms, f):.6g}" for f in type(terms)._fields)
                 print(f"iter {iteration[0]:5d}  {field_strs}")
 
     scipy_kwargs.setdefault("method", "L-BFGS-B")
     scipy_kwargs.setdefault("jac", True)
     try:
-        result = scipy.optimize.minimize(
-            fun, theta0, args=args, callback=callback, **scipy_kwargs
-        )
+        result = scipy.optimize.minimize(fun, theta0, args=args, callback=callback, **scipy_kwargs)
     except KeyboardInterrupt:
         print(
             f"\n[tracked_minimize] interrupted at iter {iteration[0]}; "
@@ -788,13 +816,10 @@ def tracked_minimize(fun, theta0, args, diag_fn=None, print_every=None, **scipy_
             f_val, g_val = float(_f), np.asarray(_g)
         except KeyboardInterrupt:
             print(
-                "[tracked_minimize] second interrupt during cleanup; "
-                "fun/jac left as nan/zero."
+                "[tracked_minimize] second interrupt during cleanup; " "fun/jac left as nan/zero."
             )
         except Exception as e:
-            print(
-                f"[tracked_minimize] could not re-evaluate fun at last theta: {e!r}"
-            )
+            print(f"[tracked_minimize] could not re-evaluate fun at last theta: {e!r}")
         result = scipy.optimize.OptimizeResult(
             x=last_theta[0],
             fun=f_val,
@@ -811,7 +836,7 @@ def _find_sigma_rv(gp_model, model):
     """Locate the PyMC RV for likelihood sigma in gp_model.
 
     Handles two cases: sigma is a bare PyMC RV, or wrapped as
-    ``pt.assume(sigma_rv, positive=True)``.
+    ``ptgp.assume(sigma_rv, positive=True)``.
     """
     sig = gp_model.likelihood.sigma
     if sig in model.rvs_to_values:
@@ -820,12 +845,11 @@ def _find_sigma_rv(gp_model, model):
         return sig.owner.inputs[0]
     raise ValueError(
         "Cannot identify sigma's PyMC RV from gp_model.likelihood.sigma. "
-        "Ensure sigma is a PyMC RV or pt.assume of one registered in the model."
+        "Ensure sigma is a PyMC RV or ptgp.assume of one registered in the model."
     )
 
 
-def _staged_build_theta0(model, shared_params, hyper_state,
-                         shared_extras=None, Z_state=None):
+def _staged_build_theta0(model, shared_params, hyper_state, shared_extras=None, Z_state=None):
     """Inject state into shared vars and return the corresponding theta0 vector.
 
     Writes ``hyper_state`` into ``shared_params`` and optionally ``Z_state``
@@ -975,20 +999,29 @@ def minimize_staged_vfe(
     phase_labels = []
 
     diag_fn_full = compile_scipy_diagnostics(
-        vfe_diagnostics, gp_model, X_var, y_var, model=model,
-        extra_vars=[Z_var], extra_init=[Z_init_arr],
+        vfe_diagnostics,
+        gp_model,
+        X_var,
+        y_var,
+        model=model,
+        extra_vars=[Z_var],
+        extra_init=[Z_init_arr],
         compile_kwargs=compile_kwargs,
     )
 
     def _make_diag_2b(z_snapshot):
         z_flat = z_snapshot.ravel()
+
         def diag(theta_model, X_, y_):
             return diag_fn_full(np.concatenate([theta_model, z_flat]), X_, y_)
+
         return diag
 
     def _run(fun, theta0, unpack, label, maxiter, phase_diag_fn):
         result, ph = tracked_minimize(
-            fun, theta0, args=(X, y),
+            fun,
+            theta0,
+            args=(X, y),
             diag_fn=phase_diag_fn,
             print_every=print_every,
             options={"maxiter": maxiter, **(scipy_options or {})},
@@ -1003,7 +1036,11 @@ def minimize_staged_vfe(
     if phase1_freeze_Z:
         p1_frozen[Z_var] = Z_init_arr
     fun1, theta0_1, unpack1, sp1, se1 = compile_scipy_objective(
-        objective_fn, gp_model, X_var, y_var, model=model,
+        objective_fn,
+        gp_model,
+        X_var,
+        y_var,
+        model=model,
         extra_vars=None if phase1_freeze_Z else [Z_var],
         extra_init=None if phase1_freeze_Z else [Z_init_arr],
         frozen_vars=p1_frozen,
@@ -1028,27 +1065,45 @@ def minimize_staged_vfe(
     for cycle in range(phase2_cycles):
         # 2a: freeze all hyperparams; train Z
         fun2a, _, unpack2a, sp2a, se2a = compile_scipy_objective(
-            objective_fn, gp_model, X_var, y_var, model=model,
-            extra_vars=[Z_var], extra_init=[Z_state],
+            objective_fn,
+            gp_model,
+            X_var,
+            y_var,
+            model=model,
+            extra_vars=[Z_var],
+            extra_init=[Z_state],
             frozen_vars={vv: hyper_state[vv] for vv in model.continuous_value_vars},
             compile_kwargs=compile_kwargs,
         )
         theta0_2a = _staged_build_theta0(model, sp2a, hyper_state, se2a, Z_state)
-        result = _run(fun2a, theta0_2a, unpack2a, f"phase2a_c{cycle + 1}", phase2_maxiter_Z, diag_fn_full)
+        result = _run(
+            fun2a, theta0_2a, unpack2a, f"phase2a_c{cycle + 1}", phase2_maxiter_Z, diag_fn_full
+        )
         if result.status == 99:
             return result, history, phase_labels, unpack2a, sp2a, se2a
         Z_state = se2a[0].get_value().copy()
 
         # 2b: freeze Z; train all hyperparams (sigma now free)
         fun2b, _, unpack2b, sp2b, _ = compile_scipy_objective(
-            objective_fn, gp_model, X_var, y_var, model=model,
-            extra_vars=None, extra_init=None,
+            objective_fn,
+            gp_model,
+            X_var,
+            y_var,
+            model=model,
+            extra_vars=None,
+            extra_init=None,
             frozen_vars={Z_var: Z_state},
             compile_kwargs=compile_kwargs,
         )
         theta0_2b = _staged_build_theta0(model, sp2b, hyper_state)
-        result = _run(fun2b, theta0_2b, unpack2b, f"phase2b_c{cycle + 1}", phase2_maxiter_hyper,
-                      _make_diag_2b(Z_state))
+        result = _run(
+            fun2b,
+            theta0_2b,
+            unpack2b,
+            f"phase2b_c{cycle + 1}",
+            phase2_maxiter_hyper,
+            _make_diag_2b(Z_state),
+        )
         if result.status == 99:
             # Phase 2b doesn't have its own Z extra; reuse phase 2a's Z shared var.
             return result, history, phase_labels, unpack2b, sp2b, [se2a[0]]
@@ -1056,8 +1111,13 @@ def minimize_staged_vfe(
 
     # Phase 3: joint fine-tuning
     fun3, _, unpack3, sp3, se3 = compile_scipy_objective(
-        objective_fn, gp_model, X_var, y_var, model=model,
-        extra_vars=[Z_var], extra_init=[Z_state],
+        objective_fn,
+        gp_model,
+        X_var,
+        y_var,
+        model=model,
+        extra_vars=[Z_var],
+        extra_init=[Z_state],
         compile_kwargs=compile_kwargs,
     )
     theta0_3 = _staged_build_theta0(model, sp3, hyper_state, se3, Z_state)

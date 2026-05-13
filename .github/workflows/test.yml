@@ -20,13 +20,16 @@ concurrency:
 
 jobs:
   test:
+    name: ${{ matrix.name }}
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
+          - name: ubuntu / py3.13
+            os: ubuntu-latest
             python-version: "3.13"
             shell: bash -leo pipefail {0}
-          - os: windows-latest
+          - name: windows / py3.12
+            os: windows-latest
             python-version: "3.12"
             shell: cmd /C call {0}
       fail-fast: false
@@ -44,9 +47,12 @@ jobs:
           environment-name: ptgp-test
           init-shell: ${{ matrix.os == 'windows-latest' && 'cmd.exe' || 'bash' }}
           cache-environment: true
+          post-cleanup: none
+      - name: Install pre-release pytensor and pymc
+        run: pip install --no-deps git+https://github.com/jessegrabowski/pytensor@assumption-system git+https://github.com/pymc-devs/pymc@main
       - name: Install ptgp
         run: |
-          pip install -e .
+          pip install -e . --no-deps
           python --version
       - name: Run tests
         run: |

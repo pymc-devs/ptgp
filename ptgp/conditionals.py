@@ -1,5 +1,6 @@
 import pytensor.tensor as pt
 
+from ptgp.rewrites import assume
 
 # Diagonal jitter added to Kmm before Cholesky / inversion, to keep it PSD
 # under floating-point noise. Matches GPflow / GPJax / PyMC defaults of 1e-6.
@@ -47,9 +48,10 @@ def base_conditional(Kmn, Kmm, Knn, f, q_sqrt=None, white=False, full_cov=False)
     # Re-annotate after the addition: PyTensor canonicalizes ``Kmm + c·I`` into a
     # ``set_subtensor`` on the diagonal, which our PSD-inference rules don't see
     # through. The mathematical identity (PSD + c·I PSD ⇒ PSD) is sound.
-    Kmm = pt.assume(
+    Kmm = assume(
         Kmm + _DEFAULT_JITTER * pt.eye(Kmm.shape[-1], dtype=Kmm.dtype),
-        positive_definite=True, symmetric=True,
+        positive_definite=True,
+        symmetric=True,
     )
     Kmm_inv = pt.linalg.inv(Kmm)
 

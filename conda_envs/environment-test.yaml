@@ -3,13 +3,26 @@ channels:
     - conda-forge
 dependencies:
     - python>=3.12
-    - jax
-    - jaxlib
-    - optax
     - numpy
     - pytest
-    - gpjax
+    - scipy
+    - filelock
+    - numba
+    - setuptools
+    - cons
+    - etuples
+    - logical-unification
+    - minikanren
+    - arviz
+    - cachetools
+    - cloudpickle
+    - pandas
+    - rich
+    - threadpoolctl
+    - typing_extensions
     - pip
     - pip:
-        - git+https://github.com/jessegrabowski/pytensor@assumption-system
-        - git+https://github.com/pymc-devs/pymc@v6
+        - jax
+        - jaxlib
+        - optax
+        - gpjax

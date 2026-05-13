@@ -90,17 +90,18 @@ class TestExpQuad:
     def test_symmetric_annotation(self, X_1d):
         X_pt = pt.as_tensor_variable(X_1d)
         K = ExpQuad(input_dim=1, ls=1.0)(X_pt)
-        from pytensor.tensor.assumptions.specify import SpecifyAssumptions
+        from pytensor.assumptions.core import FactState
+        from pytensor.assumptions.specify import SpecifyAssumptions
 
         assert isinstance(K.owner.op, SpecifyAssumptions)
-        assert "symmetric" in K.owner.op.assumptions
-        assert "positive_definite" in K.owner.op.assumptions
+        assert ("symmetric", FactState.TRUE) in K.owner.op.assumptions
+        assert ("positive_definite", FactState.TRUE) in K.owner.op.assumptions
 
     def test_cross_no_annotation(self, X_1d, X_1d_other):
         X_pt = pt.as_tensor_variable(X_1d)
         Y_pt = pt.as_tensor_variable(X_1d_other)
         K = ExpQuad(input_dim=1, ls=1.0)(X_pt, Y_pt)
-        from pytensor.tensor.assumptions.specify import SpecifyAssumptions
+        from pytensor.assumptions.specify import SpecifyAssumptions
 
         assert not isinstance(K.owner.op, SpecifyAssumptions)
 
@@ -177,9 +178,7 @@ class TestARD:
         """Scalar ls=0.5 and vector ls=[0.5, 0.5] should produce identical kernels."""
         k_iso = Matern52(input_dim=2, ls=0.5)
         k_ard = Matern52(input_dim=2, ls=np.array([0.5, 0.5]))
-        np.testing.assert_allclose(
-            _ptgp_eval(k_iso, X_2d), _ptgp_eval(k_ard, X_2d), atol=1e-14
-        )
+        np.testing.assert_allclose(_ptgp_eval(k_iso, X_2d), _ptgp_eval(k_ard, X_2d), atol=1e-14)
 
     def test_ard_vs_pymc(self, X_2d):
         """ARD Matern52 with per-dim lengthscales matches PyMC's implementation."""

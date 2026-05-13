@@ -30,12 +30,13 @@ import collections
 import numpy as np
 import pytensor
 import pytensor.tensor as pt
+
+from pytensor.assumptions.core import ASSUMPTION_INFER_REGISTRY
 from pytensor.graph.traversal import ancestors
-from pytensor.tensor.assumptions.core import ASSUMPTION_INFER_REGISTRY
 from pytensor.tensor.blockwise import Blockwise
 
-import ptgp
 import ptgp.rewrites as R
+
 from ptgp.gp import SVGP, VFE, Unapproximated, init_variational_params
 from ptgp.gp.svgp import _matrix_to_softplus_flat_init
 from ptgp.inducing import Points
@@ -44,11 +45,16 @@ from ptgp.likelihoods import Gaussian
 from ptgp.mean import Zero
 from ptgp.objectives import collapsed_elbo, elbo, marginal_log_likelihood
 
-
 CUBIC_OPS = {"Cholesky", "MatrixInverse", "Solve", "LUFactor", "SLogDet", "Det"}
 TRACKED_OPS = [
-    "Cholesky", "CholeskySolve", "SolveTriangular", "Solve",
-    "MatrixInverse", "LUFactor", "SLogDet", "Det",
+    "Cholesky",
+    "CholeskySolve",
+    "SolveTriangular",
+    "Solve",
+    "MatrixInverse",
+    "LUFactor",
+    "SLogDet",
+    "Det",
 ]
 
 
@@ -75,9 +81,9 @@ def _cubic_total(counts):
 # ---- ptgp on/off control ----
 
 _ptgp_funcs = {
-    getattr(R, n) for n in dir(R)
-    if callable(getattr(R, n))
-    and getattr(getattr(R, n), "__module__", None) == "ptgp.rewrites"
+    getattr(R, n)
+    for n in dir(R)
+    if callable(getattr(R, n)) and getattr(getattr(R, n), "__module__", None) == "ptgp.rewrites"
 }
 _snap = {k: list(v) for k, v in ASSUMPTION_INFER_REGISTRY.items()}
 
@@ -105,6 +111,7 @@ def _mode_ptgp_off():
 
 
 # ---- Model graph builders ----
+
 
 def build_unapproximated():
     X = pt.dmatrix("X")
@@ -149,9 +156,7 @@ def build_svgp(M=8):
         variational_params=vp,
     )
     loss = -elbo(svgp, X, y)
-    g_sigma, g_ls, g_Z, g_q_mu, g_q_sqrt = pt.grad(
-        loss, [sigma, ls, Z, vp.q_mu, vp.extra_vars[1]]
-    )
+    g_sigma, g_ls, g_Z, g_q_mu, g_q_sqrt = pt.grad(loss, [sigma, ls, Z, vp.q_mu, vp.extra_vars[1]])
     return (
         [X, y, sigma, ls, Z, vp.q_mu, vp.extra_vars[1]],
         [loss, g_sigma, g_ls, g_Z, g_q_mu, g_q_sqrt],
@@ -159,6 +164,7 @@ def build_svgp(M=8):
 
 
 # ---- Per-model analysis ----
+
 
 def _sample_inputs(name, N=20, M=8):
     rng = np.random.default_rng(0)
@@ -168,7 +174,8 @@ def _sample_inputs(name, N=20, M=8):
         return [
             rng.standard_normal((N, 1)),
             rng.standard_normal(N),
-            0.5, 1.2,
+            0.5,
+            1.2,
             rng.standard_normal((M, 1)),
         ]
     # SVGP
@@ -176,7 +183,8 @@ def _sample_inputs(name, N=20, M=8):
     return [
         rng.standard_normal((N, 1)),
         rng.standard_normal(N),
-        0.5, 1.2,
+        0.5,
+        1.2,
         rng.standard_normal((M, 1)),
         np.zeros(M),
         flat_init,
@@ -201,7 +209,7 @@ def analyze(name, builder):
     finally:
         _restore_ptgp()
 
-    header = ["state"] + TRACKED_OPS + ["cubic", "Dot", "Sum", "ExtractDiag"]
+    header = ["state", *TRACKED_OPS, "cubic", "Dot", "Sum", "ExtractDiag"]
     rows = [
         ("pre-rewrite", pre),
         ("ptgp on", on),
