@@ -1,8 +1,11 @@
 """Diagnostic utilities for PTGP models."""
 
 import json
+import logging
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 def get_initial_params(model, init="prior_median", rng=None, n_median_samples=500):
@@ -108,12 +111,12 @@ def check_init(
     max_g = float(np.abs(grad).max()) if grad.size > 0 else 0.0
 
     status = "OK" if loss_ok else "NaN/Inf -- BAD"
-    print(f"loss at init : {loss:.6g}  ({status})")
-    print(f"grad finite  : {grad_ok}  (max |g| = {max_g:.3g})")
+    logger.info(f"loss at init : {loss:.6g}  ({status})")
+    logger.info(f"grad finite  : {grad_ok}  (max |g| = {max_g:.3g})")
 
     if loss_ok and grad_ok and max_g > _LARGE_GRAD_WARN:
-        print(
-            f"WARNING: max |grad| = {max_g:.2e} exceeds {_LARGE_GRAD_WARN:.0e}"
+        logger.warning(
+            f"max |grad| = {max_g:.2e} exceeds {_LARGE_GRAD_WARN:.0e}"
             " -- may indicate a pathological initialization"
         )
 
@@ -121,10 +124,10 @@ def check_init(
 
     k = min(top_k, grad.size)
     top_idx = np.argsort(np.abs(grad))[::-1][:k]
-    print(f"\ntop-{k} |grad| components:")
+    logger.info(f"\ntop-{k} |grad| components:")
     for i in top_idx:
         label = labels[i] if labels is not None else str(i)
-        print(f"  [{i:6d}]  {np.abs(grad[i]):.4g}   {label}")
+        logger.info(f"  [{i:6d}]  {np.abs(grad[i]):.4g}   {label}")
 
     return loss_ok and grad_ok
 
@@ -369,7 +372,7 @@ def load_fit(path, shared_params, shared_extras=(), strict=True):
     for name, key in param_keys.items():
         sv = shared_params_by_name.get(name)
         if sv is None:
-            print(f"[load_fit] skipping param {name!r}: not in shared_params")
+            logger.warning(f"[load_fit] skipping param {name!r}: not in shared_params")
             continue
         val = blob[key]
         cur = sv.get_value()
@@ -382,7 +385,7 @@ def load_fit(path, shared_params, shared_extras=(), strict=True):
     for name, key in extra_keys.items():
         sv = shared_extras_by_name.get(name)
         if sv is None:
-            print(f"[load_fit] skipping extra {name!r}: not in shared_extras")
+            logger.warning(f"[load_fit] skipping extra {name!r}: not in shared_extras")
             continue
         val = blob[key]
         cur = sv.get_value()

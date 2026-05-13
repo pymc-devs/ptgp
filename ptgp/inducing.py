@@ -4,6 +4,7 @@ The `*_init` functions return an :class:`Points` wrapping a plain
 numpy array, so ``ip.Z`` is directly usable for plotting.
 """
 
+import logging
 from dataclasses import dataclass
 from typing import Optional
 
@@ -11,6 +12,8 @@ import numpy as np
 import pytensor
 import pytensor.tensor as pt
 import scipy.cluster.vq
+
+logger = logging.getLogger(__name__)
 
 from ptgp.kernels.base import Kernel
 
@@ -379,7 +382,7 @@ def kmeans_init(X, M, rng=None, tol=1e-6, kernel=None, jitter=1e-6,
 
     n_removed = int((~keep).sum())
     if n_removed > 0:
-        print(
+        logger.info(
             f"kmeans_init: removed {n_removed} near-duplicate centroid(s) "
             f"(tol={tol:.0e}); returning {keep.sum()} of {M} requested."
         )
