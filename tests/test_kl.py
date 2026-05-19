@@ -4,7 +4,7 @@ import numpy as np
 import pytensor
 import pytensor.tensor as pt
 
-from ptgp.kl import gauss_kl
+from ptgp.kl import gauss_kl, gauss_kl_structured
 
 
 def _eval(*tensors):
@@ -50,3 +50,35 @@ class TestGaussKL:
             )
         )
         assert kl > 0.0
+
+
+def test_gauss_kl_structured_matches_dense():
+    rng = np.random.default_rng(0)
+    M = 8
+    A = rng.standard_normal((M, M))
+    K_dense = A @ A.T + np.eye(M)
+    q_mu = rng.standard_normal(M)
+    q_sqrt = np.linalg.cholesky(np.eye(M) * 0.5)
+
+    K_t = pt.as_tensor(K_dense)
+    expected = gauss_kl(pt.as_tensor(q_mu), pt.as_tensor(q_sqrt), K=K_t).eval()
+
+    def K_solve(rhs):
+        return pt.linalg.solve(K_t, rhs)
+
+    _, K_logdet = pt.linalg.slogdet(K_t)
+    actual = gauss_kl_structured(pt.as_tensor(q_mu), pt.as_tensor(q_sqrt), K_solve, K_logdet).eval()
+
+    np.testing.assert_allclose(actual, expected, atol=1e-8)
+
+
+def test_gauss_kl_structured_returns_scalar():
+    M = 5
+    q_mu = pt.as_tensor(np.zeros(M))
+    q_sqrt = pt.as_tensor(np.eye(M))
+    K = pt.as_tensor(np.eye(M))
+    out = gauss_kl_structured(
+        q_mu, q_sqrt, lambda x: pt.linalg.solve(K, x), pt.linalg.slogdet(K)[1]
+    ).eval()
+    assert out.ndim == 0
+    assert np.isfinite(out)

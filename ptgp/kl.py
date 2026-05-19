@@ -41,3 +41,19 @@ def gauss_kl(q_mu, q_sqrt, K=None):
         sign_q, logdet_q = pt.linalg.slogdet(q_cov)
         sign_K, logdet_K = pt.linalg.slogdet(K)
         return 0.5 * (trace + mahal - M - logdet_q + logdet_K)
+
+
+def gauss_kl_structured(q_mu, q_sqrt, K_solve, K_logdet):
+    """Unwhitened KL with structured prior.
+
+    K_solve(rhs) returns K^{-1} @ rhs for rhs of shape (M, K).
+    K_logdet is a scalar tensor with log|K|.
+    Vector q_mu is promoted internally; caller must pass an (M,) tensor.
+    """
+    M = q_mu.shape[0]
+    Kinv_qsqrt = K_solve(q_sqrt)
+    trace = pt.sum(Kinv_qsqrt * q_sqrt)
+    Kinv_qmu = K_solve(q_mu[:, None])[:, 0]
+    mahal = q_mu @ Kinv_qmu
+    _, logdet_q = pt.linalg.slogdet(q_sqrt @ q_sqrt.T)
+    return 0.5 * (trace + mahal - M - logdet_q + K_logdet)

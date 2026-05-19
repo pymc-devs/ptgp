@@ -3,8 +3,8 @@ import dataclasses
 import numpy as np
 import pytensor.tensor as pt
 
-from ptgp.conditionals import base_conditional
-from ptgp.kl import gauss_kl
+from ptgp.conditionals import conditional_unwhitened, conditional_whitened
+from ptgp.kl import gauss_kl, gauss_kl_structured
 from ptgp.mean import Zero
 from ptgp.rewrites import assume
 
@@ -149,7 +149,7 @@ class SVGP:
     likelihood : Likelihood
         Observation likelihood.
     inducing_variable : InducingVariables
-        Inducing point locations.
+        Inducing point locations (or structured inducing variables).
     variational_params : VariationalParams
         Symbolic variational parameters and their backing trainable
         leaves. Construct via :func:`init_variational_params` (recommended)
@@ -203,14 +203,15 @@ class SVGP:
         mean : tensor, shape (N,)
         var : tensor, shape (N,)
         """
-        Z = self.inducing_variable.Z
-        Kmm = self.kernel(Z)
-        Kmn = self.kernel(Z, X)
-        Knn_diag = self.kernel.diag(X)
-
-        fmean, fvar = base_conditional(
-            Kmn, Kmm, Knn_diag, self.q_mu, self.q_sqrt, white=self.whiten
-        )
+        ind, kernel = self.inducing_variable, self.kernel
+        Kmn = ind.K_uf(kernel, X)
+        Knn_diag = kernel.diag(X)
+        if self.whiten:
+            A_w = ind.Kuu_sqrt_solve(kernel, Kmn)
+            fmean, fvar = conditional_whitened(A_w, Knn_diag, self.q_mu, self.q_sqrt)
+        else:
+            A = ind.Kuu_solve(kernel, Kmn)
+            fmean, fvar = conditional_unwhitened(A, Kmn, Knn_diag, self.q_mu, self.q_sqrt)
         fmean = fmean + self.mean(X)
         if incl_lik:
             return self.likelihood.predict_mean_and_var(fmean, fvar)
@@ -232,20 +233,15 @@ class SVGP:
         mean : tensor, shape (N,)
         cov : tensor, shape (N, N)
         """
-        Z = self.inducing_variable.Z
-        Kmm = self.kernel(Z)
-        Kmn = self.kernel(Z, X)
-        Knn = self.kernel(X)
-
-        fmean, fcov = base_conditional(
-            Kmn,
-            Kmm,
-            Knn,
-            self.q_mu,
-            self.q_sqrt,
-            white=self.whiten,
-            full_cov=True,
-        )
+        ind, kernel = self.inducing_variable, self.kernel
+        Kmn = ind.K_uf(kernel, X)
+        Knn = kernel(X)
+        if self.whiten:
+            A_w = ind.Kuu_sqrt_solve(kernel, Kmn)
+            fmean, fcov = conditional_whitened(A_w, Knn, self.q_mu, self.q_sqrt, full_cov=True)
+        else:
+            A = ind.Kuu_solve(kernel, Kmn)
+            fmean, fcov = conditional_unwhitened(A, Kmn, Knn, self.q_mu, self.q_sqrt, full_cov=True)
         fmean = fmean + self.mean(X)
         return fmean, fcov
 
@@ -278,6 +274,10 @@ class SVGP:
         """KL divergence KL[q(u) || p(u)]."""
         if self.whiten:
             return gauss_kl(self.q_mu, self.q_sqrt, K=None)
-        else:
-            Kuu = self.kernel(self.inducing_variable.Z)
-            return gauss_kl(self.q_mu, self.q_sqrt, K=Kuu)
+        ind, kernel = self.inducing_variable, self.kernel
+        return gauss_kl_structured(
+            self.q_mu,
+            self.q_sqrt,
+            K_solve=lambda rhs: ind.Kuu_solve(kernel, rhs),
+            K_logdet=ind.Kuu_logdet(kernel),
+        )

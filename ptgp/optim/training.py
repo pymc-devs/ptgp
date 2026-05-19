@@ -352,8 +352,7 @@ def compile_training_step(
             for var in group:
                 if var not in sym_to_shared:
                     raise ValueError(
-                        f"param_groups[{name!r}] contains unknown variable "
-                        f"{var.name or repr(var)}"
+                        f"param_groups[{name!r}] contains unknown variable {var.name or repr(var)}"
                     )
                 resolved.append(sym_to_shared[var])
             resolved_groups[name] = resolved
@@ -381,6 +380,9 @@ def compile_training_step(
         updates={**updates, **extra_updates},
         **compile_kwargs,
     )
+    from ptgp.inducing_fourier import _maybe_wrap_with_domain_check
+
+    train_step = _maybe_wrap_with_domain_check(train_step, gp_model, input_index=0)
     return train_step, shared_params, shared_extras
 
 
@@ -555,6 +557,9 @@ def compile_scipy_objective(
         [loss_replaced, flat_grad],
         **(compile_kwargs or {}),
     )
+    from ptgp.inducing_fourier import _maybe_wrap_with_domain_check
+
+    fun = _maybe_wrap_with_domain_check(fun, gp_model, input_index=1)
 
     def unpack_to_shared(theta):
         """Write ``theta`` into the captured shared vars for prediction."""
@@ -815,9 +820,7 @@ def tracked_minimize(fun, theta0, args, diag_fn=None, print_every=None, **scipy_
             _f, _g = fun(last_theta[0], *args)
             f_val, g_val = float(_f), np.asarray(_g)
         except KeyboardInterrupt:
-            print(
-                "[tracked_minimize] second interrupt during cleanup; " "fun/jac left as nan/zero."
-            )
+            print("[tracked_minimize] second interrupt during cleanup; fun/jac left as nan/zero.")
         except Exception as e:
             print(f"[tracked_minimize] could not re-evaluate fun at last theta: {e!r}")
         result = scipy.optimize.OptimizeResult(
@@ -1215,4 +1218,7 @@ def compile_predict(
         shared_extras,
     )
 
-    return pytensor.function([X_new_var], [mean_s, var_s], **(compile_kwargs or {}))
+    predict_fn = pytensor.function([X_new_var], [mean_s, var_s], **(compile_kwargs or {}))
+    from ptgp.inducing_fourier import _maybe_wrap_with_domain_check
+
+    return _maybe_wrap_with_domain_check(predict_fn, gp_model, input_index=0)

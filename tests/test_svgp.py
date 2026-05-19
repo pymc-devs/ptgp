@@ -7,8 +7,10 @@ expectation) with a non-Gaussian likelihood end-to-end.
 """
 
 import jax
+
 jax.config.update("jax_enable_x64", True)
 
+import gpjax as gpx
 import jax.numpy as jnp
 import numpy as np
 import pymc as pm
@@ -16,8 +18,6 @@ import pytensor
 import pytensor.tensor as pt
 
 from scipy.special import erf
-
-import gpjax as gpx
 
 import ptgp as pg
 
@@ -300,3 +300,38 @@ class TestSVGPPoissonElboMatchesGPJax:
         e_gpjax = self._gpjax_elbo(X, y, Z, q_mu_val, q_sqrt_val, ls_val, eta_val)
 
         np.testing.assert_allclose(e_ptgp, e_gpjax, atol=ATOL)
+
+
+class TestSVGPPointsUnwhitenedRegression:
+    """Pin SVGP+Points (unwhitened, Gaussian) ELBO/predict/KL against a saved
+    baseline. Catches numeric drift in the structured-inducing refactor — the
+    Points path should remain bit-stable through the conditional-helper split."""
+
+    def test_numeric_regression(self):
+        import pickle
+
+        from ptgp.gp.svgp import SVGP
+        from ptgp.inducing import Points
+        from ptgp.kernels.stationary import Matern32
+        from ptgp.likelihoods.gaussian import Gaussian
+        from ptgp.objectives import elbo as elbo_fn
+
+        with open("tests/_fixtures/svgp_points_unwhitened_baseline.pkl", "rb") as f:
+            ref = pickle.load(f)
+        k = 1.0 * Matern32(input_dim=1, ls=0.2)
+        svgp = SVGP(
+            kernel=k,
+            likelihood=Gaussian(sigma=0.1),
+            inducing_variable=Points(ref["Z"]),
+            whiten=False,
+        )
+        elbo_val = elbo_fn(
+            svgp, pt.as_tensor(ref["X"]), pt.as_tensor(ref["y"]), n_data=len(ref["X"])
+        ).eval()
+        fmean, fvar = [t.eval() for t in svgp.predict_marginal(pt.as_tensor(ref["X"]))]
+        kl = svgp.prior_kl().eval()
+
+        np.testing.assert_allclose(elbo_val, ref["elbo"], atol=1e-10)
+        np.testing.assert_allclose(fmean, ref["fmean"], atol=1e-10)
+        np.testing.assert_allclose(fvar, ref["fvar"], atol=1e-10)
+        np.testing.assert_allclose(kl, ref["kl"], atol=1e-10)

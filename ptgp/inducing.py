@@ -5,7 +5,6 @@ numpy array, so ``ip.Z`` is directly usable for plotting.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 import pytensor
@@ -18,13 +17,32 @@ from ptgp.kernels.base import Kernel
 class InducingVariables:
     """Base class for inducing variables.
 
-    Enables dispatch to different implementations for inter-domain,
-    multiscale, or structured inducing points.
+    Subclasses must implement ``num_inducing``, ``K_uu(kernel)``, and
+    ``K_uf(kernel, X)``. The default ``Kuu_solve`` / ``Kuu_sqrt_solve`` /
+    ``Kuu_logdet`` methods materialise ``K_uu`` and call dense linalg;
+    structured subclasses override them with cheaper variants.
     """
 
     @property
     def num_inducing(self):
         raise NotImplementedError
+
+    def K_uu(self, kernel):
+        raise NotImplementedError
+
+    def K_uf(self, kernel, X):
+        raise NotImplementedError
+
+    def Kuu_solve(self, kernel, rhs):
+        return pt.linalg.solve(self.K_uu(kernel), rhs)
+
+    def Kuu_sqrt_solve(self, kernel, rhs):
+        L = pt.linalg.cholesky(self.K_uu(kernel))
+        return pt.linalg.solve(L, rhs)
+
+    def Kuu_logdet(self, kernel):
+        _, ld = pt.linalg.slogdet(self.K_uu(kernel))
+        return ld
 
 
 class Points(InducingVariables):
@@ -42,6 +60,12 @@ class Points(InducingVariables):
     @property
     def num_inducing(self):
         return self.Z.shape[0]
+
+    def K_uu(self, kernel):
+        return kernel(self.Z)
+
+    def K_uf(self, kernel, X):
+        return kernel(self.Z, X)
 
 
 @dataclass
@@ -73,6 +97,7 @@ class KernelHealthDiagnostics:
     kuu_eig_threshold : float
         Threshold used to count small eigenvalues.
     """
+
     d_final: np.ndarray
     total_variance: float
     nystrom_residual: float
@@ -84,14 +109,16 @@ class KernelHealthDiagnostics:
 
     def __repr__(self):
         pct = 100.0 * (1.0 - self.nystrom_residual / self.total_variance)
-        return "\n".join([
-            f"variance explained: {pct:.1f}%",
-            f"nystrom_residual  : {self.nystrom_residual:.4g}",
-            f"min eigenvalue    : {self.kuu_min_eigenvalue:.3g}",
-            f"max eigenvalue    : {self.kuu_max_eigenvalue:.3g}",
-            f"condition number  : {self.kuu_condition_number:.3g}",
-            f"eigs < {self.kuu_eig_threshold:.0e}     : {self.kuu_n_small_eigenvalues}",
-        ])
+        return "\n".join(
+            [
+                f"variance explained: {pct:.1f}%",
+                f"nystrom_residual  : {self.nystrom_residual:.4g}",
+                f"min eigenvalue    : {self.kuu_min_eigenvalue:.3g}",
+                f"max eigenvalue    : {self.kuu_max_eigenvalue:.3g}",
+                f"condition number  : {self.kuu_condition_number:.3g}",
+                f"eigs < {self.kuu_eig_threshold:.0e}     : {self.kuu_n_small_eigenvalues}",
+            ]
+        )
 
 
 @dataclass
@@ -121,13 +148,14 @@ class RandomSubsampleDiagnostics:
         Populated only when a ``kernel`` was passed to
         :func:`random_subsample_init`. ``None`` otherwise.
     """
+
     M_requested: int
     M_returned: int
     N_candidates: int
     n_unique: int
     pairwise_min_distance: float
     pairwise_mean_distance: float
-    kernel_health: Optional[KernelHealthDiagnostics] = None
+    kernel_health: KernelHealthDiagnostics | None = None
 
     def __repr__(self):
         density = 100.0 * self.M_returned / self.N_candidates
@@ -178,6 +206,7 @@ class KMeansDiagnostics:
         Populated only when a ``kernel`` was passed to
         :func:`kmeans_init`. ``None`` otherwise.
     """
+
     M_requested: int
     M_returned: int
     n_removed_duplicates: int
@@ -185,7 +214,7 @@ class KMeansDiagnostics:
     inertia: float
     pairwise_min_distance: float
     pairwise_mean_distance: float
-    kernel_health: Optional[KernelHealthDiagnostics] = None
+    kernel_health: KernelHealthDiagnostics | None = None
 
     def __repr__(self):
         lines = [
@@ -219,8 +248,7 @@ def _pairwise_distance_stats(Z):
     return float(d[iu].min()), float(d[iu].mean())
 
 
-def _compute_kernel_health(kernel, X, Z, jitter=1e-6, eig_threshold=1e-4,
-                           compile_kwargs=None):
+def _compute_kernel_health(kernel, X, Z, jitter=1e-6, eig_threshold=1e-4, compile_kwargs=None):
     """Compute :class:`KernelHealthDiagnostics` for an arbitrary (kernel, X, Z).
 
     Used by :func:`compute_inducing_diagnostics` and the optional
@@ -256,8 +284,9 @@ def _compute_kernel_health(kernel, X, Z, jitter=1e-6, eig_threshold=1e-4,
     )
 
 
-def random_subsample_init(X, M, rng=None, kernel=None, jitter=1e-6,
-                          eig_threshold=1e-4, compile_kwargs=None):
+def random_subsample_init(
+    X, M, rng=None, kernel=None, jitter=1e-6, eig_threshold=1e-4, compile_kwargs=None
+):
     """Select ``M`` inducing points uniformly at random from ``X``.
 
     Parameters
@@ -299,10 +328,11 @@ def random_subsample_init(X, M, rng=None, kernel=None, jitter=1e-6,
     Z = X[idx]
     pmin, pmean = _pairwise_distance_stats(Z)
     kernel_health = (
-        _compute_kernel_health(kernel, X, Z, jitter=jitter,
-                               eig_threshold=eig_threshold,
-                               compile_kwargs=compile_kwargs)
-        if kernel is not None else None
+        _compute_kernel_health(
+            kernel, X, Z, jitter=jitter, eig_threshold=eig_threshold, compile_kwargs=compile_kwargs
+        )
+        if kernel is not None
+        else None
     )
     diag = RandomSubsampleDiagnostics(
         M_requested=int(M),
@@ -316,8 +346,9 @@ def random_subsample_init(X, M, rng=None, kernel=None, jitter=1e-6,
     return Points(Z), diag
 
 
-def kmeans_init(X, M, rng=None, tol=1e-6, kernel=None, jitter=1e-6,
-                eig_threshold=1e-4, compile_kwargs=None):
+def kmeans_init(
+    X, M, rng=None, tol=1e-6, kernel=None, jitter=1e-6, eig_threshold=1e-4, compile_kwargs=None
+):
     """k-means++ centroids of ``X`` as inducing points.
 
     Uses :func:`scipy.cluster.vq.kmeans2` with ``minit="++"``.  After
@@ -387,10 +418,11 @@ def kmeans_init(X, M, rng=None, tol=1e-6, kernel=None, jitter=1e-6,
     Z = centroids[keep]
     pmin, pmean = _pairwise_distance_stats(Z)
     kernel_health = (
-        _compute_kernel_health(kernel, X, Z, jitter=jitter,
-                               eig_threshold=eig_threshold,
-                               compile_kwargs=compile_kwargs)
-        if kernel is not None else None
+        _compute_kernel_health(
+            kernel, X, Z, jitter=jitter, eig_threshold=eig_threshold, compile_kwargs=compile_kwargs
+        )
+        if kernel is not None
+        else None
     )
     diag = KMeansDiagnostics(
         M_requested=int(M),
@@ -437,6 +469,7 @@ class GreedyVarianceDiagnostics:
     kuu_eig_threshold : float
         Threshold used to count small eigenvalues (default 1e-4).
     """
+
     trace_curve: np.ndarray
     d_final: np.ndarray
     total_variance: float
@@ -460,8 +493,9 @@ class GreedyVarianceDiagnostics:
         return "\n".join(lines)
 
 
-def greedy_variance_init(X, M, kernel, threshold=0.0, jitter=1e-12, rng=None,
-                         eig_threshold=1e-4, compile_kwargs=None):
+def greedy_variance_init(
+    X, M, kernel, threshold=0.0, jitter=1e-12, rng=None, eig_threshold=1e-4, compile_kwargs=None
+):
     """Greedy conditional-variance (pivoted-Cholesky) selection.
 
     Implements the "ConditionalVariance" initialization of Burt et al. (2020),
@@ -612,8 +646,9 @@ def _compute_kuu_eig_stats(Kuu, eig_threshold=1e-4):
     }
 
 
-def compute_inducing_diagnostics(kernel, X, Z, jitter=1e-6, eig_threshold=1e-4,
-                                 compile_kwargs=None):
+def compute_inducing_diagnostics(
+    kernel, X, Z, jitter=1e-6, eig_threshold=1e-4, compile_kwargs=None
+):
     """Evaluate inducing-point health at a *given* (kernel, X, Z).
 
     Computes the same kernel-derived metrics that
@@ -651,7 +686,9 @@ def compute_inducing_diagnostics(kernel, X, Z, jitter=1e-6, eig_threshold=1e-4,
         summary.
     """
     return _compute_kernel_health(
-        kernel, X, Z,
+        kernel,
+        X,
+        Z,
         jitter=jitter,
         eig_threshold=eig_threshold,
         compile_kwargs=compile_kwargs,

@@ -46,6 +46,12 @@ class Kernel:
         """Diagonal of K(X, X) — subclasses implement."""
         raise NotImplementedError
 
+    def diag(self, X):
+        """Diagonal of K(X, X). Default fallback: pt.diag(self(X))."""
+        import pytensor.tensor as pt
+
+        return pt.diag(self(X))
+
     def __add__(self, other):
         """Return a SumKernel combining self and other."""
         from ptgp.kernels.combination import SumKernel

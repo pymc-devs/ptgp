@@ -6,12 +6,13 @@ from ptgp import (
     mean,
     objectives,
     optim,
+    rewrites,  # noqa: F401  (registers PyTensor rewrites at import)
     utils,
 )
-from ptgp.rewrites import assume  # also registers PyTensor rewrites at import
+from ptgp.inducing_fourier import FourierFeatures1D
 
 __all__ = [
-    "assume",
+    "FourierFeatures1D",
     "gp",
     "inducing",
     "kernels",
