@@ -3,7 +3,7 @@ from collections import namedtuple
 import numpy as np
 import pytensor.tensor as pt
 
-from ptgp.rewrites import assume
+import pytensor.assumptions as pta
 
 MLLTerms = namedtuple("MLLTerms", ["mll", "fit", "logdet"])
 ELBOTerms = namedtuple("ELBOTerms", ["elbo", "var_exp", "kl"])
@@ -114,7 +114,7 @@ def collapsed_elbo(vfe, X, y):
     Kff_diag = vfe.kernel.diag(X)
     Kuf = vfe.kernel(Z, X)  # M × N
     Kuu = vfe.kernel(Z)  # M × M
-    Kuu = assume(
+    Kuu = pta.assume(
         Kuu + _DEFAULT_JITTER * pt.eye(M, dtype=Kuu.dtype),
         positive_definite=True,
         symmetric=True,
@@ -132,7 +132,7 @@ def collapsed_elbo(vfe, X, y):
     w = diff / sigma_vec  # noise-whitened residuals, N
     B = A / sigma_vec[None, :]  # M × N, column-rescaled
     inner = pt.eye(M, dtype=Kuu.dtype) + B @ B.T  # eigenvalues ≥ 1
-    inner = assume(inner, positive_definite=True, symmetric=True)
+    inner = pta.assume(inner, positive_definite=True, symmetric=True)
 
     Bw = B @ w
     quad = pt.dot(w, w) - Bw @ pt.linalg.inv(inner) @ Bw
@@ -199,7 +199,7 @@ def fitc_log_marginal_likelihood(vfe, X, y):
     Kff_diag = vfe.kernel.diag(X)
     Kuf = vfe.kernel(Z, X)  # M × N
     Kuu = vfe.kernel(Z)  # M × M
-    Kuu = assume(
+    Kuu = pta.assume(
         Kuu + _DEFAULT_JITTER * pt.eye(M, dtype=Kuu.dtype),
         positive_definite=True,
         symmetric=True,
@@ -219,7 +219,7 @@ def fitc_log_marginal_likelihood(vfe, X, y):
 
     # B has eigenvalues ≥ 1 (A diag(ν⁻¹) A^T is PSD), so it is well-conditioned.
     B = pt.eye(M, dtype=Kuu.dtype) + (A / nu[None, :]) @ A.T
-    B = assume(B, positive_definite=True, symmetric=True)
+    B = pta.assume(B, positive_definite=True, symmetric=True)
 
     quad = pt.sum(diff * beta) - alpha @ pt.linalg.inv(B) @ alpha
 
@@ -276,7 +276,7 @@ def dpp_regularizer(vfe, jitter=_DEFAULT_JITTER):
     Z = vfe.inducing_variable.Z
     M = Z.shape[0]
     Kuu = vfe.kernel(Z)
-    Kuu = assume(
+    Kuu = pta.assume(
         Kuu + jitter * pt.eye(M, dtype=Kuu.dtype),
         positive_definite=True,
         symmetric=True,

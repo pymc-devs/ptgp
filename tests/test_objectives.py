@@ -5,7 +5,7 @@ import pytensor
 import pytensor.tensor as pt
 import pytest
 
-from ptgp import assume
+import pytensor.assumptions as pta
 from ptgp.gp import SVGP, VFE, Unapproximated, VariationalParams
 from ptgp.inducing import Points
 from ptgp.kernels import ExpQuad
@@ -61,7 +61,7 @@ class TestELBO:
     def _identity_vp(self, M):
         return VariationalParams(
             q_mu=pt.zeros(M),
-            q_sqrt=assume(pt.eye(M), lower_triangular=True),
+            q_sqrt=pta.assume(pt.eye(M), lower_triangular=True),
         )
 
     def test_finite(self, regression_data, inducing_points):
@@ -108,14 +108,14 @@ class TestELBO:
         elbo_w = _eval(elbo(svgp_w, pt.as_tensor_variable(X), pt.as_tensor_variable(y)))
 
         # Unwhitened: q_mu=0, q_sqrt=Luu is the prior q(u)=N(0, Kuu+jit·I)
-        # Jitter Kuu before Cholesky to match base_conditional's internal jitter,
+        # Jitter Kuu before Cholesky to match InducingVariables._jittered_Kuu,
         # so the unwhitened path's q_sqrt corresponds to the same prior as the
         # whitened path's identity q_sqrt.
         Kuu = _eval(kernel(Z))
         Luu = np.linalg.cholesky(Kuu + 1e-6 * np.eye(5))
         vp_u = VariationalParams(
             q_mu=pt.zeros(5),
-            q_sqrt=assume(pt.as_tensor_variable(Luu), lower_triangular=True),
+            q_sqrt=pta.assume(pt.as_tensor_variable(Luu), lower_triangular=True),
         )
         svgp_u = SVGP(
             kernel=kernel,

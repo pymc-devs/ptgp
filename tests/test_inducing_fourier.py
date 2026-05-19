@@ -2,7 +2,8 @@ import numpy as np
 import pytensor.tensor as pt
 import pytest
 
-from ptgp.gp.svgp import SVGP
+import pytensor.assumptions as pta
+from ptgp.gp.svgp import SVGP, VariationalParams, init_variational_params
 from ptgp.inducing_fourier import FourierFeatures1D
 from ptgp.kernels.stationary import ExpQuad, Matern12, Matern32, Matern52
 from ptgp.likelihoods.gaussian import Gaussian
@@ -346,10 +347,13 @@ def test_Kuu_sqrt_solve_finite_at_small_lambda():
 def test_gauss_kl_structured_scalar_for_vff():
     f = FourierFeatures1D(0, 1, num_frequencies=8)
     k = 1.0 * Matern32(input_dim=1, ls=0.4)
+    M = f.num_inducing
+    vp = VariationalParams(q_mu=pt.zeros(M), q_sqrt=pt.eye(M))
     svgp = SVGP(
         kernel=k,
         likelihood=Gaussian(sigma=0.1),
         inducing_variable=f,
+        variational_params=vp,
         whiten=False,
     )
     out = svgp.prior_kl().eval()
@@ -365,13 +369,13 @@ def test_eta_squared_matern32_predictions_finite():
     M = f.num_inducing
     q_mu = rng.standard_normal(M)
     q_sqrt = np.eye(M)
+    vp = VariationalParams(q_mu=pt.as_tensor(q_mu), q_sqrt=pt.as_tensor(q_sqrt))
     svgp_scaled = SVGP(
         kernel=eta**2 * base,
         likelihood=Gaussian(sigma=0.1),
         inducing_variable=f,
         whiten=True,
-        q_mu=pt.as_tensor(q_mu),
-        q_sqrt=pt.as_tensor(q_sqrt),
+        variational_params=vp,
     )
     X = pt.as_tensor(np.linspace(0.1, 0.9, 20)[:, None])
     m_s, v_s = [t.eval() for t in svgp_scaled.predict_marginal(X)]
@@ -392,10 +396,13 @@ def test_vff_converges_to_exact_gp_sanity():
 
     f = FourierFeatures1D.from_data(X, num_frequencies=64, buffer=0.2)
     k = 1.0 * Matern32(input_dim=1, ls=0.2)
+    M = f.num_inducing
+    vp = VariationalParams(q_mu=pt.zeros(M), q_sqrt=pt.eye(M))
     svgp = SVGP(
         kernel=k,
         likelihood=Gaussian(sigma=0.05),
         inducing_variable=f,
+        variational_params=vp,
         whiten=True,
     )
     fmean, fvar = [t.eval() for t in svgp.predict_marginal(pt.as_tensor(X))]
