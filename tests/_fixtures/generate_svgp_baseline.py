@@ -8,7 +8,7 @@ import pickle
 import numpy as np
 import pytensor.tensor as pt
 
-from ptgp.gp.svgp import SVGP
+from ptgp.gp.svgp import SVGP, VariationalParams
 from ptgp.inducing import Points
 from ptgp.kernels.stationary import Matern32
 from ptgp.likelihoods.gaussian import Gaussian
@@ -23,14 +23,16 @@ def main():
     Z = np.linspace(0.05, 0.95, M)[:, None]
 
     k = 1.0 * Matern32(input_dim=1, ls=0.2)
+    vp = VariationalParams(q_mu=pt.zeros(M), q_sqrt=pt.eye(M))
     svgp = SVGP(
         kernel=k,
         likelihood=Gaussian(sigma=0.1),
         inducing_variable=Points(Z),
+        variational_params=vp,
         whiten=False,
     )
-    elbo_val = elbo(svgp, pt.as_tensor(X), pt.as_tensor(y), n_data=N).eval()
-    fmean, fvar = [t.eval() for t in svgp.predict(pt.as_tensor(X))]
+    elbo_val = elbo(svgp, pt.as_tensor(X), pt.as_tensor(y), n_data=N).elbo.eval()
+    fmean, fvar = [t.eval() for t in svgp.predict_marginal(pt.as_tensor(X))]
     kl = svgp.prior_kl().eval()
 
     out = {

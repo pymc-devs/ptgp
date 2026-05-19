@@ -261,20 +261,22 @@ class TestIntegrationWithSVGP:
 def test_points_kuu_solve_matches_dense():
     from ptgp.kernels.stationary import Matern32
 
-    Z = np.linspace(0, 1, 10)[:, None]
+    M = 10
+    Z = np.linspace(0, 1, M)[:, None]
     p = Points(Z)
     k = Matern32(input_dim=1, ls=0.3)
-    rhs = pt.as_tensor(np.eye(10))
+    rhs = pt.as_tensor(np.eye(M))
     out = p.Kuu_solve(k, rhs).eval()
-    K = k(pt.as_tensor(Z)).eval()
-    np.testing.assert_allclose(out, np.linalg.solve(K, np.eye(10)), atol=1e-6)
+    K = k(pt.as_tensor(Z)).eval() + 1e-6 * np.eye(M)
+    np.testing.assert_allclose(out, np.linalg.solve(K, np.eye(M)), atol=1e-6)
 
 
 def test_points_kuu_logdet_matches_dense():
     from ptgp.kernels.stationary import Matern32
 
-    Z = np.linspace(0, 1, 8)[:, None]
+    M = 8
+    Z = np.linspace(0, 1, M)[:, None]
     p = Points(Z)
     k = Matern32(input_dim=1, ls=0.3)
-    K = k(pt.as_tensor(Z)).eval()
+    K = k(pt.as_tensor(Z)).eval() + 1e-6 * np.eye(M)
     np.testing.assert_allclose(p.Kuu_logdet(k).eval(), np.linalg.slogdet(K)[1], atol=1e-6)

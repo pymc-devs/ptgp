@@ -89,7 +89,6 @@ class TestELBO:
         elbo_val = _eval(elbo(svgp, pt.as_tensor_variable(X), pt.as_tensor_variable(y)).elbo)
         assert np.isfinite(elbo_val)
 
-    @pytest.mark.xfail(reason="pytensor main rewrite changes affect numerical precision (~1e-3 mismatch)")
     def test_whitened_and_unwhitened_agree_at_prior(self, regression_data, inducing_points):
         """With q=prior (q_mu=0, q_sqrt=I for whitened; q_mu=0, q_sqrt=Luu for unwhitened),
         both parameterizations should give the same ELBO."""
@@ -109,7 +108,7 @@ class TestELBO:
         elbo_w = _eval(elbo(svgp_w, pt.as_tensor_variable(X), pt.as_tensor_variable(y)))
 
         # Unwhitened: q_mu=0, q_sqrt=Luu is the prior q(u)=N(0, Kuu+jit·I)
-        # Jitter Kuu before Cholesky to match base_conditional's internal jitter,
+        # Jitter Kuu before Cholesky to match InducingVariables._jittered_Kuu,
         # so the unwhitened path's q_sqrt corresponds to the same prior as the
         # whitened path's identity q_sqrt.
         Kuu = _eval(kernel(Z))

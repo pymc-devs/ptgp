@@ -36,15 +36,21 @@ class InducingVariables:
     def K_uf(self, kernel, X):
         raise NotImplementedError
 
+    _DEFAULT_JITTER = 1e-6
+
+    def _jittered_Kuu(self, kernel):
+        Kuu = self.K_uu(kernel)
+        return Kuu + self._DEFAULT_JITTER * pt.eye(Kuu.shape[-1], dtype=Kuu.dtype)
+
     def Kuu_solve(self, kernel, rhs):
-        return pt.linalg.solve(self.K_uu(kernel), rhs)
+        return pt.linalg.solve(self._jittered_Kuu(kernel), rhs)
 
     def Kuu_sqrt_solve(self, kernel, rhs):
-        L = pt.linalg.cholesky(self.K_uu(kernel))
+        L = pt.linalg.cholesky(self._jittered_Kuu(kernel))
         return pt.linalg.solve(L, rhs)
 
     def Kuu_logdet(self, kernel):
-        _, ld = pt.linalg.slogdet(self.K_uu(kernel))
+        _, ld = pt.linalg.slogdet(self._jittered_Kuu(kernel))
         return ld
 
 
