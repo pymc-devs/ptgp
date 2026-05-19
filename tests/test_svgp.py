@@ -308,11 +308,10 @@ class TestSVGPPointsUnwhitenedRegression:
     baseline. Catches numeric drift in the structured-inducing refactor — the
     Points path should remain bit-stable through the conditional-helper split."""
 
-    @pytest.mark.xfail(reason="VFF tests need porting to variational_params= SVGP API")
     def test_numeric_regression(self):
         import pickle
 
-        from ptgp.gp.svgp import SVGP
+        from ptgp.gp.svgp import SVGP, VariationalParams
         from ptgp.inducing import Points
         from ptgp.kernels.stationary import Matern32
         from ptgp.likelihoods.gaussian import Gaussian
@@ -321,15 +320,18 @@ class TestSVGPPointsUnwhitenedRegression:
         with open("tests/_fixtures/svgp_points_unwhitened_baseline.pkl", "rb") as f:
             ref = pickle.load(f)
         k = 1.0 * Matern32(input_dim=1, ls=0.2)
+        M = ref["Z"].shape[0]
+        vp = VariationalParams(q_mu=pt.zeros(M), q_sqrt=pt.eye(M))
         svgp = SVGP(
             kernel=k,
             likelihood=Gaussian(sigma=0.1),
             inducing_variable=Points(ref["Z"]),
+            variational_params=vp,
             whiten=False,
         )
         elbo_val = elbo_fn(
             svgp, pt.as_tensor(ref["X"]), pt.as_tensor(ref["y"]), n_data=len(ref["X"])
-        ).eval()
+        ).elbo.eval()
         fmean, fvar = [t.eval() for t in svgp.predict_marginal(pt.as_tensor(ref["X"]))]
         kl = svgp.prior_kl().eval()
 

@@ -1,23 +1,15 @@
 """End-to-end VFF SVGP smoke test: build, train, predict."""
 
-import sys
-
-import pytest
-
-pytestmark = pytest.mark.xfail(reason="VFF tests need porting to variational_params= SVGP API")
-
 import numpy as np
 import pymc as pm
 import pytensor.tensor as pt
 
 from ptgp import FourierFeatures1D
-from ptgp.gp.svgp import SVGP
+from ptgp.gp.svgp import SVGP, init_variational_params
 from ptgp.kernels.stationary import Matern32
 from ptgp.likelihoods.gaussian import Gaussian
 from ptgp.objectives import elbo
 from ptgp.optim.training import compile_predict, compile_training_step
-
-sys.setrecursionlimit(50000)
 
 
 def test_vff_svgp_trains_and_predicts():
@@ -28,9 +20,7 @@ def test_vff_svgp_trains_and_predicts():
 
     f = FourierFeatures1D.from_data(X, num_frequencies=10)
     M = f.num_inducing
-
-    q_mu_var = pt.vector("q_mu")
-    q_sqrt_var = pt.matrix("q_sqrt")
+    vp = init_variational_params(M)
 
     with pm.Model() as model:
         ls = pm.Exponential("ls", lam=1.0)
@@ -40,21 +30,20 @@ def test_vff_svgp_trains_and_predicts():
             kernel=kernel,
             likelihood=Gaussian(sigma=0.1),
             inducing_variable=f,
+            variational_params=vp,
             whiten=True,
-            q_mu=q_mu_var,
-            q_sqrt=q_sqrt_var,
         )
 
     X_var = pt.matrix("X")
     y_var = pt.vector("y")
     step, shared_params, shared_extras = compile_training_step(
-        elbo,
+        lambda gp, X, y: elbo(gp, X, y).elbo,
         svgp,
         X_var,
         y_var,
         model=model,
-        extra_vars=[q_mu_var, q_sqrt_var],
-        extra_init=[np.zeros(M), np.eye(M)],
+        extra_vars=vp.extra_vars,
+        extra_init=vp.extra_init,
         learning_rate=1e-2,
     )
     X_new_var = pt.matrix("X_new")
@@ -63,7 +52,7 @@ def test_vff_svgp_trains_and_predicts():
         X_new_var,
         model,
         shared_params,
-        extra_vars=[q_mu_var, q_sqrt_var],
+        extra_vars=vp.extra_vars,
         shared_extras=shared_extras,
     )
 

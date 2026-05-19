@@ -1,15 +1,11 @@
 """Op-routing and equivalence tests for VFF on the SVGP path."""
 
-import pytest
-
-pytestmark = pytest.mark.xfail(reason="VFF tests need porting to variational_params= SVGP API")
-
 import numpy as np
 import pytensor
 import pytensor.tensor as pt
 import pytest
 
-from ptgp.gp.svgp import SVGP
+from ptgp.gp.svgp import SVGP, VariationalParams, init_variational_params
 from ptgp.inducing_fourier import FourierFeatures1D
 from ptgp.kernels.stationary import Matern32
 from ptgp.likelihoods.gaussian import Gaussian
@@ -18,10 +14,12 @@ from ptgp.likelihoods.gaussian import Gaussian
 def _make(whiten, num_frequencies=8):
     f = FourierFeatures1D(0, 1, num_frequencies=num_frequencies)
     k = 1.0 * Matern32(input_dim=1, ls=0.4)
+    vp = init_variational_params(f.num_inducing)
     return SVGP(
         kernel=k,
         likelihood=Gaussian(sigma=0.1),
         inducing_variable=f,
+        variational_params=vp,
         whiten=whiten,
     )
 
@@ -87,13 +85,23 @@ def test_unwhitened_path_uses_solve_and_logdet(monkeypatch):
 
 def test_no_dense_cholesky_on_Kuu():
     f = FourierFeatures1D(0, 1, num_frequencies=12)
-    svgp = _make(whiten=True, num_frequencies=12)
+    M = f.num_inducing
+    vp = VariationalParams(
+        q_mu=pt.as_tensor(np.zeros(M)),
+        q_sqrt=pt.as_tensor(np.eye(M)),
+    )
+    k = 1.0 * Matern32(input_dim=1, ls=0.4)
+    svgp = SVGP(
+        kernel=k,
+        likelihood=Gaussian(sigma=0.1),
+        inducing_variable=f,
+        variational_params=vp,
+        whiten=True,
+    )
     N = 50
     X_sym = pt.tensor("_X", shape=(N, 1), dtype="float64")
     fmean, fvar = svgp.predict_marginal(X_sym)
     fn = pytensor.function([X_sym], [fmean, fvar])
-
-    M = f.num_inducing
     fg = fn.maker.fgraph
     shape_of = fg.shape_feature.shape_of
     for node in fg.toposort():
@@ -124,21 +132,21 @@ def test_whitened_vs_unwhitened_agreement(kind):
     S_v = R_inv @ S_u @ R_inv.T
     q_sqrt_v = np.linalg.cholesky(S_v + 1e-10 * np.eye(M))
 
+    vp_u = VariationalParams(q_mu=pt.as_tensor(m_u), q_sqrt=pt.as_tensor(q_sqrt_u))
     svgp_u = SVGP(
         kernel=k,
         likelihood=Gaussian(sigma=0.1),
         inducing_variable=f,
+        variational_params=vp_u,
         whiten=False,
-        q_mu=pt.as_tensor(m_u),
-        q_sqrt=pt.as_tensor(q_sqrt_u),
     )
+    vp_w = VariationalParams(q_mu=pt.as_tensor(q_mu_v), q_sqrt=pt.as_tensor(q_sqrt_v))
     svgp_w = SVGP(
         kernel=k,
         likelihood=Gaussian(sigma=0.1),
         inducing_variable=f,
+        variational_params=vp_w,
         whiten=True,
-        q_mu=pt.as_tensor(q_mu_v),
-        q_sqrt=pt.as_tensor(q_sqrt_v),
     )
 
     X_test = np.linspace(f.a + 0.05, f.b - 0.05, 30)[:, None]
