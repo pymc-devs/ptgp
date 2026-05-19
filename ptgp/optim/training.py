@@ -4,12 +4,15 @@ Uses ``pytensor.shared`` variables so that training automatically updates
 the parameters used by prediction — no model reconstruction needed.
 """
 
+import logging
 import re
 
 import numpy as np
 import pymc as pm
 import pytensor
 import pytensor.tensor as pt
+
+logger = logging.getLogger(__name__)
 
 from pytensor.graph.replace import graph_replace
 
@@ -804,15 +807,15 @@ def tracked_minimize(fun, theta0, args, diag_fn=None, print_every=None, **scipy_
             history.append(terms)
             if print_every is not None and iteration[0] % print_every == 0:
                 field_strs = "  ".join(f"{f}={getattr(terms, f):.6g}" for f in type(terms)._fields)
-                print(f"iter {iteration[0]:5d}  {field_strs}")
+                logger.info(f"iter {iteration[0]:5d}  {field_strs}")
 
     scipy_kwargs.setdefault("method", "L-BFGS-B")
     scipy_kwargs.setdefault("jac", True)
     try:
         result = scipy.optimize.minimize(fun, theta0, args=args, callback=callback, **scipy_kwargs)
     except KeyboardInterrupt:
-        print(
-            f"\n[tracked_minimize] interrupted at iter {iteration[0]}; "
+        logger.warning(
+            f"[tracked_minimize] interrupted at iter {iteration[0]}; "
             f"returning last-iterate state."
         )
         f_val, g_val = float("nan"), np.zeros_like(last_theta[0])
@@ -820,9 +823,11 @@ def tracked_minimize(fun, theta0, args, diag_fn=None, print_every=None, **scipy_
             _f, _g = fun(last_theta[0], *args)
             f_val, g_val = float(_f), np.asarray(_g)
         except KeyboardInterrupt:
-            print("[tracked_minimize] second interrupt during cleanup; fun/jac left as nan/zero.")
+            logger.warning(
+                "[tracked_minimize] second interrupt during cleanup; fun/jac left as nan/zero."
+            )
         except Exception as e:
-            print(f"[tracked_minimize] could not re-evaluate fun at last theta: {e!r}")
+            logger.warning(f"[tracked_minimize] could not re-evaluate fun at last theta: {e!r}")
         result = scipy.optimize.OptimizeResult(
             x=last_theta[0],
             fun=f_val,
