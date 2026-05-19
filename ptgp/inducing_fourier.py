@@ -1,4 +1,5 @@
 import numpy as np
+import pytensor.assumptions as pta
 import pytensor.tensor as pt
 
 from ptgp.inducing import InducingVariables
@@ -236,7 +237,7 @@ class FourierFeatures1D(InducingVariables):
         """Dense ``Kuu`` via ``diag(d) + U @ U.T`` for compatibility with the base API."""
         d, U = self._structured_Kuu(kernel)
         K = pt.diag(d) + U @ U.T
-        return pt.specify_assumptions(K, symmetric=True, positive_definite=True)
+        return pta.assume(K, symmetric=True, positive_definite=True)
 
     def _domain_check(self, X_numeric, kernel):
         """Raise when numeric inputs use unsupported out-of-domain VFF behavior."""

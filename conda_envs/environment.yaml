@@ -25,9 +25,5 @@ dependencies:
     - pymc
     - pip
     - pip:
-        - git+https://github.com/jessegrabowski/pytensor@assumption-system
-        - git+https://github.com/pymc-devs/pymc@main
-        - "arviz>=1,<2"
-        - arviz-base
-        - arviz-plots
+        - git+https://github.com/pymc-devs/pytensor@main
         - git+https://github.com/arviz-devs/preliz@main

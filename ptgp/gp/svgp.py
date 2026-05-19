@@ -6,7 +6,7 @@ import pytensor.tensor as pt
 from ptgp.conditionals import conditional_unwhitened, conditional_whitened
 from ptgp.kl import gauss_kl, gauss_kl_structured
 from ptgp.mean import Zero
-from ptgp.rewrites import assume
+import pytensor.assumptions as pta
 
 
 def _softplus_lower_triangular(flat, M):
@@ -124,7 +124,7 @@ def init_variational_params(M, q_mu_init=None, q_sqrt_init=None):
     n_lower = M * (M + 1) // 2
     q_mu = pt.vector("q_mu", shape=(M,), dtype="float64")
     q_sqrt_flat = pt.vector("q_sqrt_flat", shape=(n_lower,), dtype="float64")
-    q_sqrt = assume(
+    q_sqrt = pta.assume(
         _softplus_lower_triangular(q_sqrt_flat, M),
         lower_triangular=True,
     )

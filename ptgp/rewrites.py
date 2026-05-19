@@ -14,7 +14,8 @@ from pytensor.assumptions.diagonal import indexes_diagonal
 from pytensor.assumptions.positive_definite import POSITIVE_DEFINITE
 from pytensor.assumptions.specify import SpecifyAssumptions
 from pytensor.assumptions.triangular import LOWER_TRIANGULAR
-from pytensor.assumptions.utils import check_assumption, eye_is_identity, true_if
+from pytensor.assumptions.core import check_assumption, true_if
+from pytensor.tensor.rewriting.assumptions import _KEY_BY_NAME
 from pytensor.compile.mode import optdb
 from pytensor.graph.basic import Constant
 from pytensor.graph.fg import FunctionGraph
@@ -55,8 +56,20 @@ from pytensor.tensor.subtensor import AdvancedIncSubtensor, IncSubtensor
 
 POSITIVE = AssumptionKey("positive")
 
+# Register POSITIVE with DrainSpecifyAssumptions so the compiler can
+# resolve SpecifyAssumptions{positive} nodes. The inference system is
+# extensible via register_assumption(), but the drain pass uses a
+# separate name→key dict built from ALL_KEYS at import time.
+_KEY_BY_NAME[POSITIVE.name] = POSITIVE
 
-def assume(
+# Register the SpecifyAssumptions inference rule for POSITIVE, matching
+# what upstream does for its built-in keys (pytensor/assumptions/specify.py).
+from pytensor.assumptions.specify import specify_assumption_rule
+
+register_assumption(POSITIVE, SpecifyAssumptions)(specify_assumption_rule)
+
+
+def _assume_with_positive(
     x,
     diagonal=None,
     lower_triangular=None,
@@ -66,7 +79,7 @@ def assume(
     orthogonal=None,
     positive=None,
 ):
-    """Drop-in replacement for ``pytensor.assumptions.assume`` that also accepts ``positive=True``."""
+    """Extension of ``pytensor.assumptions.assume`` that also accepts ``positive=True``."""
     x = as_tensor_variable(x)
     names = {
         name
@@ -84,6 +97,11 @@ def assume(
     if not names:
         return x
     return SpecifyAssumptions({name: True for name in names})(x)
+
+
+import pytensor.assumptions as _pta  # noqa: E402
+
+_pta.assume = _assume_with_positive
 
 
 @register_assumption(POSITIVE, Elemwise)
@@ -110,14 +128,6 @@ def _dimshuffle_positive(key, op, feature, fgraph, node, input_states):
     return true_if(input_states[0] is FactState.TRUE)
 
 
-@register_assumption(POSITIVE_DEFINITE, DimShuffle)
-def _dimshuffle_psd(key, op, feature, fgraph, node, input_states):
-    """``A.T`` is PSD when ``A`` is PSD (PSD ⇒ symmetric)."""
-    if op.is_matrix_transpose:
-        return true_if(input_states[0] is FactState.TRUE)
-    return [FactState.UNKNOWN]
-
-
 @register_assumption(POSITIVE, Alloc)
 def _alloc_positive(key, op, feature, fgraph, node, input_states):
     """``Alloc(c, *shape)`` is positive iff the fill value ``c`` is."""
@@ -139,8 +149,10 @@ def _extractdiag_positive(key, op, feature, fgraph, node, input_states):
         return [FactState.UNKNOWN]
     [m] = node.inputs
     owner = m.owner
-    if owner is not None and isinstance(owner.op, Eye) and eye_is_identity(owner):
-        return [FactState.TRUE]
+    if owner is not None and isinstance(owner.op, Eye):
+        n, _m, k = owner.inputs
+        if n is _m and isinstance(k, Constant) and int(k.data) == 0:
+            return [FactState.TRUE]
     return [FactState.UNKNOWN]
 
 
@@ -218,19 +230,6 @@ def _try_AAT_factor(fgraph, M, lower_only=False):
             return None
         return b, "ATA"
     return None
-
-
-@register_assumption(POSITIVE_DEFINITE, Dot)
-def _dot_xt_M_x_psd(key, op, feature, fgraph, node, input_states):
-    """``X.T @ (M @ X)`` is PSD when ``M`` is PSD."""
-    a, b = node.inputs
-    X = _matrix_transpose_of(a)
-    if X is None or b.owner is None or not isinstance(b.owner.op, Dot):
-        return [FactState.UNKNOWN]
-    M, X2 = b.owner.inputs
-    if X2 is X and feature.check(M, POSITIVE_DEFINITE):
-        return [FactState.TRUE]
-    return [FactState.UNKNOWN]
 
 
 @register_assumption(POSITIVE_DEFINITE, Dot)

@@ -1,3 +1,4 @@
+import pytensor.assumptions as pta
 import pytensor.tensor as pt
 
 # Diagonal jitter added to Kmm before Cholesky / inversion, to keep it PSD
@@ -58,7 +59,7 @@ def base_conditional(Kmn, Kmm, Knn, f, q_sqrt=None, white=False, full_cov=False)
     # Re-annotate after the addition: PyTensor canonicalizes ``Kmm + c·I`` into a
     # ``set_subtensor`` on the diagonal, which our PSD-inference rules don't see
     # through. The mathematical identity (PSD + c·I PSD ⇒ PSD) is sound.
-    Kmm = pt.assume(
+    Kmm = pta.assume(
         Kmm + _DEFAULT_JITTER * pt.eye(Kmm.shape[-1], dtype=Kmm.dtype),
         positive_definite=True,
         symmetric=True,
