@@ -1,8 +1,15 @@
 """Tests for the assumption rules and rewrites added in ``ptgp.rewrites``.
 
 Written so that, when the rules are upstreamed into PyTensor, the test bodies
-move over unchanged — only the imports of ``POSITIVE`` (and the side-effect
-import that installs the rules) would shift from ``ptgp`` to ``pytensor``.
+move over unchanged — only the side-effect import that installs the rules
+would shift from ``ptgp`` to ``pytensor``.
+
+After the 2026-05 ablation (see ``audits/rewrites_ablation_plan.md``) the
+scope of ``ptgp.rewrites`` shrank to: B/C (PSD-quadratic-form via
+Solve / CholeskySolve), H (Det(L @ L.T)), I (diag(A @ A.T)), and J
+(MatrixInverse(PSD A)). Tests for the deleted POSITIVE bundle,
+``slogdet_specialize``, ``_set_subtensor_psd``, and the composite-merge
+passes have been removed.
 """
 
 import numpy as np
@@ -19,13 +26,12 @@ from pytensor.tensor.basic import ExtractDiag
 from pytensor.tensor.blockwise import Blockwise
 from pytensor.tensor.linalg.decomposition.cholesky import Cholesky, cholesky
 from pytensor.tensor.linalg.inverse import MatrixInverse
-from pytensor.tensor.linalg.summary import Det, SLogDet
+from pytensor.tensor.linalg.summary import Det
 
 # Install the assumption rules and rewrites under test (side-effect import).
 import ptgp.rewrites  # noqa: F401
 
 import pytensor.assumptions as pta
-from ptgp.rewrites import POSITIVE
 
 
 def make_fgraph(*outputs, inputs=None):
@@ -36,95 +42,20 @@ def make_fgraph(*outputs, inputs=None):
 
 
 # ---------------------------------------------------------------------------
-# POSITIVE assumption propagation
+# POSITIVE_DEFINITE inference: PSD-quadratic-form via Solve / CholeskySolve.
+# (Rules B and C in ptgp/rewrites.py.)
 # ---------------------------------------------------------------------------
-
-
-def test_assume_accepts_positive_kwarg():
-    x = pt.dscalar("x")
-    y = pta.assume(x, positive=True)
-    _, af = make_fgraph(y, inputs=[x])
-    assert af.check(y, POSITIVE)
-
-
-def test_positive_propagates_through_sqr_and_pow():
-    x = pta.assume(pt.dscalar("x"), positive=True)
-    _, af = make_fgraph(x**2, x**3.5, inputs=[x.owner.inputs[0]])
-    assert af.check(x**2, POSITIVE)
-    assert af.check(x**3.5, POSITIVE)
-
-
-def test_positive_propagates_through_mul_only_if_all_positive():
-    x = pta.assume(pt.dscalar("x"), positive=True)
-    y = pta.assume(pt.dscalar("y"), positive=True)
-    z = pt.dscalar("z")  # no assumption
-    _, af = make_fgraph(x * y, x * z, inputs=[x.owner.inputs[0], y.owner.inputs[0], z])
-    assert af.check(x * y, POSITIVE)
-    assert not af.check(x * z, POSITIVE)
-
-
-def test_positive_propagates_through_dimshuffle():
-    x = pta.assume(pt.dvector("x"), positive=True)
-    _, af = make_fgraph(x[None, :], inputs=[x.owner.inputs[0]])
-    assert af.check(x[None, :], POSITIVE)
-
-
-def test_alloc_of_positive_constant_is_positive():
-    n = pt.lscalar("n")
-    ones = pt.ones((n,))
-    _, af = make_fgraph(ones, inputs=[n])
-    assert af.check(ones, POSITIVE)
-
-
-def test_alloc_of_zero_is_not_positive():
-    n = pt.lscalar("n")
-    zeros = pt.zeros((n,))
-    _, af = make_fgraph(zeros, inputs=[n])
-    assert not af.check(zeros, POSITIVE)
-
-
-def test_diagonal_of_identity_is_positive():
-    n = pt.lscalar("n")
-    diag_eye = pt.diagonal(pt.eye(n))
-    _, af = make_fgraph(diag_eye, inputs=[n])
-    assert af.check(diag_eye, POSITIVE)
-
-
-# ---------------------------------------------------------------------------
-# POSITIVE_DEFINITE inference for new patterns
-# ---------------------------------------------------------------------------
-
-
-def test_alloc_diag_of_symbolic_positive_vector_is_psd():
-    v = pta.assume(pt.dvector("v"), positive=True)
-    M = pt.diag(v)
-    _, af = make_fgraph(M, inputs=[v.owner.inputs[0]])
-    assert af.check(M, POSITIVE_DEFINITE)
-
-
-def test_alloc_diag_of_unknown_vector_is_not_psd():
-    v = pt.dvector("v")
-    M = pt.diag(v)
-    _, af = make_fgraph(M, inputs=[v])
-    assert not af.check(M, POSITIVE_DEFINITE)
-
-
-def test_mul_of_positive_scalar_and_psd_matrix_is_psd():
-    sigma = pta.assume(pt.dscalar("sigma"), positive=True)
-    K = pta.assume(pt.dmatrix("K"), positive_definite=True, symmetric=True)
-    M = sigma**2 * K
-    _, af = make_fgraph(M, inputs=[sigma.owner.inputs[0], K.owner.inputs[0]])
-    assert af.check(M, POSITIVE_DEFINITE)
 
 
 def test_psd_propagates_through_matrix_transpose():
+    """Sanity check: upstream already provides this (POSITIVE_DEFINITE, DimShuffle)."""
     K = pta.assume(pt.dmatrix("K"), positive_definite=True, symmetric=True)
     _, af = make_fgraph(K.T, inputs=[K.owner.inputs[0]])
     assert af.check(K.T, POSITIVE_DEFINITE)
 
 
 def test_quadratic_form_dot_is_psd():
-    """X.T @ M @ X is PSD when M is PSD."""
+    """X.T @ M @ X is PSD when M is PSD (upstream ``match_congruence``)."""
     X = pt.dmatrix("X")
     M = pta.assume(pt.dmatrix("M"), positive_definite=True, symmetric=True)
     Q = X.T.dot(M.dot(X))
@@ -133,7 +64,7 @@ def test_quadratic_form_dot_is_psd():
 
 
 def test_quadratic_form_with_solve_is_psd():
-    """X.T @ M^{-1} @ X (written as Solve) is PSD when M is PSD."""
+    """X.T @ M^{-1} @ X (written as Solve) is PSD when M is PSD. (Rule B.)"""
     X = pt.dmatrix("X")
     M = pta.assume(pt.dmatrix("M"), positive_definite=True, symmetric=True)
     Q = X.T.dot(pt.linalg.solve(M, X))
@@ -142,7 +73,7 @@ def test_quadratic_form_with_solve_is_psd():
 
 
 def test_quadratic_form_with_cholesky_solve_is_psd():
-    """X.T @ M^{-1} @ X (written as CholeskySolve) is PSD when L = Cholesky(M)."""
+    """X.T @ M^{-1} @ X (written as CholeskySolve) is PSD when L = Cholesky(M). (Rule C.)"""
     X = pt.dmatrix("X")
     M = pta.assume(pt.dmatrix("M"), positive_definite=True, symmetric=True)
     L = cholesky(M, lower=True)
@@ -151,19 +82,8 @@ def test_quadratic_form_with_cholesky_solve_is_psd():
     assert af.check(Q, POSITIVE_DEFINITE)
 
 
-def test_set_subtensor_of_zeros_with_positive_diagonal_is_psd():
-    """``zeros(N, N)[arange(N), arange(N)] = positive_vec`` is PSD."""
-    n = pt.lscalar("n")
-    v = pta.assume(pt.dvector("v"), positive=True)
-    base = pt.zeros((n, n))
-    idx = pt.arange(n)
-    M = pt.set_subtensor(base[idx, idx], v)
-    _, af = make_fgraph(M, inputs=[n, v.owner.inputs[0]])
-    assert af.check(M, POSITIVE_DEFINITE)
-
-
 # ---------------------------------------------------------------------------
-# SLogDet -> Cholesky rewrite
+# Helpers for the structural rewrites below.
 # ---------------------------------------------------------------------------
 
 
@@ -177,86 +97,9 @@ def _has_op(graph, op_type):
     return False
 
 
-def test_slogdet_of_psd_is_lowered_to_cholesky():
-    K = pta.assume(pt.dmatrix("K"), positive_definite=True, symmetric=True)
-    _, logdet = pt.linalg.slogdet(K)
-    rewritten = rewrite_graph(logdet, include=("fast_run",))
-    assert not _has_op(rewritten, SLogDet)
-    assert _has_op(rewritten, Cholesky)
-
-
-def test_slogdet_without_psd_is_not_lowered():
-    K = pt.dmatrix("K")  # no PSD annotation
-    _, logdet = pt.linalg.slogdet(K)
-    rewritten = rewrite_graph(logdet, include=("fast_run",))
-    # Without the PSD assumption the Cholesky-based rewrite must not fire.
-    assert not _has_op(rewritten, Cholesky)
-
-
-def test_slogdet_reuses_existing_cholesky():
-    """When an upstream Solve has already produced ``Cholesky(K)``, SLogDet should reuse it."""
-    K = pta.assume(pt.dmatrix("K"), positive_definite=True, symmetric=True)
-    b = pt.dvector("b")
-    x = pt.linalg.solve(K, b, assume_a="pos")
-    _, logdet = pt.linalg.slogdet(K)
-    rewritten = rewrite_graph([x, logdet], include=("fast_run",))
-    fg = FunctionGraph(outputs=rewritten, clone=False)
-    n_chol = sum(
-        1
-        for node in fg.apply_nodes
-        if isinstance(node.op.core_op if isinstance(node.op, Blockwise) else node.op, Cholesky)
-    )
-    assert n_chol == 1, f"expected SLogDet to share Cholesky, got {n_chol} factorisations"
-
-
-def test_slogdet_lowering_is_numerically_correct():
-    K = pta.assume(pt.dmatrix("K"), positive_definite=True, symmetric=True)
-    _, logdet = pt.linalg.slogdet(K)
-    f = function([K.owner.inputs[0]], logdet)
-
-    rng = np.random.default_rng(0)
-    A = rng.standard_normal((6, 6))
-    K_val = A @ A.T + np.eye(6)
-    np.testing.assert_allclose(f(K_val), np.linalg.slogdet(K_val)[1], atol=1e-8)
-
-
-def test_slogdet_of_LLT_takes_diag_shortcut_when_L_lower_triangular():
-    """SLogDet(L @ L.T) collapses to ``2 * sum(log|diag(L)|)`` — no Cholesky, no SLogDet."""
-    L = pta.assume(pt.dmatrix("L"), lower_triangular=True)
-    _, logdet = pt.linalg.slogdet(L @ L.T)
-    rewritten = rewrite_graph(logdet, include=("fast_run",))
-    assert not _has_op(rewritten, SLogDet)
-    assert not _has_op(rewritten, Cholesky)
-
-
-def test_slogdet_of_LLT_diag_shortcut_is_numerically_correct():
-    """The diag shortcut produces the same value as full slogdet."""
-    L = pta.assume(pt.dmatrix("L"), lower_triangular=True)
-    _, logdet = pt.linalg.slogdet(L @ L.T)
-    f = function([L.owner.inputs[0]], logdet)
-
-    rng = np.random.default_rng(0)
-    M = 6
-    L_val = np.tril(rng.standard_normal((M, M)))
-    L_val[np.arange(M), np.arange(M)] = np.abs(L_val[np.arange(M), np.arange(M)]) + 0.5
-    expected = float(np.linalg.slogdet(L_val @ L_val.T)[1])
-    np.testing.assert_allclose(f(L_val), expected, atol=1e-12)
-
-
-def test_slogdet_of_LLT_diag_shortcut_handles_signed_diagonal():
-    """``log|x²|`` style is robust to signed diagonal entries on L."""
-    L = pta.assume(pt.dmatrix("L"), lower_triangular=True)
-    _, logdet = pt.linalg.slogdet(L @ L.T)
-    f = function([L.owner.inputs[0]], logdet)
-
-    rng = np.random.default_rng(1)
-    M = 5
-    L_val = np.tril(rng.standard_normal((M, M)))
-    # Mix positive and negative diagonals.
-    diag = rng.standard_normal(M)
-    L_val[np.arange(M), np.arange(M)] = np.where(np.abs(diag) > 0.3, diag, np.sign(diag) * 0.5)
-    expected = float(np.linalg.slogdet(L_val @ L_val.T)[1])
-    np.testing.assert_allclose(f(L_val), expected, atol=1e-12)
+# ---------------------------------------------------------------------------
+# Det(L @ L.T) -> (prod(diag(L)))**2 rewrite (Rule H).
+# ---------------------------------------------------------------------------
 
 
 def test_det_of_LLT_takes_diag_product_when_L_lower_triangular():
@@ -284,12 +127,16 @@ def test_det_of_LLT_diag_product_is_numerically_correct():
     np.testing.assert_allclose(f(L_val), expected, atol=1e-10)
 
 
+# ---------------------------------------------------------------------------
+# ExtractDiag(A @ A.T) -> sum(A**2, axis=-1) rewrite (Rule I).
+# ---------------------------------------------------------------------------
+
+
 def test_diag_of_AAT_to_row_norms_squared_eliminates_dot():
-    """``ExtractDiag(A @ A.T)`` lowers to ``sum(A**2, axis=-1)`` — no Dot, no ExtractDiag."""
+    """``ExtractDiag(A @ A.T)`` lowers to ``sum(A**2, axis=-1)`` — no ExtractDiag."""
     A = pt.dmatrix("A")
     out = pt.diagonal(A @ A.T)
     rewritten = rewrite_graph(out, include=("fast_run",))
-    # Folds out: no ExtractDiag (no need to extract diag of an outer product).
     assert not _has_op(rewritten, ExtractDiag)
 
 
@@ -304,7 +151,7 @@ def test_diag_of_AAT_is_numerically_correct():
 
 
 def test_diag_of_ATA_lowers_to_column_norms():
-    """``ExtractDiag(A.T @ A)`` lowers to ``sum(A**2, axis=-2)`` — no ExtractDiag, no Dot."""
+    """``ExtractDiag(A.T @ A)`` lowers to ``sum(A**2, axis=-2)`` — no ExtractDiag."""
     A = pt.dmatrix("A")
     out = pt.diagonal(A.T @ A)
     rewritten = rewrite_graph(out, include=("fast_run",))
@@ -321,26 +168,9 @@ def test_diag_of_ATA_is_numerically_correct():
     np.testing.assert_allclose(f(A_val), np.diag(A_val.T @ A_val), atol=1e-12)
 
 
-def test_slogdet_of_LTL_takes_diag_shortcut_when_L_lower_triangular():
-    """``SLogDet(L.T @ L)`` lowers via the diagonal shortcut — same as L @ L.T."""
-    L = pta.assume(pt.dmatrix("L"), lower_triangular=True)
-    _, logdet = pt.linalg.slogdet(L.T @ L)
-    rewritten = rewrite_graph(logdet, include=("fast_run",))
-    assert not _has_op(rewritten, SLogDet)
-    assert not _has_op(rewritten, Cholesky)
-
-
-def test_slogdet_of_LTL_is_numerically_correct():
-    L = pta.assume(pt.dmatrix("L"), lower_triangular=True)
-    _, logdet = pt.linalg.slogdet(L.T @ L)
-    f = function([L.owner.inputs[0]], logdet)
-
-    rng = np.random.default_rng(0)
-    M = 5
-    L_val = np.tril(rng.standard_normal((M, M)))
-    L_val[np.arange(M), np.arange(M)] = np.abs(L_val[np.arange(M), np.arange(M)]) + 0.5
-    expected = float(np.linalg.slogdet(L_val.T @ L_val)[1])
-    np.testing.assert_allclose(f(L_val), expected, atol=1e-12)
+# ---------------------------------------------------------------------------
+# MatrixInverse(PSD A) -> cho_solve(L, eye) rewrite (Rule J).
+# ---------------------------------------------------------------------------
 
 
 def test_matrix_inverse_of_LTL_uses_solve_triangular():
@@ -348,7 +178,6 @@ def test_matrix_inverse_of_LTL_uses_solve_triangular():
     L = pta.assume(pt.dmatrix("L"), lower_triangular=True)
     inv_M = pt.linalg.inv(L.T @ L)
     rewritten = rewrite_graph(inv_M, include=("fast_run",))
-    # No MatrixInverse, no Cholesky (L is reused via solve_triangular).
     assert not _has_op(rewritten, MatrixInverse)
     assert not _has_op(rewritten, Cholesky)
 
@@ -364,11 +193,6 @@ def test_matrix_inverse_of_LTL_is_numerically_correct():
     L_val[np.arange(M), np.arange(M)] = np.abs(L_val[np.arange(M), np.arange(M)]) + 0.5
     expected = np.linalg.inv(L_val.T @ L_val)
     np.testing.assert_allclose(f(L_val), expected, atol=1e-10)
-
-
-# ---------------------------------------------------------------------------
-# MatrixInverse(PSD A) -> cho_solve(L, eye) rewrite
-# ---------------------------------------------------------------------------
 
 
 def test_matrix_inverse_of_psd_is_lowered_to_cholesky():
@@ -415,18 +239,15 @@ def test_matrix_inverse_lowering_is_numerically_correct():
 
 
 # ---------------------------------------------------------------------------
-# merge_composites_with_shared_inputs (Blocker A)
+# Joint-graph cubic-op floor pinning (was: Blocker A / merge_composites_*).
+# These pin the invariant the deleted composite-merge passes were claimed to
+# enforce; they pass without those passes because pytensor 3.0.3's fusion
+# pipeline already arrives at the floor.
 # ---------------------------------------------------------------------------
 
 
 def _gp_mll_like_joint():
-    """Build the joint forward+gradient graph for ``Unapproximated + marginal_log_likelihood``.
-
-    This is the canonical case the merge rewrite targets — it produces the
-    sibling-Composite pattern that FusionOptimizer creates when forward and
-    gradient consumers of the kernel ``exp(...)`` value sit in different
-    convex closures.
-    """
+    """Build the joint forward+gradient graph for ``Unapproximated + marginal_log_likelihood``."""
     from ptgp.gp import Unapproximated
     from ptgp.kernels import ExpQuad
     from ptgp.mean import Zero
@@ -450,7 +271,7 @@ def _count_in_compiled(fn, op_type):
     )
 
 
-def test_merge_composites_collapses_gp_joint_graph_to_one_cholesky():
+def test_gp_joint_graph_hits_one_cholesky():
     """Joint forward+gradient compilation should hit the floor: exactly one Cholesky."""
     inputs, outputs = _gp_mll_like_joint()
     fn = function(inputs, outputs)
@@ -458,17 +279,7 @@ def test_merge_composites_collapses_gp_joint_graph_to_one_cholesky():
     assert _count_in_compiled(fn, MatrixInverse) == 0
 
 
-def test_merge_composites_does_not_change_single_composite_graphs():
-    """Graphs with no sibling-Composite pattern should compile unchanged in cubic-op count."""
-    x = pt.dvector("x")
-    out = pt.exp(x) + pt.log1p(x**2)  # one Elemwise chain, one consumer
-    fn = function([x], out)
-    # There should be at most one Elemwise(Composite); definitely no Cholesky/MatrixInverse.
-    assert _count_in_compiled(fn, Cholesky) == 0
-    assert _count_in_compiled(fn, MatrixInverse) == 0
-
-
-def test_merge_composites_preserves_numerical_correctness():
+def test_gp_joint_graph_numerically_correct():
     """Joint forward+gradient values match an analytic reference and finite-difference grads."""
     inputs, outputs = _gp_mll_like_joint()
     fn = function(inputs, outputs)
@@ -479,7 +290,6 @@ def test_merge_composites_preserves_numerical_correctness():
     yv = rng.standard_normal(N)
     sigma_v, ls_v = 0.5, 1.2
 
-    # Analytic reference for the loss (note: marginal_log_likelihood includes the 2π term)
     sqd = (Xv[:, 0:1] - Xv[:, 0:1].T) ** 2
     K = np.exp(-0.5 * np.maximum(sqd / ls_v**2, 0.0)) + sigma_v**2 * np.eye(N)
     L = np.linalg.cholesky(K)
