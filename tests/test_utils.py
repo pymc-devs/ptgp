@@ -3,15 +3,15 @@
 import numpy as np
 import pymc as pm
 import pytensor.tensor as pt
-import pytest
 
 import ptgp as pg
-from ptgp.utils import check_init, _build_index_labels
 
+from ptgp.utils import _build_index_labels, check_init
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_simple_model_and_objective():
     """1-D GP on synthetic data; returns (fun, theta0, X, y, model)."""
@@ -46,6 +46,7 @@ def _make_simple_model_and_objective():
 # check_init tests
 # ---------------------------------------------------------------------------
 
+
 class TestCheckInit:
     def test_returns_true_on_valid_init(self):
         fun, theta0, X, y, model = _make_simple_model_and_objective()
@@ -54,6 +55,7 @@ class TestCheckInit:
 
     def test_returns_false_on_nan_loss(self):
         """Inject a NaN-producing function and confirm check_init catches it."""
+
         def bad_fun(theta, X, y):
             return np.nan, np.zeros_like(theta)
 
@@ -85,7 +87,7 @@ class TestCheckInit:
         out = capsys.readouterr().out
         assert f"top-{top_k}" in out
         # Expect exactly top_k labelled rows in the table
-        table_lines = [l for l in out.splitlines() if l.strip().startswith("[")]
+        table_lines = [line for line in out.splitlines() if line.strip().startswith("[")]
         assert len(table_lines) == top_k
 
     def test_labels_contain_param_names(self, capsys):
@@ -98,6 +100,7 @@ class TestCheckInit:
 
     def test_no_model_uses_indices(self, capsys):
         """Without a model, the table should still print (using numeric indices)."""
+
         def ok_fun(theta, X, y):
             return -5.0, np.arange(len(theta), dtype=float)
 
@@ -112,13 +115,14 @@ class TestCheckInit:
         fun, theta0, X, y, model = _make_simple_model_and_objective()
         check_init(fun, theta0, X, y, model=model, top_k=10_000)
         out = capsys.readouterr().out
-        table_lines = [l for l in out.splitlines() if l.strip().startswith("[")]
+        table_lines = [line for line in out.splitlines() if line.strip().startswith("[")]
         assert len(table_lines) == theta0.size
 
 
 # ---------------------------------------------------------------------------
 # _build_index_labels unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestBuildIndexLabels:
     def test_returns_none_without_model(self):
@@ -135,7 +139,7 @@ class TestBuildIndexLabels:
         assert labels is not None
         assert len(labels) == n
         # Scalar params should not have bracket suffixes
-        assert all("[" not in l for l in labels)
+        assert all("[" not in label for label in labels)
 
     def test_vector_param_has_index_suffix(self):
         with pm.Model() as model:
@@ -144,21 +148,20 @@ class TestBuildIndexLabels:
         n = sum(np.asarray(v).size for v in ip.values())
         labels = _build_index_labels(n, model=model, extra_vars=None, extra_init=None)
         assert labels is not None
-        bracketed = [l for l in labels if "[" in l]
+        bracketed = [label for label in labels if "[" in label]
         assert len(bracketed) == 3
 
     def test_extra_vars_labelled(self):
         import pytensor.tensor as pt
+
         with pm.Model() as model:
             pm.Exponential("eta", scale=1.0)
         Z_var = pt.matrix("Z_logit")
         Z_init = np.zeros((4, 2))
         ip = model.initial_point()
         n = sum(np.asarray(v).size for v in ip.values()) + Z_init.size
-        labels = _build_index_labels(
-            n, model=model, extra_vars=[Z_var], extra_init=[Z_init]
-        )
+        labels = _build_index_labels(n, model=model, extra_vars=[Z_var], extra_init=[Z_init])
         assert labels is not None
         assert len(labels) == n
-        z_labels = [l for l in labels if "Z_logit" in l]
+        z_labels = [label for label in labels if "Z_logit" in label]
         assert len(z_labels) == Z_init.size

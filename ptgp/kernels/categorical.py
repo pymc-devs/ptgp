@@ -82,9 +82,7 @@ class LowRankCategorical(Kernel):
         """Validate dimensions and store the factor loadings."""
         super().__init__(input_dim, active_dims)
         if len(self.active_dims) != 1:
-            raise ValueError(
-                "LowRankCategorical requires active_dims of length 1"
-            )
+            raise ValueError("LowRankCategorical requires active_dims of length 1")
         self.num_levels = num_levels
         self.W = W
         self.kappa = kappa

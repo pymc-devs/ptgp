@@ -14,6 +14,7 @@ from ptgp import (
 )
 from ptgp.inducing_fourier import FourierFeatures1D
 
+
 class _StdoutHandler(logging.StreamHandler):
     """Handler that resolves sys.stdout at emit time, not at init time."""
 

@@ -12,12 +12,12 @@ import pymc as pm
 import pytensor
 import pytensor.tensor as pt
 
-logger = logging.getLogger(__name__)
-
 from pytensor.graph.replace import graph_replace
 
 from ptgp.objectives import vfe_diagnostics
 from ptgp.optim.optimizers import adam
+
+logger = logging.getLogger(__name__)
 
 _PHASE_LABEL_RE = re.compile(r"^phase(?P<n>\d+)(?P<sub>[ab]?)(?:_c(?P<c>\d+))?$")
 

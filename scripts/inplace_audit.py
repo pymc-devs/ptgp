@@ -32,17 +32,16 @@ and ``overwrite_b=True``.
 
 import pytensor
 import pytensor.tensor as pt
+
 from pytensor.graph.basic import Constant
 from pytensor.tensor.blockwise import Blockwise
 
-import ptgp
 from ptgp.gp import SVGP, VFE, Unapproximated, init_variational_params
 from ptgp.inducing import Points
 from ptgp.kernels import ExpQuad
 from ptgp.likelihoods import Gaussian
 from ptgp.mean import Zero
 from ptgp.objectives import collapsed_elbo, elbo, marginal_log_likelihood
-
 
 INPLACE_ATTR_NAMES = ("overwrite_a", "overwrite_b")
 
@@ -144,9 +143,7 @@ def build_svgp():
         variational_params=vp,
     )
     loss = -elbo(svgp, X, y)
-    g_sigma, g_ls, g_Z, g_q_mu, g_q_sqrt = pt.grad(
-        loss, [sigma, ls, Z, vp.q_mu, vp.extra_vars[1]]
-    )
+    g_sigma, g_ls, g_Z, g_q_mu, g_q_sqrt = pt.grad(loss, [sigma, ls, Z, vp.q_mu, vp.extra_vars[1]])
     return pytensor.function(
         [X, y, sigma, ls, Z, vp.q_mu, vp.extra_vars[1]],
         [loss, g_sigma, g_ls, g_Z, g_q_mu, g_q_sqrt],

@@ -18,7 +18,6 @@ import numpy as np
 
 from _common import Verdict, print_verdicts
 
-
 _KUU_COND_BAD = 1e8
 _KUU_COND_WARN = 1e5
 
@@ -33,8 +32,13 @@ def check_inducing(kernel, X, Z, jitter: float = 1e-6, eig_threshold: float = 1e
     from the progressive selection in :func:`greedy_variance_init`.)
     """
     from ptgp.inducing import compute_inducing_diagnostics
+
     return compute_inducing_diagnostics(
-        kernel, X, Z, jitter=jitter, eig_threshold=eig_threshold,
+        kernel,
+        X,
+        Z,
+        jitter=jitter,
+        eig_threshold=eig_threshold,
     )
 
 
@@ -55,10 +59,7 @@ def _verdicts_from_diag(diag) -> list:
             "watch for non-finite values during training",
         )
     else:
-        v_cond = Verdict(
-            "kuu_ill_conditioned", "OK",
-            f"condition number {cond:.2g}", ""
-        )
+        v_cond = Verdict("kuu_ill_conditioned", "OK", f"condition number {cond:.2g}", "")
 
     if diag.kuu_n_small_eigenvalues > 0:
         v_small = Verdict(
@@ -69,8 +70,7 @@ def _verdicts_from_diag(diag) -> list:
         )
     else:
         v_small = Verdict(
-            "inducing_collapse", "OK",
-            f"no eigenvalues below {diag.kuu_eig_threshold:.0e}", ""
+            "inducing_collapse", "OK", f"no eigenvalues below {diag.kuu_eig_threshold:.0e}", ""
         )
 
     pct = 100.0 * (1.0 - diag.trace_curve[-1] / diag.total_variance)
@@ -89,10 +89,7 @@ def _verdicts_from_diag(diag) -> list:
             "",
         )
     else:
-        v_M = Verdict(
-            "M_too_small", "OK",
-            f"variance explained {pct:.1f}%", ""
-        )
+        v_M = Verdict("M_too_small", "OK", f"variance explained {pct:.1f}%", "")
 
     return [v_cond, v_small, v_M]
 
@@ -137,7 +134,9 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--diag-pickle", required=True, type=Path)
     parser.add_argument(
-        "--out", type=Path, default=None,
+        "--out",
+        type=Path,
+        default=None,
         help="Output PNG path (default: alongside the pickle, .png suffix)",
     )
     args = parser.parse_args(argv)

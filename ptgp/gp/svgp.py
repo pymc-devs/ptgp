@@ -1,12 +1,12 @@
 import dataclasses
 
 import numpy as np
+import pytensor.assumptions as pta
 import pytensor.tensor as pt
 
 from ptgp.conditionals import conditional_unwhitened, conditional_whitened
 from ptgp.kl import gauss_kl, gauss_kl_structured
 from ptgp.mean import Zero
-import pytensor.assumptions as pta
 
 
 def _softplus_lower_triangular(flat, M):

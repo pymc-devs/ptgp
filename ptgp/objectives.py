@@ -1,9 +1,8 @@
 from collections import namedtuple
 
 import numpy as np
-import pytensor.tensor as pt
-
 import pytensor.assumptions as pta
+import pytensor.tensor as pt
 
 MLLTerms = namedtuple("MLLTerms", ["mll", "fit", "logdet"])
 ELBOTerms = namedtuple("ELBOTerms", ["elbo", "var_exp", "kl"])

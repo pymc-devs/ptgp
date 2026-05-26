@@ -16,7 +16,6 @@ import numpy as np
 
 from _common import load_history, phase_sort_key
 
-
 _FIELDS = (
     "elbo",
     "sigma",
@@ -48,8 +47,7 @@ def _plot_history(history, phase_labels, out_path):
         if is_staged:
             for p in unique_phases:
                 mask = np.asarray([lab == p for lab in phase_labels], dtype=bool)
-                ax.plot(iters[mask], y[mask], "o-",
-                        ms=2, color=color_for[p], label=p)
+                ax.plot(iters[mask], y[mask], "o-", ms=2, color=color_for[p], label=p)
         else:
             ax.plot(iters, y, "o-", ms=2, color=cmap(0))
         ax.set_title(field)

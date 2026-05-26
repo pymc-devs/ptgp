@@ -32,7 +32,7 @@ def main():
         whiten=False,
     )
     elbo_val = elbo(svgp, pt.as_tensor(X), pt.as_tensor(y), n_data=N).elbo.eval()
-    fmean, fvar = [t.eval() for t in svgp.predict_marginal(pt.as_tensor(X))]
+    fmean, fvar = (t.eval() for t in svgp.predict_marginal(pt.as_tensor(X)))
     kl = svgp.prior_kl().eval()
 
     out = {
