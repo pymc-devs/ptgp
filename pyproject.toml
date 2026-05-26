@@ -23,8 +23,8 @@ dependencies = [
   "jax",
   "optax",
   "numpy",
-  "pymc",
-  "pytensor"
+  "pymc>=6.0.0",
+  "pytensor>=3.0.2"
 ]
 
 [project.optional-dependencies]
@@ -68,7 +68,7 @@ addopts = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.format]
 docstring-code-format = true
