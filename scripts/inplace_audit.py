@@ -20,9 +20,9 @@ take — typically because PyTensor's inplace analysis doesn't look through
 ``TypeCastingOp`` wrappers like ``SpecifyAssumptions`` to verify
 aliasing.
 
-Run from the project root:
+Run from the project root with the project's ``ptgp`` env active:
 
-    /Users/bill/miniconda3/envs/ptgp/bin/python scripts/inplace_audit.py
+    python scripts/inplace_audit.py
 
 This script is **not** part of the test suite. For a stricter regression
 check on inplace counts, write a test in ``tests/`` that walks the
