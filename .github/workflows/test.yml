@@ -19,8 +19,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  style:
+    name: Run Pre-Commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      # no-commit-to-branch would fail on direct pushes to main since HEAD is
+      # main. CI isn't committing, just linting, so skip it.
+      - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+        env:
+          SKIP: no-commit-to-branch
+
   test:
     name: ${{ matrix.name }}
+    needs: style
+    if: ${{ needs.style.result == 'success' }}
     strategy:
       matrix:
         include:
