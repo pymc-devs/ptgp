@@ -7,6 +7,8 @@ import sys
 from collections import namedtuple
 from pathlib import Path
 
+from ptgp.optim import phase_sort_key  # noqa: F401  re-exported; used by plot_history.py
+
 Verdict = namedtuple("Verdict", ["pitfall", "status", "evidence", "next_steps"])
 # status ∈ {"OK", "SUSPECT", "CONFIRMED"}
 
