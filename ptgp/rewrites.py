@@ -1,25 +1,9 @@
-"""PTGP-local PyTensor rewrites and assumption rules.
-
-Registered into PyTensor's global registries at import time. See REWRITES.md.
-
-Scope after the 2026-05 ablation (audits/rewrites_ablation_plan.md): only the
-rules that the empirical probe showed are load-bearing and not yet covered by
-upstream pytensor remain here. The deleted rules (POSITIVE assumption key and
-its consumers, ``slogdet_specialize``, ``_set_subtensor_psd``, the two
-``Composite``-merge passes) were either dead code in pytensor 3.0.3 or were
-subsumed by an explicit ``pta.assume(K, positive_definite=True, symmetric=True)``
-annotation on ``marginal_log_likelihood``'s ``K``.
-"""
-
 import pytensor.tensor as pt
 
 from pytensor.assumptions.core import check_assumption
 from pytensor.assumptions.positive_definite import POSITIVE_DEFINITE
 from pytensor.assumptions.triangular import LOWER_TRIANGULAR
-from pytensor.graph.rewriting.basic import (
-    copy_stack_trace,
-    node_rewriter,
-)
+from pytensor.graph.rewriting.basic import copy_stack_trace, node_rewriter
 from pytensor.tensor.basic import ExtractDiag
 from pytensor.tensor.blas import Dot22
 from pytensor.tensor.blockwise import Blockwise
@@ -34,20 +18,24 @@ from pytensor.tensor.rewriting.basic import register_specialize
 from pytensor.tensor.rewriting.blockwise import blockwise_of
 
 
-# ---------------------------------------------------------------------------
-# Helpers shared across the rules below.
-# ---------------------------------------------------------------------------
-
-
 def _try_AAT_factor(fgraph, M, lower_only=False):
-    """If ``M = A @ A.T`` or ``M = A.T @ A`` for some matrix ``A``, return ``(A, form)``.
+    """Detect a matmul of a matrix with its transpose.
 
-    ``form`` is ``"AAT"`` or ``"ATA"``. Recognizes both 2-D ``Dot``/``Dot22`` and
-    Blockwise-wrapped versions, so batched matmul (``(B, N, K) @ (B, K, N)``)
-    works without extra handling.
+    Parameters
+    ----------
+    fgraph : FunctionGraph
+        Used for assumption lookups when ``lower_only=True``.
+    M : TensorVariable
+        Candidate matrix.
+    lower_only : bool, optional
+        Only return matches where the factor carries the ``LOWER_TRIANGULAR``
+        assumption. Default False.
 
-    If ``lower_only=True``, only return matches where ``A`` is annotated
-    ``LOWER_TRIANGULAR`` — required by the slogdet/det/inverse fast paths.
+    Returns
+    -------
+    tuple of (TensorVariable, str) or None
+        ``(A, "AAT")`` when ``M = A @ A.T``, ``(A, "ATA")`` when ``M = A.T @ A``,
+        otherwise None.
     """
     match M.owner_op_and_inputs:
         case (Blockwise(Dot()) | Dot() | Dot22(), a, b):
@@ -71,10 +59,18 @@ def _try_AAT_factor(fgraph, M, lower_only=False):
 
 
 def _existing_cholesky(fgraph, A):
-    """Return an existing ``Cholesky(lower=True)(A)`` output already in *fgraph*, else None.
+    """Find an existing ``Cholesky(A, lower=True)`` output already in the graph.
 
-    Lets the inverse rewrite share a factor produced by an upstream Solve lowering
-    instead of computing a second one.
+    Parameters
+    ----------
+    fgraph : FunctionGraph
+    A : TensorVariable
+        Matrix whose Cholesky factor to look up among its clients.
+
+    Returns
+    -------
+    TensorVariable or None
+        Output of the existing Cholesky Apply, or None.
     """
     for client, _ in fgraph.clients.get(A, ()):
         match client.op:
@@ -83,53 +79,40 @@ def _existing_cholesky(fgraph, A):
     return None
 
 
-# ---------------------------------------------------------------------------
-# Det(L @ L.T) -> (prod(diag(L)))**2 for lower-triangular L.
-#
-# Identity: det(L @ L.T) = det(L)**2 = (prod(diag(L)))**2 (always >= 0).
-# Eliminates the standalone Det Apply that survives upstream's slogdet rewrites
-# when Det is also referenced by the gradient pullback (det(M) * inv(M).T).
-# ---------------------------------------------------------------------------
-
-
 @register_specialize
 @node_rewriter([blockwise_of(Det)])
 def det_of_LLT_to_diag_product(fgraph, node):
-    """``Det(L @ L.T)`` or ``Det(L.T @ L)`` -> ``(prod(diag(L)))**2`` for lower-triangular ``L``.
+    r"""Lower ``Det(L @ L.T)`` and ``Det(L.T @ L)`` to a diagonal product.
 
-    Identity: ``det(L L.T) = det(L.T L) = det(L)**2 = (prod(diag(L)))**2`` (always >= 0).
+    Requires :math:`L` carrying the ``LOWER_TRIANGULAR`` assumption.
+
+    .. math::
+
+        \det(L L^\top) = \det(L^\top L) = \det(L)^2 = \left(\prod_i L_{ii}\right)^2
     """
     [A] = node.inputs
     aat = _try_AAT_factor(fgraph, A, lower_only=True)
     if aat is None:
         return None
-    L, _form = aat
+    L, _ = aat
     diag_L = pt.diagonal(L, axis1=-2, axis2=-1)
     new_det = (diag_L.prod(axis=-1) ** 2).astype(node.outputs[0].dtype)
     copy_stack_trace(node.outputs[0], new_det)
     return [new_det]
 
 
-# ---------------------------------------------------------------------------
-# ExtractDiag(A @ A.T) -> sum(A**2, axis=-1) for any matrix A.
-#
-# Identity: (A @ A.T)[i,i] = sum_k A[i,k]^2 = ||A_row_i||^2. Folding this lets
-# pt.trace(L @ L.T) compile to ||L||_F^2 directly, eliminating the M^2-element
-# materialization of the L @ L.T outer product just to take its trace.
-# Generally useful — not GP-specific. No assumption needed on A.
-# ---------------------------------------------------------------------------
-
-
 @register_specialize
 @node_rewriter([ExtractDiag])
 def diag_of_AAT_to_row_norms_squared(fgraph, node):
-    """Diagonal of ``A @ A.T`` (or ``A.T @ A``) lowers to elementwise norms of ``A``.
+    r"""Lower the diagonal of ``A @ A.T`` or ``A.T @ A`` to elementwise norms.
 
-    - ``ExtractDiag(A @ A.T)`` -> ``sum(A**2, axis=-1)`` (row norms squared)
-    - ``ExtractDiag(A.T @ A)`` -> ``sum(A**2, axis=-2)`` (column norms squared)
+    .. math::
 
-    Generic — no assumption needed on ``A``. Handles batched matmul via
-    ``Blockwise(Dot)`` automatically (the AAT factor matcher unwraps Blockwise).
+        (A A^\top)_{ii} = \sum_k A_{ik}^2, \qquad
+        (A^\top A)_{ii} = \sum_k A_{ki}^2
+
+    ``ExtractDiag(A @ A.T)`` lowers to ``sum(A**2, axis=-1)``; ``ExtractDiag(A.T @ A)``
+    lowers to ``sum(A**2, axis=-2)``. No assumption on ``A`` is required.
     """
     extract_op = node.op
     if extract_op.offset != 0:
@@ -138,7 +121,8 @@ def diag_of_AAT_to_row_norms_squared(fgraph, node):
     ndim = A_AT.type.ndim
     if ndim is None or ndim < 2:
         return None
-    # ExtractDiag must select the trailing two axes (the matrix axes).
+    # The diag must run along the matrix axes; if ExtractDiag is reading other
+    # axes the AAT pattern does not apply.
     axis1 = extract_op.axis1 % ndim
     axis2 = extract_op.axis2 % ndim
     if {axis1, axis2} != {ndim - 2, ndim - 1}:
@@ -153,25 +137,17 @@ def diag_of_AAT_to_row_norms_squared(fgraph, node):
     return [new_diag]
 
 
-# ---------------------------------------------------------------------------
-# MatrixInverse(PSD A) -> cho_solve(L, eye), reusing an existing Cholesky if
-# present. Avoids the redundant cubic factorisation that pt.grad(slogdet)
-# triggers via its standalone MatrixInverse cotangent.
-# ---------------------------------------------------------------------------
-
-
 @register_specialize
 @node_rewriter([blockwise_of(MatrixInverse)])
 def matrix_inverse_specialize(fgraph, node):
-    """``MatrixInverse(A)`` -> simplified form when ``A`` has structure.
+    r"""Lower ``MatrixInverse(A)`` when ``A`` has a known structure.
 
-    Three paths:
-    - ``A = L @ L.T`` (lower-triangular ``L``): ``cho_solve((L, True), eye)``,
-      using ``L`` directly — no fresh Cholesky.
-    - ``A = L.T @ L`` (lower-triangular ``L``): ``inv(L) @ inv(L.T)`` via two
-      ``solve_triangular`` calls — also reuses ``L`` directly.
-    - Otherwise (generic PSD ``A``): ``cho_solve((Cholesky(A), True), eye)``,
-      sharing an existing Cholesky if already in the graph.
+    - ``A = L @ L.T`` with lower-triangular ``L``: ``cho_solve((L, True), eye)``,
+      reusing ``L`` directly.
+    - ``A = L.T @ L`` with lower-triangular ``L``: two ``solve_triangular`` calls
+      implementing :math:`L^{-1} L^{-\top}`.
+    - ``A`` PSD: ``cho_solve((Cholesky(A), True), eye)``, sharing an existing
+      Cholesky factor if one is in the graph.
     """
     [A] = node.inputs
     eye = pt.eye(A.shape[-1], dtype=A.dtype)
@@ -181,7 +157,8 @@ def matrix_inverse_specialize(fgraph, node):
         L, form = aat
         if form == "AAT":
             inv_A = cho_solve((L, True), eye)
-        else:  # ATA: inv(L.T @ L) = inv(L) @ inv(L.T)
+        else:
+            # inv(L.T @ L) = inv(L) @ inv(L.T): two triangular solves on L.
             inv_A = solve_triangular(L, solve_triangular(L, eye, lower=True, trans="T"), lower=True)
     else:
         if not check_assumption(fgraph, A, POSITIVE_DEFINITE):
