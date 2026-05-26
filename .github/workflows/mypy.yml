@@ -1,0 +1,46 @@
+name: mypy
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/*"
+      - "ptgp/**"
+      - "scripts/run_mypy.py"
+      - "scripts/mypy-failing.txt"
+      - "pyproject.toml"
+      - "conda_envs/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.head_ref || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  mypy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -leo pipefail {0}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: mamba-org/setup-micromamba@add3a49764cedee8ee24e82dfde87f5bc2914462 # v2.0.7
+        with:
+          environment-file: conda_envs/environment-test.yaml
+          create-args: >-
+            python=3.13
+          environment-name: ptgp-test
+          init-shell: bash
+          cache-environment: true
+          post-cleanup: none
+      - name: Install pytensor and pymc
+        run: pip install --no-deps git+https://github.com/pymc-devs/pytensor@main pymc
+      - name: Install ptgp
+        run: |
+          pip install -e . --no-deps
+          python --version
+      - name: Run mypy
+        run: |
+          python ./scripts/run_mypy.py --verbose

@@ -28,7 +28,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pre-commit"]
+dev = ["pytest", "pre-commit", "mypy", "polars"]
 
 [project.urls]
 Repository = "https://github.com/bwengals/ptgp.git"
@@ -107,3 +107,14 @@ ignore = [
 
 [tool.ruff.lint.isort]
 lines-between-types = 1
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+strict_equality = true
+warn_redundant_casts = true
+warn_unused_configs = true
+warn_unused_ignores = true
+warn_return_any = true
+warn_unreachable = true
+files = ["ptgp"]
