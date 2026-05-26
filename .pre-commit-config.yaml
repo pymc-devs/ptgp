@@ -27,3 +27,4 @@ repos:
   hooks:
     - id: no-print-statements
       files: ^ptgp/
+      exclude: ^ptgp/_cli\.py$
