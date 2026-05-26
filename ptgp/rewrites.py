@@ -39,31 +39,6 @@ from pytensor.tensor.rewriting.blockwise import blockwise_of
 # ---------------------------------------------------------------------------
 
 
-def _matrix_transpose_of(var):
-    """Return the underlying ``X`` if ``var`` is ``X.T``, else None.
-
-    Works for both 2D and N-D tensors (matrix transpose = swap of last two axes).
-    """
-    owner = var.owner
-    if owner is None:
-        return None
-    if isinstance(owner.op, DimShuffle) and owner.op.is_matrix_transpose:
-        return owner.inputs[0]
-    return None
-
-
-def _unwrap_blockwise(op):
-    """Unwrap ``Blockwise`` to the core op; pass other ops through."""
-    return op.core_op if isinstance(op, Blockwise) else op
-
-
-def _core_op_of(var):
-    """Return ``var.owner.op``'s core op (unwrapping ``Blockwise``); None if no owner."""
-    if var.owner is None:
-        return None
-    return _unwrap_blockwise(var.owner.op)
-
-
 def _try_AAT_factor(fgraph, M, lower_only=False):
     """If ``M = A @ A.T`` or ``M = A.T @ A`` for some matrix ``A``, return ``(A, form)``.
 
@@ -74,17 +49,24 @@ def _try_AAT_factor(fgraph, M, lower_only=False):
     If ``lower_only=True``, only return matches where ``A`` is annotated
     ``LOWER_TRIANGULAR`` — required by the slogdet/det/inverse fast paths.
     """
-    if not isinstance(_core_op_of(M), Dot | Dot22):
-        return None
-    a, b = M.owner.inputs
-    if _matrix_transpose_of(b) is a:
-        if lower_only and not check_assumption(fgraph, a, LOWER_TRIANGULAR):
+    match M.owner_op_and_inputs:
+        case (Blockwise(Dot()) | Dot() | Dot22(), a, b):
+            pass
+        case _:
             return None
-        return a, "AAT"
-    if _matrix_transpose_of(a) is b:
-        if lower_only and not check_assumption(fgraph, b, LOWER_TRIANGULAR):
-            return None
-        return b, "ATA"
+
+    match b.owner_op_and_inputs:
+        case (DimShuffle(is_left_expanded_matrix_transpose=True), inner) if inner is a:
+            if lower_only and not check_assumption(fgraph, a, LOWER_TRIANGULAR):
+                return None
+            return a, "AAT"
+
+    match a.owner_op_and_inputs:
+        case (DimShuffle(is_left_expanded_matrix_transpose=True), inner) if inner is b:
+            if lower_only and not check_assumption(fgraph, b, LOWER_TRIANGULAR):
+                return None
+            return b, "ATA"
+
     return None
 
 
@@ -95,9 +77,9 @@ def _existing_cholesky(fgraph, A):
     instead of computing a second one.
     """
     for client, _ in fgraph.clients.get(A, ()):
-        core_op = _unwrap_blockwise(client.op)
-        if isinstance(core_op, Cholesky) and core_op.lower:
-            return client.outputs[0]
+        match client.op:
+            case Blockwise(Cholesky(lower=True)) | Cholesky(lower=True):
+                return client.outputs[0]
     return None
 
 
