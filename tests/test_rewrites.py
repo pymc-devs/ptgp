@@ -1,85 +1,30 @@
-"""Tests for the assumption rules and rewrites added in ``ptgp.rewrites``.
+"""Tests for the structural rewrites in ``ptgp.rewrites``.
 
-Written so that, when the rules are upstreamed into PyTensor, the test bodies
-move over unchanged — only the side-effect import that installs the rules
-would shift from ``ptgp`` to ``pytensor``.
+Written so that, when the rewrites are upstreamed into PyTensor, the test
+bodies move over unchanged — only the side-effect import that installs the
+rules would shift from ``ptgp`` to ``pytensor``.
 
 After the 2026-05 ablation (see ``audits/rewrites_ablation_plan.md``) the
-scope of ``ptgp.rewrites`` shrank to: B/C (PSD-quadratic-form via
-Solve / CholeskySolve), H (Det(L @ L.T)), I (diag(A @ A.T)), and J
-(MatrixInverse(PSD A)). Tests for the deleted POSITIVE bundle,
-``slogdet_specialize``, ``_set_subtensor_psd``, and the composite-merge
-passes have been removed.
+scope of ``ptgp.rewrites`` shrank to three structural rewrites: H
+(``Det(L @ L.T)``), I (``diag(A @ A.T)``), and J (``MatrixInverse(PSD A)``).
 """
 
 import numpy as np
 import pytensor.tensor as pt
 
 from pytensor import function
-from pytensor.assumptions import (
-    POSITIVE_DEFINITE,
-    AssumptionFeature,
-)
 from pytensor.graph import rewrite_graph
 from pytensor.graph.fg import FunctionGraph
 from pytensor.tensor.basic import ExtractDiag
 from pytensor.tensor.blockwise import Blockwise
-from pytensor.tensor.linalg.decomposition.cholesky import Cholesky, cholesky
+from pytensor.tensor.linalg.decomposition.cholesky import Cholesky
 from pytensor.tensor.linalg.inverse import MatrixInverse
 from pytensor.tensor.linalg.summary import Det
 
-# Install the assumption rules and rewrites under test (side-effect import).
+# Install the rewrites under test (side-effect import).
 import ptgp.rewrites  # noqa: F401
 
 import pytensor.assumptions as pta
-
-
-def make_fgraph(*outputs, inputs=None):
-    fg = FunctionGraph(outputs=list(outputs), inputs=inputs, clone=False)
-    af = AssumptionFeature()
-    fg.attach_feature(af)
-    return fg, af
-
-
-# ---------------------------------------------------------------------------
-# POSITIVE_DEFINITE inference: PSD-quadratic-form via Solve / CholeskySolve.
-# (Rules B and C in ptgp/rewrites.py.)
-# ---------------------------------------------------------------------------
-
-
-def test_psd_propagates_through_matrix_transpose():
-    """Sanity check: upstream already provides this (POSITIVE_DEFINITE, DimShuffle)."""
-    K = pta.assume(pt.dmatrix("K"), positive_definite=True, symmetric=True)
-    _, af = make_fgraph(K.T, inputs=[K.owner.inputs[0]])
-    assert af.check(K.T, POSITIVE_DEFINITE)
-
-
-def test_quadratic_form_dot_is_psd():
-    """X.T @ M @ X is PSD when M is PSD (upstream ``match_congruence``)."""
-    X = pt.dmatrix("X")
-    M = pta.assume(pt.dmatrix("M"), positive_definite=True, symmetric=True)
-    Q = X.T.dot(M.dot(X))
-    _, af = make_fgraph(Q, inputs=[X, M.owner.inputs[0]])
-    assert af.check(Q, POSITIVE_DEFINITE)
-
-
-def test_quadratic_form_with_solve_is_psd():
-    """X.T @ M^{-1} @ X (written as Solve) is PSD when M is PSD. (Rule B.)"""
-    X = pt.dmatrix("X")
-    M = pta.assume(pt.dmatrix("M"), positive_definite=True, symmetric=True)
-    Q = X.T.dot(pt.linalg.solve(M, X))
-    _, af = make_fgraph(Q, inputs=[X, M.owner.inputs[0]])
-    assert af.check(Q, POSITIVE_DEFINITE)
-
-
-def test_quadratic_form_with_cholesky_solve_is_psd():
-    """X.T @ M^{-1} @ X (written as CholeskySolve) is PSD when L = Cholesky(M). (Rule C.)"""
-    X = pt.dmatrix("X")
-    M = pta.assume(pt.dmatrix("M"), positive_definite=True, symmetric=True)
-    L = cholesky(M, lower=True)
-    Q = X.T.dot(pt.linalg.cho_solve((L, True), X))
-    _, af = make_fgraph(Q, inputs=[X, M.owner.inputs[0]])
-    assert af.check(Q, POSITIVE_DEFINITE)
 
 
 # ---------------------------------------------------------------------------

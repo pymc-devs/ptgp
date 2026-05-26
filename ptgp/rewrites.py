@@ -13,11 +13,7 @@ annotation on ``marginal_log_likelihood``'s ``K``.
 
 import pytensor.tensor as pt
 
-from pytensor.assumptions.core import (
-    FactState,
-    check_assumption,
-    register_assumption,
-)
+from pytensor.assumptions.core import check_assumption
 from pytensor.assumptions.positive_definite import POSITIVE_DEFINITE
 from pytensor.assumptions.triangular import LOWER_TRIANGULAR
 from pytensor.graph.rewriting.basic import (
@@ -30,8 +26,7 @@ from pytensor.tensor.blockwise import Blockwise
 from pytensor.tensor.elemwise import DimShuffle
 from pytensor.tensor.linalg.decomposition.cholesky import Cholesky, cholesky
 from pytensor.tensor.linalg.inverse import MatrixInverse
-from pytensor.tensor.linalg.solvers.general import Solve
-from pytensor.tensor.linalg.solvers.psd import CholeskySolve, cho_solve
+from pytensor.tensor.linalg.solvers.psd import cho_solve
 from pytensor.tensor.linalg.solvers.triangular import solve_triangular
 from pytensor.tensor.linalg.summary import Det
 from pytensor.tensor.math import Dot
@@ -69,12 +64,6 @@ def _core_op_of(var):
     return _unwrap_blockwise(var.owner.op)
 
 
-def _matches_core_op(var, *op_classes):
-    """If ``var``'s core op is an instance of any in ``op_classes``, return that op; else None."""
-    op = _core_op_of(var)
-    return op if isinstance(op, op_classes) else None
-
-
 def _try_AAT_factor(fgraph, M, lower_only=False):
     """If ``M = A @ A.T`` or ``M = A.T @ A`` for some matrix ``A``, return ``(A, form)``.
 
@@ -110,39 +99,6 @@ def _existing_cholesky(fgraph, A):
         if isinstance(core_op, Cholesky) and core_op.lower:
             return client.outputs[0]
     return None
-
-
-# ---------------------------------------------------------------------------
-# PSD recognition for ``X.T @ M^{-1} @ X`` expressed via ``Solve`` / ``CholeskySolve``.
-# ``match_congruence`` in upstream only walks ``Dot`` nodes, so it cannot see the
-# ``Solve`` / ``CholeskySolve`` acting as ``M^{-1}``. These two clauses fill that gap.
-# ---------------------------------------------------------------------------
-
-
-@register_assumption(POSITIVE_DEFINITE, Dot)
-def _dot_xt_solve_x_psd(key, op, feature, fgraph, node, input_states):
-    """``X.T @ Solve(M, X)`` ≡ ``X.T @ M^{-1} @ X`` is PSD when ``M`` is PSD."""
-    a, b = node.inputs
-    X = _matrix_transpose_of(a)
-    if X is None or _matches_core_op(b, Solve) is None:
-        return [FactState.UNKNOWN]
-    M, X2 = b.owner.inputs
-    if X2 is X and feature.check(M, POSITIVE_DEFINITE):
-        return [FactState.TRUE]
-    return [FactState.UNKNOWN]
-
-
-@register_assumption(POSITIVE_DEFINITE, Dot)
-def _dot_xt_chosolve_x_psd(key, op, feature, fgraph, node, input_states):
-    """``X.T @ CholeskySolve(L, X)`` ≡ ``X.T @ M^{-1} @ X`` (M = L @ L.T) is PSD."""
-    a, b = node.inputs
-    X = _matrix_transpose_of(a)
-    if X is None or _matches_core_op(b, CholeskySolve) is None:
-        return [FactState.UNKNOWN]
-    L, X2 = b.owner.inputs
-    if X2 is X and isinstance(_core_op_of(L), Cholesky):
-        return [FactState.TRUE]
-    return [FactState.UNKNOWN]
 
 
 # ---------------------------------------------------------------------------
