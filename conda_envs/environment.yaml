@@ -33,5 +33,7 @@ dependencies:
     - sphinx-codeautolink
     - sphinx-sitemap
     - sphinx-notfound-page
+    - jupyter-sphinx
+    - sphinxcontrib-bibtex
     - arviz
     - pip
