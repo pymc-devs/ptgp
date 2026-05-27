@@ -95,13 +95,12 @@ def main(argv=None) -> int:
         metavar="DIR",
         help="Install into <DIR>/.claude/skills/ instead of ~/.claude/skills/",
     )
-    p_install.add_argument(
-        "--force", action="store_true", help="Overwrite existing entries"
-    )
+    p_install.add_argument("--force", action="store_true", help="Overwrite existing entries")
     p_install.set_defaults(func=install_skills)
 
     args = parser.parse_args(argv)
-    return args.func(args)
+    rc: int = args.func(args)
+    return rc
 
 
 if __name__ == "__main__":

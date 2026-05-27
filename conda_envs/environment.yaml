@@ -20,5 +20,8 @@ dependencies:
     - scikit-learn
     - pre-commit
     - pytest
+    - mypy
+    - polars
+    - pymc
     - arviz
     - pip

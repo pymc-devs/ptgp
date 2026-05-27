@@ -42,11 +42,10 @@ class Kernel:
         raise NotImplementedError
 
     def diag(self, X):
-        """Diagonal of K(X, X) — subclasses implement."""
-        raise NotImplementedError
+        """Return the diagonal of K(X, X).
 
-    def diag(self, X):
-        """Diagonal of K(X, X). Default fallback: pt.diag(self(X))."""
+        Default fallback materializes the full kernel matrix via ``self(X)``.
+        """
         import pytensor.tensor as pt
 
         return pt.diag(self(X))
