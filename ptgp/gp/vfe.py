@@ -36,6 +36,14 @@ class VFE:
         self.likelihood = Gaussian(sigma)
         self.inducing_variable = inducing_variable
 
+    @property
+    def extra_vars(self):
+        return tuple(self.inducing_variable.extra_vars)
+
+    @property
+    def extra_init(self):
+        return tuple(self.inducing_variable.extra_init)
+
     def predict_marginal(self, X_new, X_train, y_train, incl_lik=False):
         """Posterior marginal mean and variance at each point in X_new.
 

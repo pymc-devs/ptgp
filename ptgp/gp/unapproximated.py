@@ -19,6 +19,9 @@ class Unapproximated:
         Observation noise standard deviation.
     """
 
+    extra_vars = ()
+    extra_init = ()
+
     def __init__(self, kernel, mean=None, sigma=None):
         """Store the kernel and mean; build a Gaussian likelihood from sigma."""
         self.kernel = kernel

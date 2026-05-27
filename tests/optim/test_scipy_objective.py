@@ -235,3 +235,32 @@ class TestNamedtupleObjective:
         loss_sc, grad_sc = fun_sc(theta0, X, y)
         np.testing.assert_allclose(loss_nt, loss_sc)
         np.testing.assert_allclose(grad_nt, grad_sc)
+
+
+class TestAutoExtras:
+    def test_vfe_extras_auto_detected(self):
+        rng = np.random.default_rng(0)
+        X = rng.standard_normal((20, 1))
+        y = np.sin(X[:, 0]) + 0.1 * rng.standard_normal(20)
+        M = 5
+        Z_init = np.linspace(-2, 2, M)[:, None]
+
+        X_var = pt.matrix("X", shape=(None, 1))
+        y_var = pt.vector("y", shape=(None,))
+        Z_var = pt.matrix("Z", shape=(M, 1))
+        with pm.Model():
+            ls = pm.HalfFlat("ls")
+            eta = pm.Exponential("eta", lam=1.0)
+            sigma = pm.HalfNormal("sigma", sigma=1.0)
+            vfe = pg.gp.VFE(
+                kernel=eta**2 * pg.kernels.Matern52(input_dim=1, ls=ls),
+                sigma=sigma,
+                inducing_variable=pg.inducing.Points(Z_var, Z_init=Z_init),
+            )
+
+            fun, theta0, *_ = pg.optim.compile_scipy_objective(
+                pg.objectives.collapsed_elbo, vfe, X_var, y_var
+            )
+        assert theta0.shape == (3 + M,)
+        loss, grad = fun(theta0, X, y)
+        assert np.isfinite(loss)

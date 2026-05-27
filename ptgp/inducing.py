@@ -25,7 +25,13 @@ class InducingVariables:
     ``K_uf(kernel, X)``. The default ``Kuu_solve`` / ``Kuu_sqrt_solve`` /
     ``Kuu_logdet`` methods materialise ``K_uu`` and call dense linalg;
     structured subclasses override them with cheaper variants.
+
+    Subclasses with trainable parameters override ``extra_vars`` /
+    ``extra_init`` to surface their symbolic leaves and initial values.
     """
+
+    extra_vars = ()
+    extra_init = ()
 
     @property
     def num_inducing(self):
@@ -62,10 +68,22 @@ class Points(InducingVariables):
     ----------
     Z : tensor or PyMC random variable, shape (M, D)
         Inducing point locations.
+    Z_init : ndarray, optional
+        Initial values when ``Z`` is a trainable symbolic placeholder. Omit
+        for constant ``Z`` (e.g. ``pt.as_tensor_variable(Z_array)``).
     """
 
-    def __init__(self, Z):
+    def __init__(self, Z, Z_init=None):
         self.Z = Z
+        self.Z_init = None if Z_init is None else np.asarray(Z_init, dtype=np.float64)
+
+    @property
+    def extra_vars(self):
+        return (self.Z,) if self.Z_init is not None else ()
+
+    @property
+    def extra_init(self):
+        return (self.Z_init,) if self.Z_init is not None else ()
 
     @property
     def num_inducing(self):
