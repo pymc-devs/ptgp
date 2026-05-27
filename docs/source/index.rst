@@ -58,6 +58,7 @@ walkthroughs.
 
    get_started/index
    user_guide/index
+   kernels/gallery
    examples/gallery
    api
    dev/index

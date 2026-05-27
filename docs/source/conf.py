@@ -46,6 +46,7 @@ extensions = [
     "sphinx_copybutton",
     "sphinx_codeautolink",
     "generate_gallery",
+    "generate_kernel_gallery",
 ]
 
 # Use the document path as prefix for autosectionlabel anchors so the same
