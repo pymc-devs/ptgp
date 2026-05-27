@@ -81,6 +81,14 @@ remove_from_toctrees = ["**/classmethods/*"]
 
 numpydoc_show_class_members = False
 numpydoc_xref_param_type = True
+
+# Teach numpydoc about project-specific section headers so they render as
+# proper sections instead of emitting "Unknown section" warnings.
+from numpydoc.docscrape import NumpyDocString  # noqa: E402
+
+for _section in ("Recommended Workflow", "Factorisation", "Fields", "Interrupts"):
+    NumpyDocString.sections.setdefault(_section, [])
+del NumpyDocString
 numpydoc_xref_ignore = {
     "of",
     "or",

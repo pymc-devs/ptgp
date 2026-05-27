@@ -51,10 +51,12 @@ CATEGORY_TITLES = {
 
 DEFAULT_IMG_LOC = None
 
-HEAD = """
+TITLE = """
 Example Gallery
 ===============
+"""
 
+TOCTREE_HEAD = """
 .. toctree::
    :hidden:
 
@@ -209,12 +211,13 @@ def main(app):
             type="thumbnail_extractor",
         )
 
-    file_lines = [HEAD]
+    toctree_entries: list[str] = []
+    section_lines: list[str] = []
 
     for category in sorted(grouped):
         nb_paths = grouped[category]
         title = CATEGORY_TITLES.get(category, category.replace("_", " ").title())
-        file_lines.append(
+        section_lines.append(
             SECTION_TEMPLATE.format(
                 section_title=title,
                 section_id=category,
@@ -240,11 +243,12 @@ def main(app):
             nbg.gen_previews()
 
             doc_name = f"{category}/{nbg.stripped_name}"
+            toctree_entries.append(doc_name)
             # Path is relative to docs/source/ — the leading slash makes
             # Sphinx resolve it from the source root, matching gEconpy's
             # convention so users can drop in custom thumbnails too.
             img_path = f"/_thumbnails/{category}/{nbg.stripped_name}.png"
-            file_lines.append(
+            section_lines.append(
                 ITEM_TEMPLATE.format(
                     doc_name=doc_name,
                     image=img_path,
@@ -252,6 +256,13 @@ def main(app):
                     link_type="doc",
                 )
             )
+
+    # Assemble: title, hidden toctree (so notebooks register with Sphinx),
+    # then the visible grid-card sections.
+    file_lines = [TITLE, TOCTREE_HEAD]
+    file_lines.extend(f"   {entry}\n" for entry in toctree_entries)
+    file_lines.append("\n")
+    file_lines.extend(section_lines)
 
     gallery_rst = examples_dir / "gallery.rst"
     gallery_rst.write_text("\n".join(file_lines), encoding="utf-8")

@@ -70,8 +70,8 @@ def check_init(
     """Evaluate the compiled objective at theta0 and report whether the result is finite.
 
     Prints a one-line summary for the loss and grad, then lists the top ``top_k``
-    largest |grad| components annotated with their variable names (when ``model``
-    is supplied).
+    largest ``|grad|`` components annotated with their variable names (when
+    ``model`` is supplied).
 
     Parameters
     ----------
@@ -94,7 +94,7 @@ def check_init(
         Initial values for ``extra_vars``.  Required for labelling when
         ``extra_vars`` is provided.
     top_k : int
-        Number of largest |grad| components to print.  Default 10.
+        Number of largest ``|grad|`` components to print.  Default 10.
 
     Returns
     -------
