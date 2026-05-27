@@ -3,13 +3,12 @@ channels:
     - conda-forge
 dependencies:
     - python>=3.12
-    #- pymc  # installed from v6 branch via pip
+    - pymc
+    - pytensor>=3.0.3
     - jax
     - jaxlib
     - optax
     - scipy
-    - libblas=*=*mkl
-    - mkl-service
     - pytest
     - gpjax
     - ipykernel
@@ -21,9 +20,5 @@ dependencies:
     - scikit-learn
     - pre-commit
     - pytest
-    #- arviz  # installed via pip (arviz 1.x + arviz-base + arviz-plots)
-    - pymc
+    - arviz
     - pip
-    - pip:
-        - git+https://github.com/pymc-devs/pytensor@main
-        - git+https://github.com/arviz-devs/preliz@main

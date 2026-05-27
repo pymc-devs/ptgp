@@ -48,8 +48,6 @@ jobs:
           init-shell: ${{ matrix.os == 'windows-latest' && 'cmd.exe' || 'bash' }}
           cache-environment: true
           post-cleanup: none
-      - name: Install pytensor and pymc
-        run: pip install --no-deps git+https://github.com/pymc-devs/pytensor@main pymc
       - name: Install ptgp
         run: |
           pip install -e . --no-deps

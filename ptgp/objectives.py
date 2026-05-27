@@ -37,6 +37,7 @@ def marginal_log_likelihood(gp, X, y):
     """
     mu = gp.mean(X)
     K = gp.kernel(X) + gp.likelihood.sigma**2 * pt.eye(X.shape[0])
+    K = pta.assume(K, positive_definite=True, symmetric=True)
 
     diff = y - mu
     sign, logdet_K = pt.linalg.slogdet(K)
