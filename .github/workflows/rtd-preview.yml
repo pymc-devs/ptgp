@@ -1,0 +1,30 @@
+name: Read the Docs PR preview
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    # Only fire when something that could change the docs build is touched.
+    paths:
+      - "docs/**"
+      - ".readthedocs.yaml"
+      - "conda_envs/environment-docs.yaml"
+      - "ptgp/**"
+      - "pyproject.toml"
+
+permissions:
+  pull-requests: write
+
+jobs:
+  documentation-links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: readthedocs/actions/preview@v1
+        with:
+          # Project slug as configured on Read the Docs. Verify this matches
+          # the slug shown in the RTD project URL
+          # (https://readthedocs.org/projects/<slug>/) once the project is
+          # imported there.
+          project-slug: "ptgp"
