@@ -26,6 +26,7 @@ dependencies:
     - sphinx-codeautolink
     - sphinx-sitemap
     - sphinx-notfound-page
+    - sphinx-autobuild
     - pip
     - pip:
         - git+https://github.com/pymc-devs/pytensor@main
