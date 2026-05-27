@@ -5,7 +5,7 @@ import pytensor
 import pytensor.tensor as pt
 import pytest
 
-from ptgp.kernels import ExpQuad, Gibbs, Matern52, RandomWalk, WarpedInput
+from ptgp.kernels import ExpQuad, Gibbs, Linear, Matern52, RandomWalk, WarpedInput
 
 
 def _ptgp_eval(kernel, X_np, Y_np=None):
@@ -15,6 +15,55 @@ def _ptgp_eval(kernel, X_np, Y_np=None):
     K_sym = kernel(X_pt, Y_pt)
     f = pytensor.function([], K_sym)
     return f()
+
+
+class TestLinear:
+    def test_gram_values(self):
+        X = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+        np.testing.assert_allclose(_ptgp_eval(Linear(input_dim=2), X), X @ X.T, atol=1e-14)
+
+    def test_cross_shape_and_values(self):
+        X = np.array([[1.0, 2.0], [3.0, 4.0]])
+        Y = np.array([[0.5, 1.0], [2.0, -1.0], [4.0, 0.0]])
+        K = _ptgp_eval(Linear(input_dim=2), X, Y)
+        np.testing.assert_allclose(K, X @ Y.T, atol=1e-14)
+
+    def test_centering(self):
+        """k(x, y) = (x - c)(y - c) with non-zero c."""
+        X = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+        c = 2.5
+        np.testing.assert_allclose(
+            _ptgp_eval(Linear(input_dim=2, c=c), X), (X - c) @ (X - c).T, atol=1e-14
+        )
+
+    def test_vs_pymc(self):
+        """Centered Linear matches PyMC's pm.gp.cov.Linear."""
+        import pymc as pm
+
+        rng = np.random.default_rng(0)
+        X = rng.standard_normal((10, 3))
+        c = 0.7
+        K_ptgp = _ptgp_eval(Linear(input_dim=3, c=c), X)
+        K_pymc = pm.gp.cov.Linear(input_dim=3, c=c)(pt.as_tensor_variable(X)).eval()
+        np.testing.assert_allclose(K_ptgp, K_pymc, atol=1e-12)
+
+    def test_active_dims(self):
+        X = np.array([[1.0, 10.0], [2.0, 20.0], [3.0, 30.0]])
+        K = _ptgp_eval(Linear(input_dim=2, active_dims=[0]), X)
+        np.testing.assert_allclose(K, X[:, :1] @ X[:, :1].T, atol=1e-14)
+
+    def test_scaling(self):
+        X = np.array([[1.0, 2.0], [3.0, 4.0]])
+        np.testing.assert_allclose(
+            _ptgp_eval(3.0 * Linear(input_dim=2), X), 3.0 * (X @ X.T), atol=1e-14
+        )
+
+    def test_diag_matches_gram_diag(self):
+        rng = np.random.default_rng(1)
+        X = rng.standard_normal((8, 2))
+        k = Linear(input_dim=2, c=0.3)
+        X_pt = pt.as_tensor_variable(X)
+        np.testing.assert_allclose(k.diag(X_pt).eval(), np.diag(k(X_pt).eval()), atol=1e-12)
 
 
 class TestRandomWalk:
