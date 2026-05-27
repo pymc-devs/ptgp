@@ -1,8 +1,10 @@
 import pytensor.assumptions as pta
 import pytensor.tensor as pt
 
+from pytensor.graph.basic import Constant
 from pytensor.graph.replace import graph_replace
 from pytensor.graph.traversal import ancestors
+from pytensor.tensor.type import TensorType
 
 from ptgp.likelihoods.base import Likelihood
 
@@ -18,34 +20,31 @@ class Gaussian(Likelihood):
     ----------
     sigma : tensor
         Observation noise standard deviation. May be a scalar (homoskedastic)
-        or a vector built against a symbolic ``X`` (heteroskedastic). For the
-        heteroskedastic case, set ``sigma.tag.requires_data = True`` so that
-        :meth:`sigma_at` substitutes X via ``graph_replace`` at predict time
-        and raises on a wiring error (sigma built against the wrong X).
+        or a vector built against a symbolic ``X`` (heteroskedastic). At
+        predict time, :meth:`sigma_at` substitutes the training ``X`` for
+        ``X_new`` in sigma's graph; mismatches surface as a strict-mode
+        ``graph_replace`` error.
     """
 
     def __init__(self, sigma):
-        sigma = pt.as_tensor_variable(sigma)
-        if getattr(sigma.tag, "requires_data", False):
-            self.sigma.tag.requires_data = True
+        self.sigma = pt.as_tensor_variable(sigma)
 
     def sigma_at(self, X_train, X_new):
         """Return ``sigma`` with ``X_train`` substituted by ``X_new``.
 
-        - If ``sigma.tag.requires_data`` is set, runs ``graph_replace`` and
-          checks that the substitution actually fired (raises with a clear
-          message if ``X_train`` is not in sigma's graph).
-        - Otherwise sigma is treated as independent of X and returned as-is
-          (no graph_replace, which would error on unused substitutions in
-          strict mode).
+        Sigma is treated as data-dependent iff it has any free symbolic
+        tensor input in its graph (covers both raw ``pt.matrix`` X and
+        ``pm.Data`` X — the latter is a SharedVariable but its type is
+        ``TensorType``). For data-independent sigma the call is a no-op.
+        For data-dependent sigma, strict-mode ``graph_replace`` raises a
+        clear error if ``X_train`` is not in sigma's graph.
         """
-        if not getattr(self.sigma.tag, "requires_data", False):
+        has_data_dep = any(
+            v.owner is None and not isinstance(v, Constant) and isinstance(v.type, TensorType)
+            for v in ancestors([self.sigma])
+        )
+        if not has_data_dep:
             return self.sigma
-        if X_train not in list(ancestors([self.sigma])):
-            raise ValueError(
-                "sigma is tagged requires_data=True but X_train is not in its graph. "
-                "Build sigma against the same X you pass to predict_marginal."
-            )
         return graph_replace(self.sigma, {X_train: X_new})
 
     def _log_prob(self, f, y):

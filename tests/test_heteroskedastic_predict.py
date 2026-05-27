@@ -1,4 +1,5 @@
 import numpy as np
+import pymc as pm
 import pytensor
 import pytensor.tensor as pt
 import pytest
@@ -24,10 +25,7 @@ def _data():
 
 
 def _hetero_sigma(X):
-    """Build a heteroskedastic sigma expression against the given symbolic X."""
-    sigma = 0.1 + 0.05 * X[:, 0] ** 2
-    sigma.tag.requires_data = True
-    return sigma
+    return 0.1 + 0.05 * X[:, 0] ** 2
 
 
 class TestUnapproximatedHeteroskedastic:
@@ -58,7 +56,7 @@ class TestUnapproximatedHeteroskedastic:
         )
         X_new_t = pt.matrix("X_new", shape=(None, 1))
         y_t = pt.vector("y", shape=(None,))
-        with pytest.raises(ValueError, match=r"requires_data.*not in its graph"):
+        with pytest.raises(ValueError, match=r"Some replacements were not used"):
             gp.predict_marginal(X_new_t, X_b, y_t, incl_lik=True)
 
 
@@ -94,7 +92,7 @@ class TestVFEHeteroskedastic:
         vfe = self._build(X_a)
         X_new_t = pt.matrix("X_new", shape=(None, 1))
         y_t = pt.vector("y", shape=(None,))
-        with pytest.raises(ValueError, match=r"requires_data.*not in its graph"):
+        with pytest.raises(ValueError, match=r"Some replacements were not used"):
             vfe.predict_marginal(X_new_t, X_b, y_t, incl_lik=True)
 
 
@@ -144,6 +142,32 @@ class TestScalarSigmaUnaffected:
         )
         v, v2 = _eval(fvar, fvar2)
         np.testing.assert_allclose(v2 - v, 0.09, atol=1e-10)
+
+
+def test_pm_data_sigma_is_detected_as_data_dependent():
+    """sigma built against a pm.Data SharedVariable must still be treated
+    as data-dependent. The heuristic filters by type (TensorType), not by
+    class (SharedVariable) — without this, pm.Data is silently invisible
+    to sigma_at and predictions use the wrong noise.
+    """
+    X_train_arr = np.linspace(-1.5, 1.5, 10)[:, None].astype(np.float64)
+    X_new_arr = np.linspace(-2.0, 2.0, 5)[:, None].astype(np.float64)
+    y_train_arr = np.sin(X_train_arr.ravel()).astype(np.float64)
+    with pm.Model(coords={"obs": np.arange(10)}):
+        X = pm.Data("X", X_train_arr, dims=("obs", "feat"))
+        gp = Unapproximated(
+            kernel=ExpQuad(input_dim=1, ls=1.0),
+            mean=Zero(),
+            sigma=_hetero_sigma(X),
+        )
+    X_new_t = pt.matrix("X_new", shape=(None, 1))
+    y_t = pt.vector("y", shape=(None,))
+    fmean, fvar = gp.predict_marginal(X_new_t, X, y_t)
+    ymean, yvar = gp.predict_marginal(X_new_t, X, y_t, incl_lik=True)
+    fn = pytensor.function([X_new_t, y_t], [fmean, fvar, ymean, yvar])
+    m, v, ym, yv = fn(X_new_arr, y_train_arr)
+    expected_sigma_new = 0.1 + 0.05 * X_new_arr[:, 0] ** 2
+    np.testing.assert_allclose(yv, v + expected_sigma_new**2, atol=1e-10)
 
 
 def test_collapsed_elbo_with_heteroskedastic_sigma():
