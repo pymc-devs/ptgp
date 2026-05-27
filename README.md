@@ -35,32 +35,26 @@ import ptgp as pg
 
 X = np.random.randn(200, 1)
 y = np.sin(X.ravel()) + 0.1 * np.random.randn(200)
-Z = np.linspace(-2, 2, 20)[:, None]
+Z_init = np.linspace(-2, 2, 20)[:, None]
+Z_var = pt.matrix("Z", shape=(20, 1))
 
 with pm.Model() as model:
     ls = pm.InverseGamma("ls", alpha=2.0, beta=1.0)
     eta = pm.Exponential("eta", lam=1.0)
     kernel = eta**2 * pg.kernels.Matern52(input_dim=1, ls=ls)
 
-    vp = pg.gp.init_variational_params(M=20)
     svgp = pg.gp.SVGP(
         kernel=kernel,
         likelihood=pg.likelihoods.Gaussian(sigma=0.1),
-        inducing_variable=pg.inducing.Points(pt.as_tensor(Z)),
-        variational_params=vp,
+        inducing_variable=pg.inducing.Points(Z_var, Z_init=Z_init),
+        variational_params=pg.gp.init_variational_params(M=20),
     )
+    fit = pg.fit(svgp, X, y, method="L-BFGS-B")
 
-X_var = pt.matrix("X", shape=(None, 1))
-y_var = pt.vector("y", shape=(None,))
+mean, var = pg.predict(svgp, np.linspace(-3, 3, 100)[:, None], fit)
+```
 
-step, shared_params, shared_extras = pg.optim.compile_training_step(
-    lambda gp, X, y: pg.objectives.elbo(gp, X, y).elbo,
-    svgp, X_var, y_var,
-    model=model,
-    extra_vars=vp.extra_vars,
-    extra_init=vp.extra_init,
-    learning_rate=1e-2,
-)
+`pg.fit` picks a default objective from the gp type (`Unapproximated` → `marginal_log_likelihood`, `VFE` → `collapsed_elbo`, `SVGP` → `elbo`) and returns a `FitResult` that `pg.predict` consumes. For stochastic mini-batch training, staged VFE, or per-group learning rates, drop down to `pg.optim.compile_training_step` / `pg.optim.compile_scipy_objective` — see [`notebooks/demo.ipynb`](notebooks/demo.ipynb).
 
 for i in range(500):
     loss = step(X, y)
