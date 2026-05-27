@@ -4,6 +4,43 @@ from ptgp.kernels.base import Kernel
 from ptgp.kernels.stationary import _squared_distance
 
 
+class Linear(Kernel):
+    r"""Linear (dot-product) kernel.
+
+    .. math::
+       k(x, y) = (x - c)^{\top} (y - c)
+
+    Non-stationary: the covariance depends on the absolute input position, not
+    just on :math:`x - y`. Scale with multiplication: eta**2 * Linear(input_dim=...).
+
+    Parameters
+    ----------
+    input_dim : int
+        Number of columns of ``X`` the kernel expects.
+    c : scalar or 1-D tensor, default 0.0
+        Center subtracted from the inputs. Scalar applies to every active
+        column; a length-``len(active_dims)`` vector applies per-column.
+    active_dims : sequence of int, optional
+        Columns of ``X`` this kernel operates on. Defaults to all columns.
+    """
+
+    def __init__(self, input_dim, c=0.0, active_dims=None):
+        """Validate dimensions via the base class and store ``c``."""
+        super().__init__(input_dim, active_dims)
+        self.c = c
+
+    def _eval(self, X, Y):
+        """Centered dot product: ``(X - c) @ (Y - c).T``."""
+        Xc = X[:, self.active_dims] - self.c
+        Yc = Y[:, self.active_dims] - self.c
+        return Xc @ Yc.T
+
+    def diag(self, X):
+        """Diagonal of K(X, X). k(x, x) = ||x - c||^2."""
+        Xc = X[:, self.active_dims] - self.c
+        return pt.sum(pt.square(Xc), axis=-1)
+
+
 class RandomWalk(Kernel):
     """Random walk (Brownian motion / Wiener process) kernel.
 
@@ -68,9 +105,7 @@ class Gibbs(Kernel):
             active_dims = [0]
         super().__init__(input_dim=input_dim, active_dims=active_dims)
         if len(self.active_dims) != 1:
-            raise ValueError(
-                "Gibbs kernel requires active_dims of length 1 when input_dim > 1."
-            )
+            raise ValueError("Gibbs kernel requires active_dims of length 1 when input_dim > 1.")
         if not callable(lengthscale_func):
             raise TypeError("lengthscale_func must be callable")
         self.lengthscale_func = lengthscale_func
