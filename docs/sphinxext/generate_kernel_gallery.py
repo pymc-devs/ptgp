@@ -306,7 +306,7 @@ def _render_cover(recipe: CoverRecipe, out_path: Path):
 
 # -- Gallery page ------------------------------------------------------------
 
-_GALLERY_HEAD = """
+_GALLERY_TITLE = """
 Covariance Gallery
 ==================
 
@@ -314,13 +314,36 @@ A visual reference for the kernels shipped in :mod:`ptgp.kernels`. Each cover
 shows GP prior samples drawn with the kernel (or the ``K(X, X)`` matrix as a
 heatmap for categorical kernels), giving an immediate sense of the kind of
 functions the covariance produces.
+"""
 
+_TOCTREE_HEAD = """
+.. toctree::
+   :hidden:
+
+"""
+
+_GRID_HEAD = """
 .. grid:: 1 2 3 3
    :gutter: 2 2 3 3
 
 """
 
-_CARD_TEMPLATE = """
+_CARD_TEMPLATE_LINKED = """
+   .. grid-item-card::
+      :text-align: center
+      :shadow: none
+      :class-card: example-gallery
+      :link: gallery/{slug}
+      :link-type: doc
+
+      .. image:: img/{file_name}.png
+         :alt: {display_name}
+
+      +++
+      {display_name}
+"""
+
+_CARD_TEMPLATE_PLAIN = """
    .. grid-item-card::
       :text-align: center
       :shadow: none
@@ -343,7 +366,7 @@ def main(app):
     kernels_dir.mkdir(parents=True, exist_ok=True)
     img_dir.mkdir(parents=True, exist_ok=True)
 
-    lines = [_GALLERY_HEAD]
+    rendered: list[tuple[str, str, str, bool]] = []
     for recipe in KERNEL_RECIPES:
         try:
             _render_cover(recipe, img_dir / f"{recipe.name}.png")
@@ -353,10 +376,22 @@ def main(app):
                 type="kernel_gallery",
             )
             continue
+        slug = recipe.name.lower()
+        page_exists = (kernels_dir / "gallery" / f"{slug}.md").exists()
+        rendered.append((recipe.name, recipe.display_name, slug, page_exists))
+
+    # Assemble: title, hidden toctree (only for pages that exist), grid header,
+    # cards (linked when the page exists, plain otherwise).
+    lines = [_GALLERY_TITLE, _TOCTREE_HEAD]
+    lines.extend(f"   gallery/{slug}\n" for _, _, slug, exists in rendered if exists)
+    lines.append(_GRID_HEAD)
+    for file_name, display_name, slug, page_exists in rendered:
+        template = _CARD_TEMPLATE_LINKED if page_exists else _CARD_TEMPLATE_PLAIN
         lines.append(
-            _CARD_TEMPLATE.format(
-                file_name=recipe.name,
-                display_name=recipe.display_name,
+            template.format(
+                file_name=file_name,
+                display_name=display_name,
+                slug=slug,
             )
         )
 

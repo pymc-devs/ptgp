@@ -27,6 +27,8 @@ dependencies:
     - sphinx-sitemap
     - sphinx-notfound-page
     - sphinx-autobuild
+    - jupyter-sphinx
+    - sphinxcontrib-bibtex
     - pip
     - pip:
         - git+https://github.com/pymc-devs/pytensor@main

@@ -45,9 +45,17 @@ extensions = [
     "sphinx_design",
     "sphinx_copybutton",
     "sphinx_codeautolink",
+    "jupyter_sphinx",
+    "sphinxcontrib.bibtex",
     "generate_gallery",
     "generate_kernel_gallery",
 ]
+
+# Bibliographic citations: drop new entries into docs/source/references.bib
+# and cite from prose with `{cite:t}` (textual) or `{cite:p}` (parenthetical).
+bibtex_bibfiles = ["references.bib"]
+bibtex_default_style = "unsrt"
+bibtex_reference_style = "author_year"
 
 # Use the document path as prefix for autosectionlabel anchors so the same
 # section title in two files doesn't collide.
@@ -65,6 +73,7 @@ exclude_patterns = [
 
 source_suffix = {
     ".rst": "restructuredtext",
+    ".md": "myst-nb",
     ".ipynb": "myst-nb",
     ".myst": "myst-nb",
 }
