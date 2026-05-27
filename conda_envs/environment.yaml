@@ -22,6 +22,16 @@ dependencies:
     - pytest
     - mypy
     - polars
-    - pymc
+    # Docs tooling — kept in sync with conda_envs/environment-docs.yaml so
+    # `make html` works in the dev env without an extra install step.
+    - sphinx>=7
+    - pydata-sphinx-theme
+    - myst-nb
+    - numpydoc
+    - sphinx-copybutton
+    - sphinx-design
+    - sphinx-codeautolink
+    - sphinx-sitemap
+    - sphinx-notfound-page
     - arviz
     - pip

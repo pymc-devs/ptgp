@@ -1,0 +1,33 @@
+name: ptgp-docs
+channels:
+    - conda-forge
+dependencies:
+    - python>=3.12
+    # Runtime deps: autodoc imports ptgp, so the full runtime stack has to
+    # be in scope.
+    - jax
+    - jaxlib
+    - optax
+    - numpy
+    - scipy
+    - libblas=*=*mkl
+    - mkl-service
+    - pymc
+    - matplotlib
+    # Docs build deps.
+    - ipython
+    - jupyter
+    - sphinx>=7
+    - pydata-sphinx-theme
+    - myst-nb
+    - numpydoc
+    - sphinx-copybutton
+    - sphinx-design
+    - sphinx-codeautolink
+    - sphinx-sitemap
+    - sphinx-notfound-page
+    - pip
+    - pip:
+        - git+https://github.com/pymc-devs/pytensor@main
+        # ptgp itself so autodoc resolves the current source tree.
+        - -e ..
