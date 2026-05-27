@@ -45,7 +45,9 @@ class Unapproximated:
         var : tensor, shape (N*,)
         """
         Knn = self.kernel(X_train)
-        Knn_noisy = Knn + self.likelihood.sigma**2 * pt.eye(X_train.shape[0])
+        sigma = self.likelihood.sigma
+        sigma2_train = sigma**2 * pt.ones(X_train.shape[0])  # (N,); scalar broadcasts
+        Knn_noisy = Knn + pt.diag(sigma2_train)
         Kns = self.kernel(X_train, X_new)  # (N, N*)
         Kss_diag = self.kernel.diag(X_new)
 
@@ -56,5 +58,6 @@ class Unapproximated:
         fvar = Kss_diag - pt.sum(Kns * (Knn_inv @ Kns), axis=0)
 
         if incl_lik:
-            return self.likelihood.predict_mean_and_var(fmean, fvar)
+            sigma_new = self.likelihood.sigma_at(X_train, X_new)
+            return fmean, fvar + sigma_new**2
         return fmean, fvar
