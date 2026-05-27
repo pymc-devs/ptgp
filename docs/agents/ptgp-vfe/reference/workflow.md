@@ -84,8 +84,10 @@ convergence (a sign Z needs to move) — see
 **When.** Tier B converges but `nystrom_residual` stays large and you
 suspect the inducing layout is the bottleneck.
 
-**What.** Same compile call as Tier B but pass `Z_var` via
-`extra_vars=[Z_var]` (and remove from `frozen_vars`). Z and
+**What.** Same compile call as Tier B but construct the inducing
+variable with `Points(Z_var, Z_init=Z0)` (or pass `extra_vars=[Z_var]`
+explicitly) and remove `Z_var` from `frozen_vars`. With the `Z_init`
+form, `gp.extra_vars` defaults pick up `Z` automatically. Z and
 hyperparameters now share the optimizer.
 
 **Notes.** The collapsed bound's gradient w.r.t. Z is cheap, so this
