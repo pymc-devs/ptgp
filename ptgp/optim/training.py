@@ -22,6 +22,13 @@ logger = logging.getLogger(__name__)
 _PHASE_LABEL_RE = re.compile(r"^phase(?P<n>\d+)(?P<sub>[ab]?)(?:_c(?P<c>\d+))?$")
 
 
+def _scalar_from_objective(result):
+    """First field of a namedtuple result, or the value unchanged."""
+    if isinstance(result, tuple) and hasattr(result, "_fields"):
+        return result[0]
+    return result
+
+
 def phase_sort_key(label):
     """Sort key for :func:`minimize_staged_vfe` phase labels.
 
@@ -248,8 +255,8 @@ def compile_training_step(
     Parameters
     ----------
     objective_fn : callable
-        ``(gp_model, X_var, y_var) -> scalar`` returning the quantity to
-        maximize (e.g. ``elbo``, ``marginal_log_likelihood``).
+        ``(gp_model, X_var, y_var) -> scalar | namedtuple``. If a namedtuple
+        is returned, the first field is taken as the scalar to maximize.
     gp_model : GP, VFE, or SVGP
         PTGP model whose hyperparameters are PyMC RVs.
     X_var : TensorVariable
@@ -361,7 +368,7 @@ def compile_training_step(
             resolved_groups[name] = resolved
         optimizer_kwargs = {**optimizer_kwargs, "param_groups": resolved_groups}
 
-    loss = -objective_fn(gp_model, X_var, y_var)
+    loss = -_scalar_from_objective(objective_fn(gp_model, X_var, y_var))
     if include_prior:
         loss = loss - model.logp(jacobian=True, sum=True)
     [loss_replaced] = _replace_graph(
@@ -415,8 +422,8 @@ def compile_scipy_objective(
     Parameters
     ----------
     objective_fn : callable
-        ``(gp_model, X_var, y_var) -> scalar``, returning the quantity to
-        maximize (e.g. ``marginal_log_likelihood``, ``collapsed_elbo``).
+        ``(gp_model, X_var, y_var) -> scalar | namedtuple``. If a namedtuple
+        is returned, the first field is taken as the scalar to maximize.
         The returned scalar is negated internally so scipy minimizes.
     gp_model : GP, VFE, or SVGP
         PTGP model whose hyperparameters are PyMC RVs.
@@ -536,7 +543,7 @@ def compile_scipy_objective(
         pieces.append(theta_var[offset : offset + size].reshape(shape))
         offset += size
 
-    loss = -objective_fn(gp_model, X_var, y_var)
+    loss = -_scalar_from_objective(objective_fn(gp_model, X_var, y_var))
     if include_prior:
         loss = loss - model.logp(jacobian=True, sum=True)
     [loss_rvs_replaced] = model.replace_rvs_by_values([loss])

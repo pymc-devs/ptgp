@@ -203,3 +203,35 @@ class TestScipyObjectiveFrozenVars:
         assert theta0.shape == (3,)
         loss, grad = fun(theta0, X, y)
         assert grad.shape == (3,)
+
+
+class TestNamedtupleObjective:
+    def test_namedtuple_objective_matches_scalar(self):
+        rng = np.random.default_rng(0)
+        X = rng.standard_normal((20, 1))
+        y = np.sin(X[:, 0]) + 0.1 * rng.standard_normal(20)
+
+        X_var = pt.matrix("X")
+        y_var = pt.vector("y")
+        with pm.Model():
+            ls = pm.HalfFlat("ls")
+            eta = pm.Exponential("eta", lam=1.0)
+            sigma = pm.HalfNormal("sigma", sigma=1.0)
+            gp = pg.gp.Unapproximated(
+                kernel=eta**2 * pg.kernels.Matern52(input_dim=1, ls=ls),
+                sigma=sigma,
+            )
+
+            fun_nt, theta0, *_ = pg.optim.compile_scipy_objective(
+                pg.objectives.marginal_log_likelihood, gp, X_var, y_var
+            )
+            fun_sc, _, *_ = pg.optim.compile_scipy_objective(
+                lambda g, X, y: pg.objectives.marginal_log_likelihood(g, X, y).mll,
+                gp,
+                X_var,
+                y_var,
+            )
+        loss_nt, grad_nt = fun_nt(theta0, X, y)
+        loss_sc, grad_sc = fun_sc(theta0, X, y)
+        np.testing.assert_allclose(loss_nt, loss_sc)
+        np.testing.assert_allclose(grad_nt, grad_sc)
