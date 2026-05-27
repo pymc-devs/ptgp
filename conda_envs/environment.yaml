@@ -4,7 +4,7 @@ channels:
 dependencies:
     - python>=3.12
     - pymc
-    - pytensor>=3.0.2
+    - pytensor>=3.0.3
     - jax
     - jaxlib
     - optax
