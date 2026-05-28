@@ -2,6 +2,7 @@ import pytensor.tensor as pt
 
 from ptgp.likelihoods import Gaussian
 from ptgp.mean import Zero
+from ptgp.objectives import collapsed_elbo
 
 
 class VFE:
@@ -22,6 +23,9 @@ class VFE:
     inducing_variable : InducingVariables
         Inducing point locations.
     """
+
+    default_objective = staticmethod(collapsed_elbo)
+    predict_needs_data = True
 
     def __init__(self, kernel, mean=None, sigma=None, inducing_variable=None):
         """Store the kernel, mean, and inducing variable; build a Gaussian likelihood from sigma."""

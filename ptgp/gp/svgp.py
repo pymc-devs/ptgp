@@ -7,6 +7,7 @@ import pytensor.tensor as pt
 from ptgp.conditionals import conditional_unwhitened, conditional_whitened
 from ptgp.kl import gauss_kl, gauss_kl_structured
 from ptgp.mean import Zero
+from ptgp.objectives import elbo
 
 
 def _softplus_lower_triangular(flat, M):
@@ -157,6 +158,9 @@ class SVGP:
     whiten : bool
         If True, use whitened variational parameterization (default True).
     """
+
+    default_objective = staticmethod(elbo)
+    predict_needs_data = False
 
     def __init__(
         self,
