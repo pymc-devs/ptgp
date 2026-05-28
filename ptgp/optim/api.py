@@ -1,9 +1,3 @@
-"""One-shot ``fit`` and ``predict`` for the common case.
-
-Drop down to :func:`compile_scipy_objective` / :func:`compile_predict`
-for staged training, custom placeholders, or per-group learning rates.
-"""
-
 from typing import Any, NamedTuple
 
 import numpy as np
@@ -11,7 +5,6 @@ import pymc as pm
 import pytensor.tensor as pt
 import scipy.optimize
 
-from ptgp.objectives import collapsed_elbo, elbo, marginal_log_likelihood
 from ptgp.optim.training import (
     compile_predict,
     compile_scipy_objective,
@@ -28,17 +21,12 @@ class FitResult(NamedTuple):
 
 
 def _default_objective(gp_model):
-    from ptgp.gp import SVGP, VFE, Unapproximated
-
-    if isinstance(gp_model, Unapproximated):
-        return marginal_log_likelihood
-    if isinstance(gp_model, VFE):
-        return collapsed_elbo
-    if isinstance(gp_model, SVGP):
-        return elbo
-    raise ValueError(
-        f"No default objective for {type(gp_model).__name__}; pass objective= explicitly."
-    )
+    objective = getattr(gp_model, "default_objective", None)
+    if objective is None:
+        raise ValueError(
+            f"{type(gp_model).__name__} has no default_objective; pass objective= explicitly."
+        )
+    return objective
 
 
 def _as_2d(X):
@@ -61,28 +49,57 @@ def fit(
     compile_kwargs=None,
     **scipy_kwargs,
 ):
-    """One-shot fit for ``Unapproximated`` / ``VFE`` / ``SVGP``.
+    """Batteries-included estimation method for GP models.
+
+    Estimation uses reasonable defaults based on the provided approximation. For
+    fine-grained control, use the low-level API.
 
     Parameters
     ----------
     gp_model : Unapproximated, VFE, or SVGP
+        The PTGP model whose hyperparameters are PyMC RVs. Must expose a
+        ``default_objective`` attribute or be passed ``objective=``.
     X : ndarray, shape (N,) or (N, D)
-    y : ndarray, shape (N,)
+        Training inputs. 1D inputs are reshaped to ``(N, 1)``.
+    y : ndarray, shape (N,) or (N, 1)
+        Training targets. Column vectors are squeezed to 1D for the caller.
     model : pm.Model, optional
         Defaults to the enclosing ``with pm.Model()`` context.
     objective : callable, optional
-        Defaults to ``marginal_log_likelihood`` / ``collapsed_elbo`` /
-        ``elbo`` for ``Unapproximated`` / ``VFE`` / ``SVGP``.
+        ``(gp_model, X_var, y_var) -> scalar | namedtuple``. Defaults to
+        ``gp_model.default_objective``.
     method : str
-        Forwarded to :func:`scipy.optimize.minimize`.
-    init, init_rng, compile_kwargs :
-        Forwarded to :func:`compile_scipy_objective`.
+        Optimization method passed to :func:`scipy.optimize.minimize`. Must
+        accept a Jacobian — ``fit`` always supplies one (``jac=True``).
+        Default ``"L-BFGS-B"``.
+    init : str
+        Strategy for the initial parameter vector. One of:
+
+        - ``"prior_median"`` (default) — median of each prior via
+          ``pm.icdf(rv, 0.5)``, with a 500-sample fallback when icdf is
+          unimplemented and a per-RV fallback to PyMC's initial point for
+          improper priors.
+        - ``"prior_draw"`` — one draw from each prior. Stochastic; pin with
+          ``init_rng`` for reproducibility.
+        - ``"unconstrained_zero"`` — PyMC's ``model.initial_point()`` (0 in
+          unconstrained space unless ``initval=`` was set on the RV).
+    init_rng : int or numpy.random.Generator, optional
+        Seed for the sampling-based portions of ``"prior_median"`` and
+        ``"prior_draw"``. No effect under ``"unconstrained_zero"``.
+    compile_kwargs : dict, optional
+        Forwarded as ``**compile_kwargs`` to ``pytensor.function`` when
+        compiling the loss+grad. Use to set ``mode`` (e.g. ``"NUMBA"``,
+        ``"JAX"``) or other compile-time options.
     **scipy_kwargs
-        Forwarded to :func:`scipy.optimize.minimize`.
+        Additional keyword arguments forwarded to
+        :func:`scipy.optimize.minimize` (e.g. ``tol``, ``options``,
+        ``bounds``). Do not pass ``jac`` — it is set internally.
 
     Returns
     -------
     FitResult
+        Namedtuple with the scipy result, trained parameters in constrained
+        space, shared variables for prediction handoff, and the PyMC model.
     """
     model = pm.modelcontext(model)
     if objective is None:
@@ -132,18 +149,38 @@ def predict(
 ):
     """Posterior mean and variance at ``X_new``.
 
-    ``X_train`` / ``y_train`` are required for ``Unapproximated`` and
-    ``VFE``; ignored for ``SVGP``.
-    """
-    from ptgp.gp import SVGP
+    ``X_train`` / ``y_train`` are required when
+    ``gp_model.predict_needs_data`` is True (``Unapproximated``, ``VFE``)
+    and ignored otherwise (``SVGP``).
 
+    Parameters
+    ----------
+    gp_model : Unapproximated, VFE, or SVGP
+        The same PTGP model used to produce ``fit_result``.
+    X_new : ndarray, shape (M,) or (M, D)
+        Prediction inputs. 1D arrays are reshaped to ``(M, 1)``.
+    fit_result : FitResult
+        Output of :func:`fit`.
+    X_train, y_train : ndarray, optional
+        Required when ``gp_model.predict_needs_data`` is True.
+    incl_lik : bool
+        If True, add likelihood noise to the predictive variance.
+    compile_kwargs : dict, optional
+        Forwarded as ``**compile_kwargs`` to ``pytensor.function`` when
+        compiling the predict graph.
+
+    Returns
+    -------
+    mean : ndarray, shape (M,)
+        Posterior mean at each row of ``X_new``.
+    var : ndarray, shape (M,)
+        Posterior marginal variance at each row of ``X_new``.
+    """
     X_new = _as_2d(X_new)
     D = X_new.shape[1]
     X_new_var = pt.matrix("X_new", shape=(None, D))
 
-    if isinstance(gp_model, SVGP):
-        X_train_arg = y_train_arg = None
-    else:
+    if getattr(gp_model, "predict_needs_data", True):
         if X_train is None or y_train is None:
             raise ValueError(
                 f"{type(gp_model).__name__}.predict requires X_train and y_train; "
@@ -151,6 +188,8 @@ def predict(
             )
         X_train_arg = _as_2d(X_train)
         y_train_arg = np.asarray(y_train, dtype=np.float64)
+    else:
+        X_train_arg = y_train_arg = None
 
     pred = compile_predict(
         gp_model,
