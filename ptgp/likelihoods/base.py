@@ -1,5 +1,62 @@
+import copy
+
 import numpy as np
 import pytensor.tensor as pt
+
+from pytensor.graph.replace import clone_replace
+from pytensor.graph.traversal import ancestors
+from pytensor.tensor.type import TensorType
+
+
+def _data_inputs(value, X):
+    """Leaf nodes in ``value``'s graph that look like the design matrix ``X``.
+
+    A leaf (no owner) with the same ndim as ``X`` and matching feature
+    dimensions is taken to be a copy of the model input — whether it is a
+    symbolic placeholder, a ``pm.Data`` / shared variable, or a constant array
+    baked in via ``pt.as_tensor_variable``. Matching is by type, so ``pm.Data``
+    (a SharedVariable whose type is ``TensorType``) is caught. PyMC random
+    variables and other computed nodes carry an owner and are excluded; scalars
+    never match, so literal constants like ``0.1`` are left alone.
+    """
+    feat = X.type.shape[1:]
+    return [
+        v
+        for v in ancestors([value])
+        if v.owner is None
+        and isinstance(v.type, TensorType)
+        and v.type.ndim == X.type.ndim
+        and v.type.ndim > 0
+        and all(a is None or b is None or a == b for a, b in zip(v.type.shape[1:], feat))
+    ]
+
+
+def _reroot(value, X):
+    """Re-root ``value`` onto ``X`` by replacing design-matrix-shaped leaves.
+
+    The input(s) to replace are discovered from the graph, so the caller only
+    supplies the new data. ``rebuild_strict=False`` lets a baked constant array
+    (whose row dimension is statically frozen) be replaced by ``X`` without
+    coercing ``X`` back to that frozen shape. A data-independent ``value``
+    (scalar or PyMC RV) is returned unchanged.
+
+    ``X`` must be a 2D design matrix ``(N, D)``. The discovery in
+    :func:`_data_inputs` keys on dimensionality: parameters are per-observation
+    1D vectors, so a 2D ``X`` is what distinguishes the data from the parameter
+    itself. A 1D ``X`` would collapse that gap and could match the parameter, so
+    it is rejected.
+    """
+    if X.type.ndim < 2:
+        raise ValueError(
+            "Re-rooting a likelihood parameter requires a 2D design matrix (N, D); "
+            f"got X with ndim={X.type.ndim}. Parameters are per-observation 1D "
+            "vectors, so a 1D X cannot be distinguished from the parameter itself."
+        )
+    value = pt.as_tensor_variable(value)
+    inputs = _data_inputs(value, X)
+    if not inputs:
+        return value
+    return clone_replace(value, {v: X for v in inputs}, rebuild_strict=False)
 
 
 class Likelihood:
@@ -23,6 +80,20 @@ class Likelihood:
 
     n_points: int = 20
     invlink = None
+    param_names: tuple = ()
+
+    def clone_replace_data(self, X):
+        """Return a copy with every data-dependent parameter re-rooted onto X.
+
+        Each parameter named in ``param_names`` whose graph depends on a free
+        data input is re-expressed over ``X``; data-independent parameters are
+        left untouched. Used at predict time to evaluate parameters at the test
+        inputs rather than the training inputs they were built against.
+        """
+        new = copy.copy(self)
+        for name in self.param_names:
+            setattr(new, name, _reroot(getattr(self, name), X))
+        return new
 
     def _log_prob(self, f, y):
         """Symbolic log p(y|f). Subclasses must implement."""
