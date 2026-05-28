@@ -20,8 +20,10 @@ class NegativeBinomial(Likelihood):
         Number of Gauss-Hermite quadrature points (default 20).
     """
 
+    param_names = ("alpha",)
+
     def __init__(self, alpha, invlink=None, n_points=20):
-        self.alpha = alpha
+        self.alpha = pt.as_tensor_variable(alpha)
         self.invlink = invlink or pt.exp
         self.n_points = n_points
 
