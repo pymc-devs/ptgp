@@ -107,6 +107,15 @@ def fit(
 
     X = _as_2d(X)
     y = np.asarray(y, dtype=np.float64)
+    if y.ndim == 2 and y.shape[1] == 1:
+        y = y[:, 0]
+    if y.ndim != 1:
+        raise ValueError(f"y must be 1D or a column vector; got shape {y.shape}.")
+    if X.shape[0] != y.shape[0]:
+        raise ValueError(
+            f"X and y disagree on number of observations: "
+            f"X.shape[0]={X.shape[0]} vs y.shape[0]={y.shape[0]}."
+        )
     D = X.shape[1]
 
     X_var = pt.matrix("X", shape=(None, D))
