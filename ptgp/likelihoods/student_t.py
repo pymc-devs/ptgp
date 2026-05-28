@@ -18,9 +18,11 @@ class StudentT(Likelihood):
         Number of Gauss-Hermite quadrature points (default 20).
     """
 
+    param_names = ("nu", "sigma")
+
     def __init__(self, nu, sigma, n_points=20):
-        self.nu = nu
-        self.sigma = sigma
+        self.nu = pt.as_tensor_variable(nu)
+        self.sigma = pt.as_tensor_variable(sigma)
         self.n_points = n_points
 
     def _log_prob(self, f, y):

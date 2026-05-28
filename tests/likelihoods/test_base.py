@@ -6,7 +6,7 @@ import pytensor
 import pytensor.tensor as pt
 import pytest
 
-from ptgp.likelihoods import Bernoulli, Gaussian, Poisson
+from ptgp.likelihoods import Bernoulli, Gaussian, NegativeBinomial, Poisson, StudentT
 
 
 def _eval(*tensors):
@@ -84,6 +84,28 @@ class TestCloneReplaceData:
         got = pytensor.function([X_new], rerooted)(new)
         np.testing.assert_allclose(got, 0.1 + np.sum(new**2, axis=1))
 
+    def test_reroots_all_tensor_params(self):
+        X = pt.matrix("X", shape=(None, 1))
+        new = np.array([[1.0], [2.0], [3.0]])
+        out = StudentT(nu=3.0 + X[:, 0] ** 2, sigma=_hetero(X)).clone_replace_data(
+            pt.as_tensor_variable(new)
+        )
+        nu_val, sigma_val = _eval(out.nu, out.sigma)
+        np.testing.assert_allclose(nu_val, 3.0 + new[:, 0] ** 2)
+        np.testing.assert_allclose(sigma_val, _hetero(new))
+
+    def test_negative_binomial_alpha(self):
+        X = pt.matrix("X", shape=(None, 1))
+        new = np.array([[0.0], [2.0]])
+        out = NegativeBinomial(alpha=_hetero(X)).clone_replace_data(pt.as_tensor_variable(new))
+        np.testing.assert_allclose(_eval(out.alpha), _hetero(new))
+
+    def test_leaves_scalar_params_untouched(self):
+        X = pt.matrix("X", shape=(None, 1))
+        lik = StudentT(nu=4.0, sigma=_hetero(X))
+        out = lik.clone_replace_data(pt.matrix("X_new", shape=(None, 1)))
+        assert out.nu is lik.nu
+
     def test_returns_copy_leaving_original_untouched(self):
         X = pt.matrix("X", shape=(None, 1))
         lik = Gaussian(_hetero(X))
@@ -91,6 +113,11 @@ class TestCloneReplaceData:
         out = lik.clone_replace_data(pt.matrix("X_new", shape=(None, 1)))
         assert lik.sigma is original
         assert out.sigma is not original
+
+    def test_preserves_non_parameter_attributes(self):
+        X = pt.matrix("X", shape=(None, 1))
+        lik = StudentT(nu=_hetero(X), sigma=0.5, n_points=33)
+        assert lik.clone_replace_data(pt.matrix("X_new", shape=(None, 1))).n_points == 33
 
     def test_scalar_hyperparam_survives_reroot(self):
         """A parameter mixing data with a scalar placeholder re-roots only the
