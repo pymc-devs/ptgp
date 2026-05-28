@@ -16,7 +16,6 @@ from ptgp.inducing_fourier import FourierFeatures1D
 from ptgp.optim.api import FitResult, fit, predict
 
 
-
 class _StdoutHandler(logging.StreamHandler):
     """Handler that resolves sys.stdout at emit time, not at init time."""
 
