@@ -23,12 +23,10 @@ def to_idata(
 
     Groups produced (empty groups are omitted):
 
-    - ``point_estimate`` — every optimized value in constrained space, with
-      ``(chain=1, draw=1, *)`` axes. Includes PyMC RVs (``sigma``, ``eta``, …)
-      *and* non-PyMC extras (``Z``, ``q_mu``, ``q_sqrt_flat``, …). The
-      ``(chain, draw)`` axes are kept so ArviZ tooling can consume the group
-      even though nothing was sampled — this is a point estimate, not a
-      posterior.
+    - ``point_estimate`` — every optimized value in constrained space, on its
+      own dims with no ``chain``/``draw`` axes (nothing was sampled). Includes
+      PyMC RVs (``sigma``, ``eta``, …) *and* non-PyMC extras (``Z``, ``q_mu``,
+      ``q_sqrt_flat``, …).
     - ``unconstrained_point_estimate`` — the same values in value-var
       (transformed) space.
     - ``optimizer_result`` — scalar fields from the scipy ``OptimizeResult``
@@ -69,11 +67,10 @@ def to_idata(
     constrained, unconstrained = _collect_optimized(model, shared_params, shared_extras)
     idata = from_dict(
         {
-            "point_estimate": {k: np.expand_dims(v, (0, 1)) for k, v in constrained.items()},
-            "unconstrained_point_estimate": {
-                k: np.expand_dims(v, (0, 1)) for k, v in unconstrained.items()
-            },
+            "point_estimate": constrained,
+            "unconstrained_point_estimate": unconstrained,
         },
+        sample_dims=[],
         coords=coords,
         dims=dims,
         name="ptgp_fit",
