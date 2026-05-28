@@ -1,6 +1,7 @@
 import numpy as np
 import pymc as pm
 import xarray as xr
+
 from arviz_base import dict_to_dataset, from_dict
 from pymc.backends.arviz import (
     coords_and_dims_for_inferencedata,
@@ -22,14 +23,14 @@ def to_idata(
 
     Groups produced (empty groups are omitted):
 
-    - ``posterior`` — every optimized value in constrained space, with
+    - ``point_estimate`` — every optimized value in constrained space, with
       ``(chain=1, draw=1, *)`` axes. Includes PyMC RVs (``sigma``, ``eta``, …)
-      *and* non-PyMC extras (``Z``, ``q_mu``, ``q_sqrt_flat``, …). Naming the
-      group ``posterior`` is the same harmless lie ``pmx.find_MAP`` tells —
-      ArviZ tooling expects this group to exist regardless of how it was
-      produced.
-    - ``unconstrained_posterior`` — the same values in value-var (transformed)
-      space.
+      *and* non-PyMC extras (``Z``, ``q_mu``, ``q_sqrt_flat``, …). The
+      ``(chain, draw)`` axes are kept so ArviZ tooling can consume the group
+      even though nothing was sampled — this is a point estimate, not a
+      posterior.
+    - ``unconstrained_point_estimate`` — the same values in value-var
+      (transformed) space.
     - ``optimizer_result`` — scalar fields from the scipy ``OptimizeResult``
       (``fun``, ``success``, ``status``, ``message``, ``nit``, ``nfev``,
       ``njev``) plus per-iteration trajectory DataArrays from ``history``
@@ -44,7 +45,7 @@ def to_idata(
         ``compile_training_step`` / ``minimize_staged_vfe``.
     shared_extras : sequence of pytensor shared variables, optional
         Trained extras (``Z``, ``q_mu``, ``q_sqrt_flat``, …). Each entry must
-        have a ``.name``; values appear in ``posterior`` keyed by that name.
+        have a ``.name``; values appear in ``point_estimate`` keyed by that name.
         Default ``()``.
     result : scipy.optimize.OptimizeResult, optional
         Final optimization result. Default ``None``.
@@ -68,8 +69,8 @@ def to_idata(
     constrained, unconstrained = _collect_optimized(model, shared_params, shared_extras)
     idata = from_dict(
         {
-            "posterior": {k: np.expand_dims(v, (0, 1)) for k, v in constrained.items()},
-            "unconstrained_posterior": {
+            "point_estimate": {k: np.expand_dims(v, (0, 1)) for k, v in constrained.items()},
+            "unconstrained_point_estimate": {
                 k: np.expand_dims(v, (0, 1)) for k, v in unconstrained.items()
             },
         },
@@ -117,9 +118,7 @@ def _collect_optimized(model, shared_params, shared_extras):
         unc = np.asarray(shared_params[vv].get_value())
         unconstrained[vv.name] = unc
         transform = model.rvs_to_transforms.get(rv)
-        constrained[rv.name] = (
-            np.asarray(transform.backward(unc).eval()) if transform else unc
-        )
+        constrained[rv.name] = np.asarray(transform.backward(unc).eval()) if transform else unc
 
     seen = set()
     for sv in shared_extras:

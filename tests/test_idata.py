@@ -75,8 +75,8 @@ def test_all_groups_present():
     model, sp, se, result, history = _train_vfe()
     idata = to_idata(sp, se, result=result, history=history, model=model)
     for group in (
-        "posterior",
-        "unconstrained_posterior",
+        "point_estimate",
+        "unconstrained_point_estimate",
         "optimizer_result",
         "observed_data",
         "constant_data",
@@ -84,24 +84,24 @@ def test_all_groups_present():
         assert group in idata.children
 
 
-def test_transforms_applied_to_constrained_posterior():
-    """``posterior`` uses backward transform; ``unconstrained_posterior`` does not."""
+def test_transforms_applied_to_constrained_point_estimate():
+    """``point_estimate`` uses backward transform; ``unconstrained_point_estimate`` does not."""
     model, sp, se, *_ = _train_vfe()
     idata = to_idata(sp, se, model=model)
     for name in ("eta", "ls", "sigma"):
-        constrained = float(idata.posterior[name].squeeze())
-        unconstrained = float(idata.unconstrained_posterior[f"{name}_log__"].squeeze())
+        constrained = float(idata.point_estimate[name].squeeze())
+        unconstrained = float(idata.unconstrained_point_estimate[f"{name}_log__"].squeeze())
         assert np.isclose(constrained, np.exp(unconstrained))
 
 
-def test_extras_appear_in_both_posterior_groups():
+def test_extras_appear_in_both_point_estimate_groups():
     """Non-PyMC extras have no transform; identical values appear in both groups."""
     model, sp, se, *_ = _train_vfe()
     idata = to_idata(sp, se, model=model)
-    assert "Z" in idata.posterior.data_vars
-    assert "Z" in idata.unconstrained_posterior.data_vars
+    assert "Z" in idata.point_estimate.data_vars
+    assert "Z" in idata.unconstrained_point_estimate.data_vars
     np.testing.assert_array_equal(
-        idata.posterior["Z"].values, idata.unconstrained_posterior["Z"].values
+        idata.point_estimate["Z"].values, idata.unconstrained_point_estimate["Z"].values
     )
 
 
@@ -203,5 +203,5 @@ def test_modelcontext_default():
     model, sp, se, *_ = _train_vfe()
     with model:
         idata = to_idata(sp, se)
-    assert "posterior" in idata.children
-    assert "eta" in idata.posterior.data_vars
+    assert "point_estimate" in idata.children
+    assert "eta" in idata.point_estimate.data_vars
