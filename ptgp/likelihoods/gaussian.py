@@ -1,4 +1,3 @@
-import pytensor.assumptions as pta
 import pytensor.tensor as pt
 
 from pytensor.graph.basic import Constant
