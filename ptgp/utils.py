@@ -34,6 +34,7 @@ def get_initial_params(model, init="prior_median", rng=None, n_median_samples=50
         returned as plain Python floats; array RVs as numpy arrays.
     """
     import pymc as pm
+
     from ptgp.optim.training import _make_initial_point
 
     model = pm.modelcontext(model)
@@ -45,9 +46,7 @@ def get_initial_params(model, init="prior_median", rng=None, n_median_samples=50
         transform = model.rvs_to_transforms.get(rv)
         unconstrained = np.asarray(ip[vv.name], dtype=np.float64)
         if transform is not None:
-            constrained = np.asarray(
-                transform.backward(unconstrained).eval(), dtype=np.float64
-            )
+            constrained = np.asarray(transform.backward(unconstrained).eval(), dtype=np.float64)
         else:
             constrained = unconstrained
         result[rv.name] = float(constrained) if constrained.ndim == 0 else constrained
@@ -226,14 +225,25 @@ def save_fit(path, shared_params, shared_extras=(), meta=None):
     Saving after a VFE fit::
 
         result, history, labels, unpack, sp, se = minimize_staged_vfe(
-            objective_fn, gp_model, X_var, y_var, X, y, model,
-            sigma_init=0.1, Z_var=Z_var, Z_init=Z_init,
+            objective_fn,
+            gp_model,
+            X_var,
+            y_var,
+            X,
+            y,
+            model,
+            sigma_init=0.1,
+            Z_var=Z_var,
+            Z_init=Z_init,
         )
         unpack(result.x)
 
         from ptgp.utils import save_fit
+
         save_fit(
-            "fit_threefactor_2026-04-22.npz", sp, se,
+            "fit_threefactor_2026-04-22.npz",
+            sp,
+            se,
             meta={
                 "as_of": "2026-04-22",
                 "target": "oas_sofr",
@@ -248,9 +258,7 @@ def save_fit(path, shared_params, shared_extras=(), meta=None):
     for vv, sv in shared_params.items():
         name = vv.name
         if name in seen:
-            raise ValueError(
-                f"Duplicate shared_params name {name!r}; cannot save unambiguously."
-            )
+            raise ValueError(f"Duplicate shared_params name {name!r}; cannot save unambiguously.")
         seen.add(name)
         blob[_FIT_PARAM_PREFIX + name] = np.asarray(sv.get_value())
 
@@ -263,9 +271,7 @@ def save_fit(path, shared_params, shared_extras=(), meta=None):
                 "found a shared variable with name=None."
             )
         if name in seen:
-            raise ValueError(
-                f"Duplicate shared_extras name {name!r}; cannot save unambiguously."
-            )
+            raise ValueError(f"Duplicate shared_extras name {name!r}; cannot save unambiguously.")
         seen.add(name)
         blob[_FIT_EXTRA_PREFIX + name] = np.asarray(sv.get_value())
 
@@ -321,17 +327,27 @@ def load_fit(path, shared_params, shared_extras=(), strict=True):
             ...  # priors
             gp_model = VFE(...)
         fun, theta0, unpack, sp, se = compile_scipy_objective(
-            objective_fn, gp_model, X_var, y_var, model=model,
-            extra_vars=[Z_var], extra_init=[Z_init],
+            objective_fn,
+            gp_model,
+            X_var,
+            y_var,
+            model=model,
+            extra_vars=[Z_var],
+            extra_init=[Z_init],
         )
 
         from ptgp.utils import load_fit
+
         meta = load_fit("fit_threefactor_2026-04-22.npz", sp, se)
         print(meta["as_of"], meta["features"])
 
         predict_fn = compile_predict(
-            gp_model, X_new_var, model, sp,
-            extra_vars=[Z_var], shared_extras=se,
+            gp_model,
+            X_new_var,
+            model,
+            sp,
+            extra_vars=[Z_var],
+            shared_extras=se,
         )
         mean, var = predict_fn(X_new)
     """
@@ -339,12 +355,10 @@ def load_fit(path, shared_params, shared_extras=(), strict=True):
     file_keys = set(blob.files)
 
     param_keys = {
-        k[len(_FIT_PARAM_PREFIX):]: k
-        for k in file_keys if k.startswith(_FIT_PARAM_PREFIX)
+        k[len(_FIT_PARAM_PREFIX) :]: k for k in file_keys if k.startswith(_FIT_PARAM_PREFIX)
     }
     extra_keys = {
-        k[len(_FIT_EXTRA_PREFIX):]: k
-        for k in file_keys if k.startswith(_FIT_EXTRA_PREFIX)
+        k[len(_FIT_EXTRA_PREFIX) :]: k for k in file_keys if k.startswith(_FIT_EXTRA_PREFIX)
     }
 
     shared_params_by_name = {vv.name: sv for vv, sv in shared_params.items()}
@@ -365,9 +379,7 @@ def load_fit(path, shared_params, shared_extras=(), strict=True):
         if extra_e:
             problems.append(f"shared_extras not present in file: {sorted(extra_e)}")
         if problems:
-            raise ValueError(
-                "load_fit name mismatch (strict=True):\n  " + "\n  ".join(problems)
-            )
+            raise ValueError("load_fit name mismatch (strict=True):\n  " + "\n  ".join(problems))
 
     for name, key in param_keys.items():
         sv = shared_params_by_name.get(name)

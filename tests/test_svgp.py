@@ -7,20 +7,19 @@ expectation) with a non-Gaussian likelihood end-to-end.
 """
 
 import jax
-import pytest
 
 jax.config.update("jax_enable_x64", True)
 
-import gpjax as gpx
-import jax.numpy as jnp
-import numpy as np
-import pymc as pm
-import pytensor
-import pytensor.tensor as pt
+import gpjax as gpx  # noqa: E402
+import jax.numpy as jnp  # noqa: E402
+import numpy as np  # noqa: E402
+import pymc as pm  # noqa: E402
+import pytensor  # noqa: E402
+import pytensor.tensor as pt  # noqa: E402
 
-from scipy.special import erf
+from scipy.special import erf  # noqa: E402
 
-import ptgp as pg
+import ptgp as pg  # noqa: E402
 
 ATOL = 1e-4  # cross-library noise is ~3e-5 once both libs jitter at 1e-6
 
@@ -332,7 +331,7 @@ class TestSVGPPointsUnwhitenedRegression:
         elbo_val = elbo_fn(
             svgp, pt.as_tensor(ref["X"]), pt.as_tensor(ref["y"]), n_data=len(ref["X"])
         ).elbo.eval()
-        fmean, fvar = [t.eval() for t in svgp.predict_marginal(pt.as_tensor(ref["X"]))]
+        fmean, fvar = (t.eval() for t in svgp.predict_marginal(pt.as_tensor(ref["X"])))
         kl = svgp.prior_kl().eval()
 
         np.testing.assert_allclose(elbo_val, ref["elbo"], atol=1e-10)

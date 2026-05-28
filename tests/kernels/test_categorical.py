@@ -29,18 +29,14 @@ class TestOverlap:
         """k(x, y) = 1[x == y] with one active categorical column."""
         X = np.array([[0.0], [1.0], [0.0], [2.0]])
         expected = (X == X.T).astype(float)
-        np.testing.assert_allclose(
-            _ptgp_eval(Overlap(input_dim=1), X), expected, atol=1e-14
-        )
+        np.testing.assert_allclose(_ptgp_eval(Overlap(input_dim=1), X), expected, atol=1e-14)
 
     def test_multi_column_mean(self):
         """With multiple active columns, kernel is the mean equality."""
         X = np.array([[0.0, 0.0], [0.0, 1.0], [1.0, 1.0]])
         eq = (X[:, None, :] == X[None, :, :]).astype(float)
         expected = eq.mean(axis=-1)
-        np.testing.assert_allclose(
-            _ptgp_eval(Overlap(input_dim=2), X), expected, atol=1e-14
-        )
+        np.testing.assert_allclose(_ptgp_eval(Overlap(input_dim=2), X), expected, atol=1e-14)
 
     def test_active_dims_selects_column(self):
         """Only the active columns contribute; other columns are ignored."""
@@ -52,23 +48,17 @@ class TestOverlap:
     def test_scaling(self):
         X = np.array([[0.0], [1.0], [1.0]])
         expected = 4.0 * (X == X.T).astype(float)
-        np.testing.assert_allclose(
-            _ptgp_eval(4.0 * Overlap(input_dim=1), X), expected, atol=1e-14
-        )
+        np.testing.assert_allclose(_ptgp_eval(4.0 * Overlap(input_dim=1), X), expected, atol=1e-14)
 
     def test_cross(self):
         X = np.array([[0.0], [1.0]])
         Y = np.array([[1.0], [1.0], [2.0]])
         expected = (X == Y.T).astype(float)
-        np.testing.assert_allclose(
-            _ptgp_eval(Overlap(input_dim=1), X, Y), expected, atol=1e-14
-        )
+        np.testing.assert_allclose(_ptgp_eval(Overlap(input_dim=1), X, Y), expected, atol=1e-14)
 
     def test_diag(self):
         X = np.array([[0.0], [1.0], [2.0]])
-        np.testing.assert_allclose(
-            _ptgp_diag(Overlap(input_dim=1), X), np.ones(3), atol=1e-14
-        )
+        np.testing.assert_allclose(_ptgp_diag(Overlap(input_dim=1), X), np.ones(3), atol=1e-14)
 
     def test_positive_definite(self):
         rng = np.random.default_rng(0)
@@ -185,6 +175,4 @@ class TestLowRankCategorical:
         W = pt.as_tensor_variable(np.zeros((3, 2)))
         kappa = pt.as_tensor_variable(np.ones(3))
         with pytest.raises(ValueError, match="length 1"):
-            LowRankCategorical(
-                input_dim=2, num_levels=3, W=W, kappa=kappa, active_dims=[0, 1]
-            )
+            LowRankCategorical(input_dim=2, num_levels=3, W=W, kappa=kappa, active_dims=[0, 1])

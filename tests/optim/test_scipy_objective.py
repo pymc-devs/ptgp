@@ -26,7 +26,11 @@ class TestScipyObjectiveGP:
             )
 
         fun, theta0, _, _, _ = pg.optim.compile_scipy_objective(
-            lambda gp, X, y: pg.objectives.marginal_log_likelihood(gp, X, y).mll, gp, X_var, y_var, model=model,
+            lambda gp, X, y: pg.objectives.marginal_log_likelihood(gp, X, y).mll,
+            gp,
+            X_var,
+            y_var,
+            model=model,
         )
         assert theta0.shape == (3,)
         loss, grad = fun(theta0, X, y)
@@ -50,11 +54,19 @@ class TestScipyObjectiveGP:
             )
 
         fun, theta0, unpack_to_shared, shared, _ = pg.optim.compile_scipy_objective(
-            lambda gp, X, y: pg.objectives.marginal_log_likelihood(gp, X, y).mll, gp, X_var, y_var, model=model,
+            lambda gp, X, y: pg.objectives.marginal_log_likelihood(gp, X, y).mll,
+            gp,
+            X_var,
+            y_var,
+            model=model,
         )
         loss0, _ = fun(theta0, X, y)
         result = scipy.optimize.minimize(
-            fun, theta0, args=(X, y), jac=True, method="L-BFGS-B",
+            fun,
+            theta0,
+            args=(X, y),
+            jac=True,
+            method="L-BFGS-B",
         )
         assert result.success
         assert result.fun < loss0
@@ -81,15 +93,28 @@ class TestScipyObjectiveGP:
             )
 
         fun, theta0, unpack_to_shared, shared, _ = pg.optim.compile_scipy_objective(
-            lambda gp, X, y: pg.objectives.marginal_log_likelihood(gp, X, y).mll, gp, X_var, y_var, model=model,
+            lambda gp, X, y: pg.objectives.marginal_log_likelihood(gp, X, y).mll,
+            gp,
+            X_var,
+            y_var,
+            model=model,
         )
         result = scipy.optimize.minimize(
-            fun, theta0, args=(X, y), jac=True, method="L-BFGS-B",
+            fun,
+            theta0,
+            args=(X, y),
+            jac=True,
+            method="L-BFGS-B",
         )
         unpack_to_shared(result.x)
 
         predict = pg.optim.compile_predict(
-            gp, X_new_var, model, shared, X_train=X, y_train=y,
+            gp,
+            X_new_var,
+            model,
+            shared,
+            X_train=X,
+            y_train=y,
         )
         X_new = np.linspace(0, 5, 10)[:, None]
         mu, var = predict(X_new)
@@ -121,13 +146,22 @@ class TestScipyObjectiveVFE:
             )
 
         fun, theta0, unpack_to_shared, _, extras = pg.optim.compile_scipy_objective(
-            lambda gp, X, y: pg.objectives.collapsed_elbo(gp, X, y).elbo, vfe, X_var, y_var,
-            model=model, extra_vars=[Z_var], extra_init=[Z_init],
+            lambda gp, X, y: pg.objectives.collapsed_elbo(gp, X, y).elbo,
+            vfe,
+            X_var,
+            y_var,
+            model=model,
+            extra_vars=[Z_var],
+            extra_init=[Z_init],
         )
         assert theta0.shape == (3 + M,)
 
         result = scipy.optimize.minimize(
-            fun, theta0, args=(X, y), jac=True, method="L-BFGS-B",
+            fun,
+            theta0,
+            args=(X, y),
+            jac=True,
+            method="L-BFGS-B",
         )
         assert result.success
         unpack_to_shared(result.x)
@@ -158,8 +192,12 @@ class TestScipyObjectiveFrozenVars:
             )
 
         fun, theta0, _, _, _ = pg.optim.compile_scipy_objective(
-            lambda gp, X, y: pg.objectives.collapsed_elbo(gp, X, y).elbo, vfe, X_var, y_var,
-            model=model, frozen_vars={Z_var: Z_frozen},
+            lambda gp, X, y: pg.objectives.collapsed_elbo(gp, X, y).elbo,
+            vfe,
+            X_var,
+            y_var,
+            model=model,
+            frozen_vars={Z_var: Z_frozen},
         )
         # Only the 3 hyperparameters in theta; no Z.
         assert theta0.shape == (3,)

@@ -2,10 +2,10 @@
 
 import numpy as np
 import pytensor
+import pytensor.assumptions as pta
 import pytensor.tensor as pt
 import pytest
 
-import pytensor.assumptions as pta
 from ptgp.inducing import (
     KernelHealthDiagnostics,
     KMeansDiagnostics,

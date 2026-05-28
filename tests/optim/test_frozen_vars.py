@@ -39,7 +39,10 @@ class TestFrozenVars:
         X_var = pt.matrix("X")
         y_var = pt.vector("y")
         train_step, _, _ = pg.optim.compile_training_step(
-            lambda gp, X, y: pg.objectives.elbo(gp, X, y).elbo, svgp, X_var, y_var,
+            lambda gp, X, y: pg.objectives.elbo(gp, X, y).elbo,
+            svgp,
+            X_var,
+            y_var,
             model=model,
             extra_vars=vp.extra_vars,
             extra_init=vp.extra_init,
@@ -66,7 +69,10 @@ class TestFrozenVars:
 
         # Phase 1: Z frozen.
         train_step_1, shared_1, extras_1 = pg.optim.compile_training_step(
-            lambda gp, X, y: pg.objectives.elbo(gp, X, y).elbo, svgp, X_var, y_var,
+            lambda gp, X, y: pg.objectives.elbo(gp, X, y).elbo,
+            svgp,
+            X_var,
+            y_var,
             model=model,
             extra_vars=vp.extra_vars,
             extra_init=vp.extra_init,
@@ -78,7 +84,10 @@ class TestFrozenVars:
 
         # Phase 2: same svgp, Z now trainable via extra_vars.
         train_step_2, shared_2, extras_2 = pg.optim.compile_training_step(
-            lambda gp, X, y: pg.objectives.elbo(gp, X, y).elbo, svgp, X_var, y_var,
+            lambda gp, X, y: pg.objectives.elbo(gp, X, y).elbo,
+            svgp,
+            X_var,
+            y_var,
             model=model,
             extra_vars=[*vp.extra_vars, Z_var],
             extra_init=[*vp.extra_init, Z0],
@@ -117,20 +126,23 @@ class TestFrozenVars:
         sigma_vv = model.rvs_to_values[sigma]
         # Constrained value 0.123 → unconstrained via the model's transform.
         transform = model.rvs_to_transforms[sigma]
-        sigma_unc = float(
-            transform.forward(pt.as_tensor_variable(0.123)).eval()
-        )
+        sigma_unc = float(transform.forward(pt.as_tensor_variable(0.123)).eval())
 
         _, theta0, _, shared_params, _ = pg.optim.compile_scipy_objective(
             lambda gp, X, y: pg.objectives.marginal_log_likelihood(gp, X, y).mll,
-            gp, X_var, y_var, model=model,
+            gp,
+            X_var,
+            y_var,
+            model=model,
             frozen_vars={sigma_vv: sigma_unc},
         )
 
         # Shared var for sigma must hold the freeze value, not the PyMC
         # initial point (which would be 0 in unconstrained space).
         np.testing.assert_allclose(
-            shared_params[sigma_vv].get_value(), sigma_unc, atol=1e-12,
+            shared_params[sigma_vv].get_value(),
+            sigma_unc,
+            atol=1e-12,
         )
 
         # And the theta0 slot for sigma must match — same source, but verify
@@ -149,7 +161,10 @@ class TestFrozenVars:
 
         with pytest.raises(ValueError, match="both extra_vars and frozen_vars"):
             pg.optim.compile_training_step(
-                lambda gp, X, y: pg.objectives.elbo(gp, X, y).elbo, svgp, X_var, y_var,
+                lambda gp, X, y: pg.objectives.elbo(gp, X, y).elbo,
+                svgp,
+                X_var,
+                y_var,
                 model=model,
                 extra_vars=[*vp.extra_vars, Z_var],
                 extra_init=[*vp.extra_init, Z0],

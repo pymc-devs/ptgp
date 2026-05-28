@@ -5,6 +5,7 @@ numpy array, so ``ip.Z`` is directly usable for plotting.
 """
 
 import logging
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -12,9 +13,9 @@ import pytensor
 import pytensor.tensor as pt
 import scipy.cluster.vq
 
-logger = logging.getLogger(__name__)
-
 from ptgp.kernels.base import Kernel
+
+logger = logging.getLogger(__name__)
 
 
 class InducingVariables:

@@ -15,18 +15,19 @@ numpy log-prob function.
 """
 
 import jax
+
 jax.config.update("jax_enable_x64", True)
 
-import numpy as np
-import pymc as pm
-import pytensor
-import pytensor.tensor as pt
-import scipy.linalg
+import numpy as np  # noqa: E402
+import pymc as pm  # noqa: E402
+import pytensor  # noqa: E402
+import pytensor.tensor as pt  # noqa: E402
+import scipy.linalg  # noqa: E402
 
-from scipy import integrate
-from scipy.special import gammaln
+from scipy import integrate  # noqa: E402
+from scipy.special import gammaln  # noqa: E402
 
-import ptgp as pg
+import ptgp as pg  # noqa: E402
 
 ATOL = 1e-5
 
@@ -36,11 +37,7 @@ ATOL = 1e-5
 
 def _matern52_numpy(X1, X2, ls, eta):
     """Matern52 kernel in numpy: k(r) = eta^2 (1 + sqrt(5)r + 5r^2/3) exp(-sqrt(5)r)."""
-    sqd = (
-        np.sum(X1**2, axis=-1)[:, None]
-        + np.sum(X2**2, axis=-1)[None, :]
-        - 2.0 * X1 @ X2.T
-    )
+    sqd = np.sum(X1**2, axis=-1)[:, None] + np.sum(X2**2, axis=-1)[None, :] - 2.0 * X1 @ X2.T
     r = np.sqrt(np.maximum(sqd, 0.0)) / ls
     s5 = np.sqrt(5.0)
     return eta**2 * (1.0 + s5 * r + 5.0 * r**2 / 3.0) * np.exp(-s5 * r)
@@ -74,7 +71,10 @@ def _variational_expectation_quad(log_prob_fn, y, mu_f, var_f):
     total = 0.0
     for yn, m, v in zip(y, mu_f, var_f):
         sd = np.sqrt(v)
-        integrand = lambda z: log_prob_fn(m + sd * z, yn) * np.exp(-0.5 * z**2) / np.sqrt(2.0 * np.pi)
+
+        def integrand(z):
+            return log_prob_fn(m + sd * z, yn) * np.exp(-0.5 * z**2) / np.sqrt(2.0 * np.pi)
+
         val, _ = integrate.quad(integrand, -30.0, 30.0)
         total += val
     return total
@@ -103,6 +103,7 @@ def _fixed_config(rng, N=40, M=8, x_range=(-2.0, 2.0)):
 
 def _studentt_logprob(nu, sigma):
     """Return a numpy log_prob(f, y) for StudentT(y; f, sigma, nu)."""
+
     def logp(f, y):
         z = (y - f) / sigma
         return (
@@ -111,6 +112,7 @@ def _studentt_logprob(nu, sigma):
             - 0.5 * np.log(nu * np.pi * sigma**2)
             - 0.5 * (nu + 1.0) * np.log1p(z**2 / nu)
         )
+
     return logp
 
 
@@ -211,9 +213,7 @@ class TestSVGPStudentTElboMatchesReference:
         X_var = pt.matrix("X")
         y_var = pt.vector("y")
         elbo_expr = pg.objectives.elbo(svgp, X_var, y_var).elbo
-        fn = pytensor.function(
-            [X_var, y_var, *vp.extra_vars, ls, eta, sigma], elbo_expr
-        )
+        fn = pytensor.function([X_var, y_var, *vp.extra_vars, ls, eta, sigma], elbo_expr)
         return float(fn(X, y, *vp.extra_init, ls_val, eta_val, sigma_val))
 
     def test_elbo_match(self):
@@ -222,11 +222,15 @@ class TestSVGPStudentTElboMatchesReference:
         y = np.sin(X[:, 0]) + 0.3 * rng.standard_t(5.0, X.shape[0])
         ls_val, eta_val, nu_val, sigma_val = 1.3, 0.9, 5.0, 0.3
 
-        e_ptgp = self._ptgp_elbo(
-            X, y, Z, q_mu_val, q_sqrt_val, ls_val, eta_val, nu_val, sigma_val
-        )
+        e_ptgp = self._ptgp_elbo(X, y, Z, q_mu_val, q_sqrt_val, ls_val, eta_val, nu_val, sigma_val)
         e_ref = _reference_elbo(
-            X, y, Z, q_mu_val, q_sqrt_val, ls_val, eta_val,
+            X,
+            y,
+            Z,
+            q_mu_val,
+            q_sqrt_val,
+            ls_val,
+            eta_val,
             _studentt_logprob(nu_val, sigma_val),
         )
 
@@ -238,6 +242,7 @@ class TestSVGPStudentTElboMatchesReference:
 
 def _negbinom_logprob(alpha):
     """Return a numpy log_prob(f, y) for NegativeBinomial(y; exp(f), alpha)."""
+
     def logp(f, y):
         mu = np.exp(f)
         return (
@@ -247,6 +252,7 @@ def _negbinom_logprob(alpha):
             + alpha * np.log(alpha / (alpha + mu))
             + y * np.log(mu / (alpha + mu))
         )
+
     return logp
 
 
@@ -346,9 +352,7 @@ class TestSVGPNegBinomElboMatchesReference:
         X_var = pt.matrix("X")
         y_var = pt.vector("y")
         elbo_expr = pg.objectives.elbo(svgp, X_var, y_var).elbo
-        fn = pytensor.function(
-            [X_var, y_var, *vp.extra_vars, ls, eta, alpha], elbo_expr
-        )
+        fn = pytensor.function([X_var, y_var, *vp.extra_vars, ls, eta, alpha], elbo_expr)
         return float(fn(X, y, *vp.extra_init, ls_val, eta_val, alpha_val))
 
     def test_elbo_match(self):
@@ -360,11 +364,15 @@ class TestSVGPNegBinomElboMatchesReference:
         y = rng.negative_binomial(alpha_val, p).astype(np.float64)
         ls_val, eta_val = 1.3, 0.9
 
-        e_ptgp = self._ptgp_elbo(
-            X, y, Z, q_mu_val, q_sqrt_val, ls_val, eta_val, alpha_val
-        )
+        e_ptgp = self._ptgp_elbo(X, y, Z, q_mu_val, q_sqrt_val, ls_val, eta_val, alpha_val)
         e_ref = _reference_elbo(
-            X, y, Z, q_mu_val, q_sqrt_val, ls_val, eta_val,
+            X,
+            y,
+            Z,
+            q_mu_val,
+            q_sqrt_val,
+            ls_val,
+            eta_val,
             _negbinom_logprob(alpha_val),
         )
 

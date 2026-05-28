@@ -2,8 +2,7 @@ import numpy as np
 import pytensor.tensor as pt
 import pytest
 
-import pytensor.assumptions as pta
-from ptgp.gp.svgp import SVGP, VariationalParams, init_variational_params
+from ptgp.gp.svgp import SVGP, VariationalParams
 from ptgp.inducing_fourier import FourierFeatures1D
 from ptgp.kernels.stationary import ExpQuad, Matern12, Matern32, Matern52
 from ptgp.likelihoods.gaussian import Gaussian
@@ -102,7 +101,7 @@ def test_structured_kuu_base_shapes():
 def test_structured_kuu_base_matches_oracle_matern12():
     f = FourierFeatures1D(a=-0.5, b=1.5, num_frequencies=10)
     k = Matern12(input_dim=1, ls=0.3)
-    d, U = [t.eval() for t in f._structured_Kuu_base(k)]
+    d, U = (t.eval() for t in f._structured_Kuu_base(k))
     Kuu_struct = np.diag(d) + U @ U.T
     Kuu_oracle = oracle_kuu_matern12(a=-0.5, b=1.5, ms=np.arange(11), ls=0.3)
     np.testing.assert_allclose(Kuu_struct, Kuu_oracle, atol=1e-10)
@@ -111,7 +110,7 @@ def test_structured_kuu_base_matches_oracle_matern12():
 def test_structured_kuu_base_matches_oracle_matern32():
     f = FourierFeatures1D(a=-0.5, b=1.5, num_frequencies=10)
     k = Matern32(input_dim=1, ls=0.3)
-    d, U = [t.eval() for t in f._structured_Kuu_base(k)]
+    d, U = (t.eval() for t in f._structured_Kuu_base(k))
     Kuu_struct = np.diag(d) + U @ U.T
     Kuu_oracle = oracle_kuu_matern32(a=-0.5, b=1.5, ms=np.arange(11), ls=0.3)
     np.testing.assert_allclose(Kuu_struct, Kuu_oracle, atol=1e-10)
@@ -120,7 +119,7 @@ def test_structured_kuu_base_matches_oracle_matern32():
 def test_structured_kuu_base_matches_oracle_matern52():
     f = FourierFeatures1D(a=-0.5, b=1.5, num_frequencies=10)
     k = Matern52(input_dim=1, ls=0.3)
-    d, U = [t.eval() for t in f._structured_Kuu_base(k)]
+    d, U = (t.eval() for t in f._structured_Kuu_base(k))
     Kuu_struct = np.diag(d) + U @ U.T
     Kuu_oracle = oracle_kuu_matern52(a=-0.5, b=1.5, ms=np.arange(11), ls=0.3)
     np.testing.assert_allclose(Kuu_struct, Kuu_oracle, atol=1e-10)
@@ -378,7 +377,7 @@ def test_eta_squared_matern32_predictions_finite():
         variational_params=vp,
     )
     X = pt.as_tensor(np.linspace(0.1, 0.9, 20)[:, None])
-    m_s, v_s = [t.eval() for t in svgp_scaled.predict_marginal(X)]
+    m_s, v_s = (t.eval() for t in svgp_scaled.predict_marginal(X))
     assert np.all(np.isfinite(m_s)) and np.all(v_s >= 0)
 
 
@@ -405,6 +404,6 @@ def test_vff_converges_to_exact_gp_sanity():
         variational_params=vp,
         whiten=True,
     )
-    fmean, fvar = [t.eval() for t in svgp.predict_marginal(pt.as_tensor(X))]
+    fmean, fvar = (t.eval() for t in svgp.predict_marginal(pt.as_tensor(X)))
     assert np.all(np.isfinite(fmean))
     assert np.all(fvar >= 0)

@@ -239,20 +239,24 @@ def test_tracked_minimize_interrupts_gracefully():
         f = float(np.sum(100.0 * (x[1:] - x[:-1] ** 2) ** 2 + (1 - x[:-1]) ** 2))
         g = np.zeros_like(x)
         g[:-1] += -400.0 * x[:-1] * (x[1:] - x[:-1] ** 2) - 2.0 * (1 - x[:-1])
-        g[1:]  += 200.0 * (x[1:] - x[:-1] ** 2)
+        g[1:] += 200.0 * (x[1:] - x[:-1] ** 2)
         return f, g
 
     theta0 = np.array([0.0, 0.0, 0.0])
 
     # diag_fn appends one entry per callback so we can count iterations seen.
     from collections import namedtuple
+
     Term = namedtuple("Term", ["loss"])
+
     def diag_fn(theta, *args):
         return Term(loss=float(theta @ theta))
 
     # Disable convergence so scipy runs until we raise.
     result, history = pg.optim.tracked_minimize(
-        fun, theta0, args=(),
+        fun,
+        theta0,
+        args=(),
         diag_fn=diag_fn,
         options={"maxiter": 100, "ftol": 0, "gtol": 0},
     )
@@ -296,6 +300,7 @@ def test_minimize_staged_vfe_interrupts_in_phase1(gp_data):
     # routine, but simplest: monkey-patch tracked_minimize directly to inject
     # an interrupt after a few iters.
     import ptgp.optim.training as training_mod
+
     orig = training_mod.tracked_minimize
     state = {"calls": 0}
 
@@ -304,21 +309,28 @@ def test_minimize_staged_vfe_interrupts_in_phase1(gp_data):
         state["calls"] += 1
         if state["calls"] == 1:
             inner_count = [0]
+
             def f_wrapped(theta, *a):
                 inner_count[0] += 1
                 if inner_count[0] >= 4:
                     raise KeyboardInterrupt
                 return fun(theta, *a)
-            return orig(f_wrapped, theta0, args=args, diag_fn=diag_fn,
-                        print_every=print_every, **kwargs)
-        return orig(fun, theta0, args=args, diag_fn=diag_fn,
-                    print_every=print_every, **kwargs)
+
+            return orig(
+                f_wrapped, theta0, args=args, diag_fn=diag_fn, print_every=print_every, **kwargs
+            )
+        return orig(fun, theta0, args=args, diag_fn=diag_fn, print_every=print_every, **kwargs)
 
     training_mod.tracked_minimize = raising_tracked_minimize
     try:
         result, history, phase_labels, unpack, sp, se = pg.optim.minimize_staged_vfe(
             lambda gp_, X_, y_: pg.objectives.collapsed_elbo(gp_, X_, y_).elbo,
-            vfe, X_var, y_var, X, y, model,
+            vfe,
+            X_var,
+            y_var,
+            X,
+            y,
+            model,
             sigma_init=0.1,
             Z_var=Z_var,
             Z_init=Z_init,

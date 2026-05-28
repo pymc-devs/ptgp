@@ -21,6 +21,7 @@ prints the full op breakdown and is the right tool for diagnosis.
 
 import pytensor
 import pytensor.tensor as pt
+
 from pytensor.tensor.blockwise import Blockwise
 from pytensor.tensor.linalg.decomposition.cholesky import Cholesky
 from pytensor.tensor.linalg.decomposition.lu import LUFactor
@@ -34,7 +35,6 @@ from ptgp.kernels import ExpQuad
 from ptgp.likelihoods import Gaussian
 from ptgp.mean import Zero
 from ptgp.objectives import collapsed_elbo, elbo, marginal_log_likelihood
-
 
 CUBIC_OPS = (Cholesky, MatrixInverse, Solve, Det, SLogDet, LUFactor)
 
@@ -108,9 +108,7 @@ def test_svgp_joint_graph_at_cubic_floor():
         variational_params=vp,
     )
     loss = -elbo(svgp, X, y).elbo
-    g_sigma, g_ls, g_Z, g_qmu, g_qsq = pt.grad(
-        loss, [sigma, ls, Z, vp.q_mu, vp.extra_vars[1]]
-    )
+    g_sigma, g_ls, g_Z, g_qmu, g_qsq = pt.grad(loss, [sigma, ls, Z, vp.q_mu, vp.extra_vars[1]])
     fn = pytensor.function(
         [X, y, sigma, ls, Z, vp.q_mu, vp.extra_vars[1]],
         [loss, g_sigma, g_ls, g_Z, g_qmu, g_qsq],

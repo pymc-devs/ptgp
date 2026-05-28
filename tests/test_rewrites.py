@@ -10,6 +10,7 @@ scope of ``ptgp.rewrites`` shrank to three structural rewrites: H
 """
 
 import numpy as np
+import pytensor.assumptions as pta
 import pytensor.tensor as pt
 
 from pytensor import function
@@ -23,9 +24,6 @@ from pytensor.tensor.linalg.summary import Det
 
 # Install the rewrites under test (side-effect import).
 import ptgp.rewrites  # noqa: F401
-
-import pytensor.assumptions as pta
-
 
 # ---------------------------------------------------------------------------
 # Helpers for the structural rewrites below.

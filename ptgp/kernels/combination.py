@@ -27,7 +27,7 @@ class SumKernel(Kernel):
         return self.k1(X, Y) + self.k2(X, Y)
 
     def diag(self, X):
-        """Diagonal of K(X, X) = diag(k1) + diag(k2)."""
+        """Return the per-point variance — sum of the two component diagonals."""
         return self.k1.diag(X) + self.k2.diag(X)
 
 
@@ -56,7 +56,7 @@ class ProductKernel(Kernel):
         return self.k1 * self.k2(X, Y)
 
     def diag(self, X):
-        """Diagonal of K(X, X) = diag(k1) * diag(k2). Handles scalar * kernel."""
+        """Return the per-point variance — product of component diagonals, with scalar passthrough."""
         k1_is_kernel = isinstance(self.k1, Kernel)
         k2_is_kernel = isinstance(self.k2, Kernel)
         if k1_is_kernel and k2_is_kernel:

@@ -7,6 +7,7 @@ import pytensor.tensor as pt
 import pytest
 
 import ptgp as pg
+
 from ptgp.optim import schedules
 from ptgp.optim.optimizers import adam
 
@@ -159,7 +160,7 @@ class TestCompileTrainingStepGroups:
     def test_unknown_var_in_group_raises(self):
         rng = np.random.default_rng(0)
         X = np.sort(rng.uniform(0, 5, 20))[:, None]
-        y = np.sin(X[:, 0]) + rng.normal(0, 0.1, 20)
+        np.sin(X[:, 0]) + rng.normal(0, 0.1, 20)
 
         with pm.Model() as model:
             ls = pm.InverseGamma("ls", alpha=2.0, beta=1.0)

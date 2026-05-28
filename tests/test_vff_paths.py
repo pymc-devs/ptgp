@@ -150,8 +150,8 @@ def test_whitened_vs_unwhitened_agreement(kind):
     )
 
     X_test = np.linspace(f.a + 0.05, f.b - 0.05, 30)[:, None]
-    m_u_out, v_u_out = [t.eval() for t in svgp_u.predict_marginal(pt.as_tensor(X_test))]
-    m_w_out, v_w_out = [t.eval() for t in svgp_w.predict_marginal(pt.as_tensor(X_test))]
+    m_u_out, v_u_out = (t.eval() for t in svgp_u.predict_marginal(pt.as_tensor(X_test)))
+    m_w_out, v_w_out = (t.eval() for t in svgp_w.predict_marginal(pt.as_tensor(X_test)))
     np.testing.assert_allclose(m_u_out, m_w_out, atol=1e-6)
     np.testing.assert_allclose(v_u_out, v_w_out, atol=1e-6)
 

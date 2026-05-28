@@ -7,9 +7,6 @@ import sys
 from collections import namedtuple
 from pathlib import Path
 
-from ptgp.optim import phase_sort_key  # re-export — single source of truth
-
-
 Verdict = namedtuple("Verdict", ["pitfall", "status", "evidence", "next_steps"])
 # status ∈ {"OK", "SUSPECT", "CONFIRMED"}
 

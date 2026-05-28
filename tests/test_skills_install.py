@@ -1,7 +1,5 @@
 """Smoke test for ``ptgp install-skills``."""
 
-from pathlib import Path
-
 from ptgp._cli import main as cli_main
 
 
