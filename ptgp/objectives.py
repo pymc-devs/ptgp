@@ -124,8 +124,7 @@ def collapsed_elbo(vfe, X, y):
     A = pt.linalg.solve_triangular(Lu, Kuf, lower=True)  # M × N
     Q_diag = pt.sum(A * A, axis=0)  # N
 
-    sigma_raw = vfe.likelihood.sigma
-    sigma_vec = sigma_raw(X) if callable(sigma_raw) else sigma_raw * pt.ones(N, dtype=Kuu.dtype)
+    sigma_vec = vfe.likelihood.sigma * pt.ones(N, dtype=Kuu.dtype)
     sigma2_vec = sigma_vec**2
 
     diff = y - mu
@@ -313,8 +312,7 @@ def vfe_diagnostics(vfe, X, y):
     """
     terms = collapsed_elbo(vfe, X, y)
     N = X.shape[0]
-    sigma_raw = vfe.likelihood.sigma
-    sigma_vec = sigma_raw(X) if callable(sigma_raw) else sigma_raw * pt.ones(N)
+    sigma_vec = vfe.likelihood.sigma * pt.ones(N)
     sigma_mean = pt.mean(sigma_vec)  # scalar; mean of a constant vector = that constant
     fit_per_n = terms.fit / N
     excess_fit_per_n = fit_per_n + 0.5 * pt.log(2.0 * np.pi * sigma_mean**2)

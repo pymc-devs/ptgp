@@ -36,12 +36,6 @@ class VFE:
         self.likelihood = Gaussian(sigma)
         self.inducing_variable = inducing_variable
 
-        if callable(sigma):
-            self.sigma_fn = self.likelihood.sigma  # already wrapped with ptgp.assume
-        else:
-            _s = self.likelihood.sigma
-            self.sigma_fn = lambda X: pt.ones(X.shape[0]) * _s
-
     def predict_marginal(self, X_new, X_train, y_train, incl_lik=False):
         """Posterior marginal mean and variance at each point in X_new.
 
@@ -62,7 +56,8 @@ class VFE:
         var : tensor, shape (N*,)
         """
         Z = self.inducing_variable.Z
-        sigma2_vec = self.sigma_fn(X_train) ** 2  # (N,); constant if scalar sigma
+        sigma = self.likelihood.sigma
+        sigma2_vec = sigma**2 * pt.ones(X_train.shape[0])  # (N,); scalar broadcasts
 
         Kuu = self.kernel(Z)  # (M, M)
         Kuf = self.kernel(Z, X_train)  # (M, N)
@@ -80,5 +75,6 @@ class VFE:
         fvar = Kss_diag - pt.sum(Kus * ((Kuu_inv - Sigma_inv) @ Kus), axis=0)
 
         if incl_lik:
-            return self.likelihood.predict_mean_and_var(fmean, fvar)
+            sigma_new = self.likelihood.sigma_at(X_train, X_new)
+            return fmean, fvar + sigma_new**2
         return fmean, fvar
