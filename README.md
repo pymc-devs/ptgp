@@ -11,7 +11,7 @@ PTGP is for practitioners who need flexible, well-supported GP modeling. The goa
 - **Non-Gaussian likelihoods:** Bernoulli, Poisson, NegativeBinomial, StudentT
 - **PyMC priors:** set priors on any hyperparameter; use PyMC distributions for mean functions and noise models; MAP training by default
 - **Training tools:** L-BFGS-B and Adam optimizers, per-parameter learning rates, staged optimization, frozen variables, inducing point initialization strategies, diagnostic-guided workflows; more are being added, such as carefully monitored training to help diagnose issues early
-- **Skill files:** LLM-readable guides for debugging training issues and folk wisdom; currently have helpers for VFE, more planned for other approximations
+- **Agent-readable docs:** `docs/agents/` ships LLM-readable guides for debugging training issues and folk wisdom (VFE training covered). See the [Working with AI coding assistants](#working-with-ai-coding-assistants) section below.
 - **More coming:** see the [issues](https://github.com/bwengals/ptgp/issues)
 
 Researchers benefit from the underlying design: PTGP is built on PyTensor's symbolic graph and rewrite system, so you write GP math directly (`pt.linalg.inv(K)`, `pt.linalg.slogdet(K)`) and the compiler chooses efficient algorithms based on declared matrix structure. This makes it straightforward to implement new GP approximations and create custom models, and will eventually allow matrix structure like Kronecker, Toeplitz, and sparse to be taken advantage of automatically.
@@ -70,27 +70,48 @@ predict_fn = pg.optim.compile_predict(svgp, pt.matrix("X_new"), model, shared_pa
 mean, var = predict_fn(np.linspace(-3, 3, 100)[:, None])
 ```
 
-Training uses MAP by default: the PyMC log-prior is added to the objective. Pass `include_prior=False` for pure ELBO. For exact GPs and VFE, use `compile_scipy_objective` with L-BFGS-B instead. For now, see [`notebooks/demo.ipynb`](notebooks/demo.ipynb) for examples covering all models. Better documentation and examples are planned.
+Training uses MAP by default: the PyMC log-prior is added to the objective. Pass `include_prior=False` for pure ELBO. For exact GPs and VFE, use `compile_scipy_objective` with L-BFGS-B instead. See [`notebooks/demo.ipynb`](notebooks/demo.ipynb) for end-to-end examples covering all three models.
 
 ## How it works
 
-PTGP is built on PyTensor's symbolic graph. Kernels, likelihoods, and GP models return symbolic tensors with naive linear algebra like `pt.linalg.inv(K)` that PyTensor's rewrite system automatically lowers to efficient Cholesky-based code using declared matrix properties. All models compile their full forward+gradient step down to the minimum number of cubic factorizations. Iterative solvers are planned for the future.
+PTGP is built on PyTensor's symbolic graph. Kernels, likelihoods, and GP models return symbolic tensors with naive linear algebra like `pt.linalg.inv(K)` that PyTensor's rewrite system automatically lowers to efficient Cholesky-based code using declared matrix properties. All models compile their full forward+gradient step down to the minimum number of cubic factorizations.
 
 PTGP tries to distill some of the approaches of existing GP libraries and make them more accessible, mainly [GPJax](https://github.com/JaxGaussianProcesses/GPJax), [GPflow](https://github.com/GPflow/GPflow), and [GPyTorch](https://github.com/cornellius-gp/gpytorch).
+
+## Working with AI coding assistants
+
+PTGP is set up to work nicely with AI coding assistants:
+
+- **[`AGENTS.md`](AGENTS.md)** — project-level instructions for AI coding assistants (architecture, conventions, where things live, how to run tests). Follows the [AGENTS.md](https://agents.md/) cross-tool convention used by Codex, Cursor, Aider, and others.
+- **[`docs/agents/`](docs/agents/)** — backend-agnostic agent-skill docs covering folk wisdom and training-debug recipes. Currently includes [`ptgp-vfe`](docs/agents/ptgp-vfe/) (VFE diagnostic skill: pitfalls, escalation workflow, interpretation of `VFEDiagnostics` and `GreedyVarianceDiagnostics`).
+
+**Claude Code users:** Claude Code reads `CLAUDE.md`, not `AGENTS.md`. Symlink so they stay in sync:
+
+```bash
+ln -s AGENTS.md CLAUDE.md
+```
+
+To install the VFE skill into a Claude Code skill directory (so Claude auto-discovers it when you mention VFE), run:
+
+```bash
+python scripts/install_claude_skills.py --project .   # ./.claude/skills/
+python scripts/install_claude_skills.py --user        # ~/.claude/skills/
+```
 
 ## Install
 
 ```bash
+pip install git+https://github.com/bwengals/ptgp.git
+```
+
+To hack on PTGP itself, clone and install in editable mode:
+
+```bash
+git clone https://github.com/bwengals/ptgp.git
+cd ptgp
 pip install -e .
 ```
 
-Requires PyTensor from main and PyMC >= 6.0:
+## Contributing
 
-```bash
-pip install git+https://github.com/pymc-devs/pytensor@main
-pip install pymc
-```
-
-## Status
-
-Prototype. See the [issues](https://github.com/bwengals/ptgp/issues) for what's being worked on. Feel free to propose issues, feature requests, or use cases you've been hoping could be made easier. PRs always welcome.
+See the [issues](https://github.com/bwengals/ptgp/issues) for what's being worked on. Feel free to propose issues, feature requests, or use cases you've been hoping could be made easier. PRs always welcome.

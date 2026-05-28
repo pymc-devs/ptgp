@@ -5,8 +5,8 @@ description: Diagnose and fix VFE (Titsias collapsed-bound) sparse-GP training f
 
 # ptgp-vfe — VFE training diagnostic skill
 
-Routes Claude to the right context when diagnosing a Titsias collapsed-bound
-(VFE) sparse-GP run in ptgp. Three branches:
+Routes an AI coding assistant to the right context when diagnosing a Titsias
+collapsed-bound (VFE) sparse-GP run in ptgp. Three branches:
 
 ## reference/
 

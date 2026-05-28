@@ -15,9 +15,9 @@ Also prints the max difference between ptgp-on and ptgp-off output
 values across all outputs, as a sanity check that the rewrites preserve
 numerical semantics.
 
-Run from the project root:
+Run from the project root with the project's ``ptgp`` env active:
 
-    /Users/bill/miniconda3/envs/ptgp/bin/python scripts/joint_graph_analysis.py
+    python scripts/joint_graph_analysis.py
 
 This script is **not** part of the test suite — it's a diagnostic tool
 for investigating compiled-graph structure (e.g., when
