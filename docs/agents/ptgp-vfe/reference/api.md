@@ -32,9 +32,13 @@ parameter list.
 - **`compile_scipy_objective(objective_fn, gp, X_var, y_var, model=None,
   extra_vars=None, extra_init=None, frozen_vars=None, include_prior=True,
   init="prior_median", init_rng=None) -> (fun, theta0, unpack, sp,
-  se)`** — scipy-compatible loss + grad. `init` defaults to
-  `"prior_median"` (improper priors fall back per-RV; see the function
-  docstring).
+  se)`** — scipy-compatible loss + grad. `objective_fn` may return a
+  scalar or a namedtuple (first field is taken as the scalar).
+  `extra_vars` / `extra_init` default to `gp.extra_vars` / `gp.extra_init`
+  when omitted; pass them explicitly to override (e.g. an empty tuple to
+  exclude all extras, or `vp.extra_vars` to keep `Z` frozen). `init`
+  defaults to `"prior_median"` (improper priors fall back per-RV; see
+  the function docstring).
 - **`compile_scipy_diagnostics(diagnostic_fn, gp, X_var, y_var, ...) ->
   diag_fn`** — companion that compiles a forward-only pass returning
   every namedtuple field at a given theta. Pair with
@@ -109,3 +113,18 @@ parameter list.
   n_median_samples=500) -> dict`** — constrained-space values for all
   free RVs at the chosen init strategy. Used to build numerical proxy
   kernels for `greedy_variance_init`.
+
+## Convenience API — `ptgp/optim/api.py`
+
+- **`fit(gp, X, y, *, model=None, objective=None, method="L-BFGS-B",
+  init="prior_median", init_rng=None, compile_kwargs=None,
+  **scipy_kwargs) -> FitResult`** — one-shot training. Picks
+  `marginal_log_likelihood` / `collapsed_elbo` / `elbo` by gp type when
+  `objective` is omitted, compiles, minimizes, unpacks, and returns
+  `FitResult(result, params, shared_params, shared_extras, model)`.
+  Wraps `compile_scipy_objective` + `scipy.optimize.minimize` —
+  drop down for staged training or fine control.
+- **`predict(gp, X_new, fit_result, *, X_train=None, y_train=None,
+  incl_lik=False, compile_kwargs=None) -> (mean, var)`** — compile
+  + evaluate. `X_train` / `y_train` required for `Unapproximated`
+  and `VFE`; ignored for `SVGP`.

@@ -2,6 +2,7 @@ import pytensor.tensor as pt
 
 from ptgp.likelihoods import Gaussian
 from ptgp.mean import Zero
+from ptgp.objectives import marginal_log_likelihood
 
 
 class Unapproximated:
@@ -18,6 +19,11 @@ class Unapproximated:
     sigma : tensor or PyMC random variable
         Observation noise standard deviation.
     """
+
+    extra_vars = ()
+    extra_init = ()
+    default_objective = staticmethod(marginal_log_likelihood)
+    predict_needs_data = True
 
     def __init__(self, kernel, mean=None, sigma=None):
         """Store the kernel and mean; build a Gaussian likelihood from sigma."""

@@ -1,4 +1,5 @@
 from ptgp.optim import schedules
+from ptgp.optim.api import FitResult, fit, predict
 from ptgp.optim.optimizers import adam, sgd
 from ptgp.optim.training import (
     compile_predict,
@@ -23,4 +24,7 @@ __all__ = [
     "minimize_staged_vfe",
     "phase_sort_key",
     "tracked_minimize",
+    "fit",
+    "predict",
+    "FitResult",
 ]

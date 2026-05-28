@@ -13,6 +13,7 @@ from ptgp import (
     utils,
 )
 from ptgp.inducing_fourier import FourierFeatures1D
+from ptgp.optim.api import FitResult, fit, predict
 
 
 class _StdoutHandler(logging.StreamHandler):
@@ -39,6 +40,8 @@ if not _logger.handlers:
 
 __all__ = [
     "FourierFeatures1D",
+    "FitResult",
+    "fit",
     "gp",
     "inducing",
     "kernels",
@@ -46,6 +49,7 @@ __all__ = [
     "mean",
     "objectives",
     "optim",
+    "predict",
     "utils",
 ]
 

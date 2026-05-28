@@ -2,6 +2,7 @@ import pytensor.tensor as pt
 
 from ptgp.likelihoods import Gaussian
 from ptgp.mean import Zero
+from ptgp.objectives import collapsed_elbo
 
 
 class VFE:
@@ -23,6 +24,9 @@ class VFE:
         Inducing point locations.
     """
 
+    default_objective = staticmethod(collapsed_elbo)
+    predict_needs_data = True
+
     def __init__(self, kernel, mean=None, sigma=None, inducing_variable=None):
         """Store the kernel, mean, and inducing variable; build a Gaussian likelihood from sigma."""
         if not hasattr(inducing_variable, "Z"):
@@ -35,6 +39,14 @@ class VFE:
         self.mean = mean if mean is not None else Zero()
         self.likelihood = Gaussian(sigma)
         self.inducing_variable = inducing_variable
+
+    @property
+    def extra_vars(self):
+        return tuple(self.inducing_variable.extra_vars)
+
+    @property
+    def extra_init(self):
+        return tuple(self.inducing_variable.extra_init)
 
     def predict_marginal(self, X_new, X_train, y_train, incl_lik=False):
         """Posterior marginal mean and variance at each point in X_new.

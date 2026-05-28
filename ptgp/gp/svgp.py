@@ -7,6 +7,7 @@ import pytensor.tensor as pt
 from ptgp.conditionals import conditional_unwhitened, conditional_whitened
 from ptgp.kl import gauss_kl, gauss_kl_structured
 from ptgp.mean import Zero
+from ptgp.objectives import elbo
 
 
 def _softplus_lower_triangular(flat, M):
@@ -46,7 +47,7 @@ def _matrix_to_softplus_flat_init(L_init, M):
     return flat
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class VariationalParams:
     """Symbolic variational parameters for SVGP.
 
@@ -59,18 +60,16 @@ class VariationalParams:
         Symbolic Cholesky factor of the variational covariance, shape ``(M, M)``,
         annotated ``lower_triangular=True``. Pass to ``SVGP`` via
         ``variational_params=...``.
-    extra_vars : list of TensorVariable
-        Trainable leaf variables underlying ``q_mu`` and ``q_sqrt``. Pass to
-        ``compile_training_step`` / ``compile_scipy_objective`` as ``extra_vars``.
-    extra_init : list of ndarray
-        Initial values for ``extra_vars``, in matching order. Pass to
-        ``compile_training_step`` / ``compile_scipy_objective`` as ``extra_init``.
+    extra_vars : tuple of TensorVariable
+        Trainable leaves underlying ``q_mu`` and ``q_sqrt``.
+    extra_init : tuple of ndarray
+        Initial values for ``extra_vars``, in matching order.
     """
 
     q_mu: object
     q_sqrt: object
-    extra_vars: list = dataclasses.field(default_factory=list)
-    extra_init: list = dataclasses.field(default_factory=list)
+    extra_vars: tuple = ()
+    extra_init: tuple = ()
 
 
 def init_variational_params(M, q_mu_init=None, q_sqrt_init=None):
@@ -132,8 +131,8 @@ def init_variational_params(M, q_mu_init=None, q_sqrt_init=None):
     return VariationalParams(
         q_mu=q_mu,
         q_sqrt=q_sqrt,
-        extra_vars=[q_mu, q_sqrt_flat],
-        extra_init=[q_mu_init, flat_init],
+        extra_vars=(q_mu, q_sqrt_flat),
+        extra_init=(q_mu_init, flat_init),
     )
 
 
@@ -160,6 +159,9 @@ class SVGP:
         If True, use whitened variational parameterization (default True).
     """
 
+    default_objective = staticmethod(elbo)
+    predict_needs_data = False
+
     def __init__(
         self,
         kernel,
@@ -183,6 +185,20 @@ class SVGP:
         self.variational_params = variational_params
         self.q_mu = variational_params.q_mu
         self.q_sqrt = variational_params.q_sqrt
+
+    @property
+    def extra_vars(self):
+        return (
+            *self.variational_params.extra_vars,
+            *self.inducing_variable.extra_vars,
+        )
+
+    @property
+    def extra_init(self):
+        return (
+            *self.variational_params.extra_init,
+            *self.inducing_variable.extra_init,
+        )
 
     def predict_marginal(self, X, incl_lik=False):
         """Posterior marginal mean and variance at each point in X.
