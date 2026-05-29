@@ -1,6 +1,6 @@
 import pytensor.tensor as pt
 
-from ptgp.likelihoods.base import Likelihood, LikelihoodOp
+from ptgp.likelihoods.base import LikelihoodOp, build
 
 
 def inv_probit(x):
@@ -11,6 +11,9 @@ def inv_probit(x):
 
 class BernoulliOp(LikelihoodOp):
     """Bernoulli likelihood Op. Closed-form predictive for the probit link."""
+
+    param_names = ()
+    default_invlink = staticmethod(inv_probit)
 
     def _log_prob(self, f, y):
         p = self.invlink(f)
@@ -30,21 +33,10 @@ class BernoulliOp(LikelihoodOp):
         return super().predict_mean_and_var(params, mu, var)
 
 
-class Bernoulli(Likelihood):
-    """Bernoulli likelihood: p(y=1|f) = invlink(f).
+def Bernoulli(invlink=None, n_points=20):
+    """Build a Bernoulli likelihood p(y=1|f) = invlink(f).
 
-    Default link is probit. Variational expectation via Gauss-Hermite quadrature.
-
-    Parameters
-    ----------
-    invlink : callable, optional
-        Inverse link function (default: probit). Use ``pt.sigmoid`` for logit link.
-    n_points : int
-        Number of Gauss-Hermite quadrature points (default 20).
+    Returns a :class:`~ptgp.likelihoods.base.LikelihoodVariable`. Default link is
+    probit (closed-form predictive); pass ``invlink=pt.sigmoid`` for logit.
     """
-
-    op_cls = BernoulliOp
-    param_names = ()
-
-    def __init__(self, invlink=None, n_points=20):
-        super().__init__(n_points=n_points, invlink=invlink or inv_probit)
+    return build(BernoulliOp, [], n_points=n_points, invlink=invlink)
