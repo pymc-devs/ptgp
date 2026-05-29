@@ -1,41 +1,42 @@
 import pytensor.tensor as pt
 
-from ptgp.likelihoods.base import Likelihood
+from ptgp.likelihoods.base import LikelihoodOp
 
 
-class Poisson(Likelihood):
-    """Poisson likelihood: p(y|f) = Poisson(y; invlink(f)).
+class PoissonOp(LikelihoodOp):
+    """Poisson likelihood Op. Closed-form variational expectation for log link."""
 
-    Default link is log (invlink=exp). Has a closed-form variational
-    expectation with the log link; falls back to quadrature for other links.
-
-    Parameters
-    ----------
-    invlink : callable, optional
-        Inverse link function (default: exp).
-    n_points : int
-        Number of Gauss-Hermite quadrature points (default 20).
-    """
-
-    def __init__(self, invlink=None, n_points=20):
-        self.invlink = invlink or pt.exp
-        self.n_points = n_points
+    param_names = ()
+    allowed_links = ("log",)
 
     def _log_prob(self, f, y):
-        lam = self.invlink(f)
+        lam = self._invlink(f)
         return y * pt.log(lam) - lam - pt.gammaln(y + 1.0)
 
     def _conditional_mean(self, f):
-        return self.invlink(f)
+        return self._invlink(f)
 
     def _conditional_variance(self, f):
-        return self.invlink(f)
+        return self._invlink(f)
 
-    def variational_expectation(self, y, mu, var):
-        """Closed-form for log link: E_q[y*f - exp(f) - log(y!)].
-
-        Falls back to quadrature for other link functions.
-        """
-        if self.invlink is pt.exp:
+    def variational_expectation(self, params, y, mu, var):
+        if self.link == "log":
             return y * mu - pt.exp(mu + var / 2.0) - pt.gammaln(y + 1.0)
-        return super().variational_expectation(y, mu, var)
+        return super().variational_expectation(params, y, mu, var)
+
+
+def Poisson(link=None, n_points=20):
+    """Build a Poisson likelihood p(y|f) with rate ``invlink(f)``.
+
+    Returns a :class:`~ptgp.likelihoods.base.LikelihoodVariable`. The log link
+    (the default and only supported link) has a closed-form variational
+    expectation.
+
+    Parameters
+    ----------
+    link : str, optional
+        Inverse link name; only ``"log"`` is supported (the default).
+    n_points : int
+        Number of Gauss-Hermite quadrature points (default 20).
+    """
+    return PoissonOp(n_points=n_points, link=link)()

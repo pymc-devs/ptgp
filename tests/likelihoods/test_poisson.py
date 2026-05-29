@@ -4,6 +4,8 @@ import numpy as np
 import pytensor
 import pytensor.tensor as pt
 
+from scipy.special import gammaln
+
 from ptgp.likelihoods import Poisson
 
 
@@ -23,11 +25,12 @@ class TestPoisson:
                 pt.as_tensor_variable(y), pt.as_tensor_variable(mu), pt.as_tensor_variable(var)
             )
         )
-        # Use base class quadrature via _gauss_hermite directly
+        # Use base-op quadrature via _gauss_hermite directly
         lik = Poisson(n_points=50)
+        op = lik.owner.op
         ve_quad = _eval(
-            lik._gauss_hermite(
-                lik._log_prob,
+            op._gauss_hermite(
+                op._log_prob,
                 pt.as_tensor_variable(y),
                 pt.as_tensor_variable(mu),
                 pt.as_tensor_variable(var),
@@ -46,3 +49,21 @@ class TestPoisson:
             )
         )
         np.testing.assert_allclose(ve, np.array([-1.0]), atol=1e-12)
+
+    def test_quadrature_predict_collapses_at_zero_variance(self):
+        """At zero latent variance the base quadrature predictives reduce to the
+        conditional moments and the pointwise log-density at f = mu."""
+        mu, y, var = np.array([0.5, 1.0]), np.array([1.0, 3.0]), np.zeros(2)
+        lam = np.exp(mu)
+        lik = Poisson()
+        pm, pv = _eval(
+            *lik.predict_mean_and_var(pt.as_tensor_variable(mu), pt.as_tensor_variable(var))
+        )
+        pld = _eval(
+            lik.predict_log_density(
+                pt.as_tensor_variable(y), pt.as_tensor_variable(mu), pt.as_tensor_variable(var)
+            )
+        )
+        np.testing.assert_allclose(pm, lam, atol=1e-10)
+        np.testing.assert_allclose(pv, lam, atol=1e-10)
+        np.testing.assert_allclose(pld, y * mu - lam - gammaln(y + 1.0), atol=1e-10)

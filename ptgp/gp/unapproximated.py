@@ -18,6 +18,10 @@ class Unapproximated:
         Mean function (default: ``Zero()``).
     sigma : tensor or PyMC random variable
         Observation noise standard deviation.
+    x : tensor, optional
+        The design matrix ``sigma`` was built against, for heteroskedastic
+        noise. Pass it so sigma can be re-rooted onto the test inputs at predict
+        time.
     """
 
     extra_vars = ()
@@ -25,11 +29,11 @@ class Unapproximated:
     default_objective = staticmethod(marginal_log_likelihood)
     predict_needs_data = True
 
-    def __init__(self, kernel, mean=None, sigma=None):
+    def __init__(self, kernel, mean=None, sigma=None, x=None):
         """Store the kernel and mean; build a Gaussian likelihood from sigma."""
         self.kernel = kernel
         self.mean = mean if mean is not None else Zero()
-        self.likelihood = Gaussian(sigma)
+        self.likelihood = Gaussian(sigma, x=x)
 
     def predict_marginal(self, X_new, X_train, y_train, incl_lik=False):
         """Posterior marginal mean and variance at each point in X_new.
@@ -64,6 +68,5 @@ class Unapproximated:
         fvar = Kss_diag - pt.sum(Kns * (Knn_inv @ Kns), axis=0)
 
         if incl_lik:
-            sigma_new = self.likelihood.sigma_at(X_train, X_new)
-            return fmean, fvar + sigma_new**2
+            return self.likelihood.at(X_new).predict_mean_and_var(fmean, fvar)
         return fmean, fvar

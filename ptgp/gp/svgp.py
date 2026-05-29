@@ -230,7 +230,7 @@ class SVGP:
             fmean, fvar = conditional_unwhitened(A, Kmn, Knn_diag, self.q_mu, self.q_sqrt)
         fmean = fmean + self.mean(X)
         if incl_lik:
-            return self.likelihood.predict_mean_and_var(fmean, fvar)
+            return self.likelihood.at(X).predict_mean_and_var(fmean, fvar)
         return fmean, fvar
 
     def predict_joint(self, X):

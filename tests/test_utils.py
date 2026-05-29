@@ -8,10 +8,6 @@ import ptgp as pg
 
 from ptgp.utils import _build_index_labels, check_init
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 
 def _make_simple_model_and_objective():
     """1-D GP on synthetic data; returns (fun, theta0, X, y, model)."""
@@ -40,11 +36,6 @@ def _make_simple_model_and_objective():
         lambda gp, X, y: pg.objectives.collapsed_elbo(gp, X, y).elbo, gp, X_var, y_var, model=model
     )
     return fun, theta0, X, y, model
-
-
-# ---------------------------------------------------------------------------
-# check_init tests
-# ---------------------------------------------------------------------------
 
 
 class TestCheckInit:
@@ -117,11 +108,6 @@ class TestCheckInit:
         out = capsys.readouterr().out
         table_lines = [line for line in out.splitlines() if line.strip().startswith("[")]
         assert len(table_lines) == theta0.size
-
-
-# ---------------------------------------------------------------------------
-# _build_index_labels unit tests
-# ---------------------------------------------------------------------------
 
 
 class TestBuildIndexLabels:

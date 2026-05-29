@@ -2,11 +2,11 @@ import numpy as np
 import pymc as pm
 import pytensor
 import pytensor.tensor as pt
-import pytest
 
-from ptgp.gp import VFE, Unapproximated
+from ptgp.gp import SVGP, VFE, Unapproximated, init_variational_params
 from ptgp.inducing import Points
 from ptgp.kernels import ExpQuad
+from ptgp.likelihoods import Gaussian
 from ptgp.mean import Zero
 from ptgp.objectives import collapsed_elbo
 
@@ -33,7 +33,7 @@ class TestUnapproximatedHeteroskedastic:
         X_train, y_train, X_new = _data()
         X = pt.matrix("X", shape=(None, 1))
         gp = Unapproximated(
-            kernel=ExpQuad(input_dim=1, ls=1.0), mean=Zero(), sigma=_hetero_sigma(X)
+            kernel=ExpQuad(input_dim=1, ls=1.0), mean=Zero(), sigma=_hetero_sigma(X), x=X
         )
         X_new_t = pt.matrix("X_new", shape=(None, 1))
         y_t = pt.vector("y", shape=(None,))
@@ -47,18 +47,6 @@ class TestUnapproximatedHeteroskedastic:
         expected_sigma_new = 0.1 + 0.05 * X_new[:, 0] ** 2
         np.testing.assert_allclose(yv, v + expected_sigma_new**2, atol=1e-10)
 
-    def test_wrong_X_raises(self):
-        """sigma built against X_a, predict called with X_b — ancestor check fires."""
-        X_a = pt.matrix("X_a", shape=(None, 1))
-        X_b = pt.matrix("X_b", shape=(None, 1))
-        gp = Unapproximated(
-            kernel=ExpQuad(input_dim=1, ls=1.0), mean=Zero(), sigma=_hetero_sigma(X_a)
-        )
-        X_new_t = pt.matrix("X_new", shape=(None, 1))
-        y_t = pt.vector("y", shape=(None,))
-        with pytest.raises(ValueError, match=r"Some replacements were not used"):
-            gp.predict_marginal(X_new_t, X_b, y_t, incl_lik=True)
-
 
 class TestVFEHeteroskedastic:
     def _build(self, X):
@@ -66,7 +54,7 @@ class TestVFEHeteroskedastic:
         return VFE(
             kernel=ExpQuad(input_dim=1, ls=1.0),
             mean=Zero(),
-            sigma=_hetero_sigma(X),
+            sigma=_hetero_sigma(X), x=X,
             inducing_variable=Points(pt.as_tensor_variable(Z)),
         )
 
@@ -86,14 +74,30 @@ class TestVFEHeteroskedastic:
         expected_sigma_new = 0.1 + 0.05 * X_new[:, 0] ** 2
         np.testing.assert_allclose(yv, v + expected_sigma_new**2, atol=1e-10)
 
-    def test_wrong_X_raises(self):
-        X_a = pt.matrix("X_a", shape=(None, 1))
-        X_b = pt.matrix("X_b", shape=(None, 1))
-        vfe = self._build(X_a)
+
+class TestSVGPHeteroskedastic:
+    def test_incl_lik_adds_pointwise_noise(self):
+        X_train, y_train, X_new = _data()
+        M = 6
+        Z = np.linspace(-1.5, 1.5, M)[:, None].astype(np.float64)
+        vp = init_variational_params(M)
+        X = pt.matrix("X", shape=(None, 1))
+        svgp = SVGP(
+            kernel=ExpQuad(input_dim=1, ls=1.0),
+            mean=Zero(),
+            likelihood=Gaussian(_hetero_sigma(X), x=X),
+            inducing_variable=Points(pt.as_tensor_variable(Z)),
+            variational_params=vp,
+        )
         X_new_t = pt.matrix("X_new", shape=(None, 1))
-        y_t = pt.vector("y", shape=(None,))
-        with pytest.raises(ValueError, match=r"Some replacements were not used"):
-            vfe.predict_marginal(X_new_t, X_b, y_t, incl_lik=True)
+
+        _, fvar = svgp.predict_marginal(X_new_t)
+        _, yvar = svgp.predict_marginal(X_new_t, incl_lik=True)
+        fn = pytensor.function([X_new_t, *vp.extra_vars], [fvar, yvar], on_unused_input="ignore")
+        v, yv = fn(X_new, *vp.extra_init)
+
+        expected_sigma_new = 0.1 + 0.05 * X_new[:, 0] ** 2
+        np.testing.assert_allclose(yv - v, expected_sigma_new**2, atol=1e-10)
 
 
 class TestScalarSigmaUnaffected:
@@ -145,10 +149,11 @@ class TestScalarSigmaUnaffected:
 
 
 def test_pm_data_sigma_is_detected_as_data_dependent():
-    """sigma built against a pm.Data SharedVariable must still be treated
-    as data-dependent. The heuristic filters by type (TensorType), not by
-    class (SharedVariable) — without this, pm.Data is silently invisible
-    to sigma_at and predictions use the wrong noise.
+    """sigma built against a pm.Data SharedVariable must still be re-rooted.
+
+    The design matrix handle is keyed by identity (the ``x=`` argument), so a
+    pm.Data SharedVariable works exactly like a symbolic placeholder — passing
+    it as ``x=`` lets at swap it for the test inputs.
     """
     X_train_arr = np.linspace(-1.5, 1.5, 10)[:, None].astype(np.float64)
     X_new_arr = np.linspace(-2.0, 2.0, 5)[:, None].astype(np.float64)
@@ -158,7 +163,7 @@ def test_pm_data_sigma_is_detected_as_data_dependent():
         gp = Unapproximated(
             kernel=ExpQuad(input_dim=1, ls=1.0),
             mean=Zero(),
-            sigma=_hetero_sigma(X),
+            sigma=_hetero_sigma(X), x=X,
         )
     X_new_t = pt.matrix("X_new", shape=(None, 1))
     y_t = pt.vector("y", shape=(None,))
@@ -182,7 +187,7 @@ def test_collapsed_elbo_with_heteroskedastic_sigma():
     vfe = VFE(
         kernel=ExpQuad(input_dim=1, ls=1.0),
         mean=Zero(),
-        sigma=_hetero_sigma(X),
+        sigma=_hetero_sigma(X), x=X,
         inducing_variable=Points(pt.as_tensor_variable(Z)),
     )
     elbo = collapsed_elbo(vfe, X, y).elbo

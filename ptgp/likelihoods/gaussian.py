@@ -1,66 +1,52 @@
 import pytensor.tensor as pt
 
-from pytensor.graph.basic import Constant
-from pytensor.graph.replace import graph_replace
-from pytensor.graph.traversal import ancestors
-from pytensor.tensor.type import TensorType
-
-from ptgp.likelihoods.base import Likelihood
+from ptgp.likelihoods.base import LikelihoodOp, to_inputs
 
 LOG2PI = pt.log(2.0 * pt.pi)
 
 
-class Gaussian(Likelihood):
-    """Gaussian likelihood p(y|f) = N(y; f, sigma^2).
+class GaussianOp(LikelihoodOp):
+    """Gaussian likelihood Op: closed-form expectations (no quadrature)."""
 
-    All methods have closed-form expressions (no quadrature needed).
+    param_names = ("sigma",)
+
+    def _log_prob(self, f, y, sigma):
+        return -0.5 * (LOG2PI + pt.log(sigma**2) + (y - f) ** 2 / sigma**2)
+
+    def _conditional_mean(self, f, sigma):
+        return f
+
+    def _conditional_variance(self, f, sigma):
+        return pt.ones_like(f) * sigma**2
+
+    def variational_expectation(self, params, y, mu, var):
+        (sigma,) = params
+        return -0.5 * (LOG2PI + pt.log(sigma**2) + ((y - mu) ** 2 + var) / sigma**2)
+
+    def predict_mean_and_var(self, params, mu, var):
+        (sigma,) = params
+        return mu, var + sigma**2
+
+    def predict_log_density(self, params, y, mu, var):
+        (sigma,) = params
+        total_var = var + sigma**2
+        return -0.5 * (LOG2PI + pt.log(total_var) + (y - mu) ** 2 / total_var)
+
+
+def Gaussian(sigma, x=None):
+    """Build a Gaussian likelihood p(y|f) = N(y; f, sigma^2).
+
+    Returns a :class:`~ptgp.likelihoods.base.LikelihoodVariable` — a graph node
+    exposing ``.sigma``, ``.at``, ``.predict_mean_and_var``, etc.
 
     Parameters
     ----------
     sigma : tensor
-        Observation noise standard deviation. May be a scalar (homoskedastic)
-        or a vector built against a symbolic ``X`` (heteroskedastic). At
-        predict time, :meth:`sigma_at` substitutes the training ``X`` for
-        ``X_new`` in sigma's graph; mismatches surface as a strict-mode
-        ``graph_replace`` error.
+        Observation noise standard deviation. Scalar (homoskedastic) or a vector
+        built against a design matrix ``X`` (heteroskedastic).
+    x : tensor, optional
+        The design matrix ``sigma`` was built against; pass it for
+        heteroskedastic noise so ``.at`` can re-root sigma onto test inputs.
     """
-
-    def __init__(self, sigma):
-        self.sigma = pt.as_tensor_variable(sigma)
-
-    def sigma_at(self, X_train, X_new):
-        """Return ``sigma`` with ``X_train`` substituted by ``X_new``.
-
-        Sigma is treated as data-dependent iff it has any free symbolic
-        tensor input in its graph (covers both raw ``pt.matrix`` X and
-        ``pm.Data`` X — the latter is a SharedVariable but its type is
-        ``TensorType``). For data-independent sigma the call is a no-op.
-        For data-dependent sigma, strict-mode ``graph_replace`` raises a
-        clear error if ``X_train`` is not in sigma's graph.
-        """
-        has_data_dep = any(
-            v.owner is None and not isinstance(v, Constant) and isinstance(v.type, TensorType)
-            for v in ancestors([self.sigma])
-        )
-        if not has_data_dep:
-            return self.sigma
-        return graph_replace(self.sigma, {X_train: X_new})
-
-    def _log_prob(self, f, y):
-        return -0.5 * (LOG2PI + pt.log(self.sigma**2) + (y - f) ** 2 / self.sigma**2)
-
-    def _conditional_mean(self, f):
-        return f
-
-    def _conditional_variance(self, f):
-        return pt.ones_like(f) * self.sigma**2
-
-    def variational_expectation(self, y, mu, var):
-        return -0.5 * (LOG2PI + pt.log(self.sigma**2) + ((y - mu) ** 2 + var) / self.sigma**2)
-
-    def predict_mean_and_var(self, mu, var):
-        return mu, var + self.sigma**2
-
-    def predict_log_density(self, y, mu, var):
-        total_var = var + self.sigma**2
-        return -0.5 * (LOG2PI + pt.log(total_var) + (y - mu) ** 2 / total_var)
+    op = GaussianOp(has_data=x is not None)
+    return op(*to_inputs([sigma], x))
