@@ -28,3 +28,12 @@ repos:
     - id: no-print-statements
       files: ^ptgp/
       exclude: ^ptgp/_cli\.py$
+
+- repo: local
+  hooks:
+    - id: check-kernel-gallery
+      name: check covariance gallery covers every public kernel
+      entry: python scripts/check_kernel_gallery.py
+      language: system
+      pass_filenames: false
+      files: ^(ptgp/kernels/|docs/sphinxext/generate_kernel_gallery\.py$)
