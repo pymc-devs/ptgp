@@ -188,3 +188,4 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 .idea/
+/docs/source/
