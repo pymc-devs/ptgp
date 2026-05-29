@@ -54,13 +54,22 @@ with pm.Model() as model:
 mean, var = pg.predict(svgp, np.linspace(-3, 3, 100)[:, None], fit)
 ```
 
-`pg.fit` picks a default objective from the gp type (`Unapproximated` → `marginal_log_likelihood`, `VFE` → `collapsed_elbo`, `SVGP` → `elbo`) and returns a `FitResult` that `pg.predict` consumes. For stochastic mini-batch training, staged VFE, or per-group learning rates, drop down to `pg.optim.compile_training_step` / `pg.optim.compile_scipy_objective` — see [`notebooks/demo.ipynb`](notebooks/demo.ipynb).
+`pg.fit` picks a default objective from the gp type (`Unapproximated` → `marginal_log_likelihood`, `VFE` → `collapsed_elbo`, `SVGP` → `elbo`) and returns a `FitResult` that `pg.predict` consumes. For stochastic mini-batch training, staged VFE, or per-group learning rates, drop down to `pg.optim.compile_training_step` / `pg.optim.compile_scipy_objective` — see [`notebooks/demo.ipynb`](notebooks/demo.ipynb):
+
+```python
+X_var = pt.matrix("X")
+y_var = pt.vector("y")
+
+step, shared_params, shared_extras = pg.optim.compile_training_step(
+    pg.objectives.elbo, svgp, X_var, y_var, model, learning_rate=1e-2
+)
 
 for i in range(500):
     loss = step(X, y)
 
-predict_fn = pg.optim.compile_predict(svgp, pt.matrix("X_new"), model, shared_params,
-                                       extra_vars=vp.extra_vars, shared_extras=shared_extras)
+predict_fn = pg.optim.compile_predict(
+    svgp, pt.matrix("X_new"), model, shared_params, shared_extras=shared_extras
+)
 mean, var = predict_fn(np.linspace(-3, 3, 100)[:, None])
 ```
 
@@ -79,7 +88,9 @@ PTGP is set up to work nicely with AI coding assistants:
 - **[`AGENTS.md`](AGENTS.md)** — project-level instructions for AI coding assistants (architecture, conventions, where things live, how to run tests). Follows the [AGENTS.md](https://agents.md/) cross-tool convention used by Codex, Cursor, Aider, and others.
 - **[`docs/agents/`](docs/agents/)** — backend-agnostic agent-skill docs covering folk wisdom and training-debug recipes. Currently includes [`ptgp-vfe`](docs/agents/ptgp-vfe/) (VFE diagnostic skill: pitfalls, escalation workflow, interpretation of `VFEDiagnostics` and `GreedyVarianceDiagnostics`).
 
-**Claude Code users:** Claude Code reads `CLAUDE.md`, not `AGENTS.md`. Symlink so they stay in sync:
+### Claude Code users
+
+Claude Code reads `CLAUDE.md`, not `AGENTS.md`. Symlink so they stay in sync:
 
 ```bash
 ln -s AGENTS.md CLAUDE.md
