@@ -3,6 +3,7 @@ import sys
 
 from ptgp import (
     gp,
+    idata,
     inducing,
     kernels,
     likelihoods,
@@ -43,6 +44,7 @@ __all__ = [
     "FitResult",
     "fit",
     "gp",
+    "idata",
     "inducing",
     "kernels",
     "likelihoods",
