@@ -32,9 +32,6 @@ import ptgp as pg  # noqa: E402
 ATOL = 1e-5
 
 
-# ---- Reference ELBO machinery (numpy + scipy, no PTGP internals) ----------
-
-
 def _matern52_numpy(X1, X2, ls, eta):
     """Matern52 kernel in numpy: k(r) = eta^2 (1 + sqrt(5)r + 5r^2/3) exp(-sqrt(5)r)."""
     sqd = np.sum(X1**2, axis=-1)[:, None] + np.sum(X2**2, axis=-1)[None, :] - 2.0 * X1 @ X2.T
@@ -96,9 +93,6 @@ def _fixed_config(rng, N=40, M=8, x_range=(-2.0, 2.0)):
     L = np.tril(rng.normal(0, 0.2, (M, M)))
     L[np.arange(M), np.arange(M)] = np.abs(L[np.arange(M), np.arange(M)]) + 0.5
     return X, Z, q_mu, L
-
-
-# ---- StudentT -------------------------------------------------------------
 
 
 def _studentt_logprob(nu, sigma):
@@ -235,9 +229,6 @@ class TestSVGPStudentTElboMatchesReference:
         )
 
         np.testing.assert_allclose(e_ptgp, e_ref, atol=ATOL)
-
-
-# ---- NegativeBinomial -----------------------------------------------------
 
 
 def _negbinom_logprob(alpha):

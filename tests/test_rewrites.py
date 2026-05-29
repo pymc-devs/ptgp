@@ -25,10 +25,6 @@ from pytensor.tensor.linalg.summary import Det
 # Install the rewrites under test (side-effect import).
 import ptgp.rewrites  # noqa: F401
 
-# ---------------------------------------------------------------------------
-# Helpers for the structural rewrites below.
-# ---------------------------------------------------------------------------
-
 
 def _has_op(graph, op_type):
     fg = FunctionGraph(outputs=[graph] if not isinstance(graph, list) else graph, clone=False)
@@ -38,11 +34,6 @@ def _has_op(graph, op_type):
         if isinstance(core, op_type):
             return True
     return False
-
-
-# ---------------------------------------------------------------------------
-# Det(L @ L.T) -> (prod(diag(L)))**2 rewrite (Rule H).
-# ---------------------------------------------------------------------------
 
 
 def test_det_of_LLT_takes_diag_product_when_L_lower_triangular():
@@ -68,11 +59,6 @@ def test_det_of_LLT_diag_product_is_numerically_correct():
     L_val[np.arange(M), np.arange(M)] = np.abs(L_val[np.arange(M), np.arange(M)]) + 0.5
     expected = float(np.linalg.det(L_val @ L_val.T))
     np.testing.assert_allclose(f(L_val), expected, atol=1e-10)
-
-
-# ---------------------------------------------------------------------------
-# ExtractDiag(A @ A.T) -> sum(A**2, axis=-1) rewrite (Rule I).
-# ---------------------------------------------------------------------------
 
 
 def test_diag_of_AAT_to_row_norms_squared_eliminates_dot():
@@ -109,11 +95,6 @@ def test_diag_of_ATA_is_numerically_correct():
     rng = np.random.default_rng(0)
     A_val = rng.standard_normal((6, 4))  # gives diag of (4, 4)
     np.testing.assert_allclose(f(A_val), np.diag(A_val.T @ A_val), atol=1e-12)
-
-
-# ---------------------------------------------------------------------------
-# MatrixInverse(PSD A) -> cho_solve(L, eye) rewrite (Rule J).
-# ---------------------------------------------------------------------------
 
 
 def test_matrix_inverse_of_LTL_uses_solve_triangular():
@@ -181,12 +162,10 @@ def test_matrix_inverse_lowering_is_numerically_correct():
     np.testing.assert_allclose(f(K_val), np.linalg.inv(K_val), atol=1e-10)
 
 
-# ---------------------------------------------------------------------------
 # Joint-graph cubic-op floor pinning (was: Blocker A / merge_composites_*).
 # These pin the invariant the deleted composite-merge passes were claimed to
 # enforce; they pass without those passes because pytensor 3.0.3's fusion
 # pipeline already arrives at the floor.
-# ---------------------------------------------------------------------------
 
 
 def _gp_mll_like_joint():
