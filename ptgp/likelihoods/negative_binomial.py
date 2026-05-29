@@ -1,6 +1,27 @@
 import pytensor.tensor as pt
 
-from ptgp.likelihoods.base import Likelihood
+from ptgp.likelihoods.base import Likelihood, LikelihoodOp, _param_property
+
+
+class NegativeBinomialOp(LikelihoodOp):
+    """Negative binomial likelihood Op. Expectations via quadrature."""
+
+    def _log_prob(self, f, y, alpha):
+        mu = self.invlink(f)
+        return (
+            pt.gammaln(y + alpha)
+            - pt.gammaln(alpha)
+            - pt.gammaln(y + 1.0)
+            + alpha * pt.log(alpha / (alpha + mu))
+            + y * pt.log(mu / (alpha + mu))
+        )
+
+    def _conditional_mean(self, f, alpha):
+        return self.invlink(f)
+
+    def _conditional_variance(self, f, alpha):
+        mu = self.invlink(f)
+        return mu + mu**2 / alpha
 
 
 class NegativeBinomial(Likelihood):
@@ -18,29 +39,14 @@ class NegativeBinomial(Likelihood):
         Inverse link function (default: exp).
     n_points : int
         Number of Gauss-Hermite quadrature points (default 20).
+    x : tensor, optional
+        The design matrix ``alpha`` was built against, for a heteroskedastic
+        parameter re-rooted onto the test inputs at predict time.
     """
 
+    op_cls = NegativeBinomialOp
     param_names = ("alpha",)
+    alpha = _param_property("alpha")
 
-    def __init__(self, alpha, invlink=None, n_points=20):
-        self.alpha = pt.as_tensor_variable(alpha)
-        self.invlink = invlink or pt.exp
-        self.n_points = n_points
-
-    def _log_prob(self, f, y):
-        mu = self.invlink(f)
-        alpha = self.alpha
-        return (
-            pt.gammaln(y + alpha)
-            - pt.gammaln(alpha)
-            - pt.gammaln(y + 1.0)
-            + alpha * pt.log(alpha / (alpha + mu))
-            + y * pt.log(mu / (alpha + mu))
-        )
-
-    def _conditional_mean(self, f):
-        return self.invlink(f)
-
-    def _conditional_variance(self, f):
-        mu = self.invlink(f)
-        return mu + mu**2 / self.alpha
+    def __init__(self, alpha, invlink=None, n_points=20, x=None):
+        super().__init__(x=x, n_points=n_points, invlink=invlink or pt.exp, alpha=alpha)
