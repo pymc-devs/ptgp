@@ -27,13 +27,9 @@ def _eval(*tensors):
 
 
 def test_likelihood_survives_clone_and_reroots_on_the_clone():
-    """Regression: the likelihood handle lives in the graph as a node, so cloning
-    a model graph carries it — we recover the likelihood from the *clone* and
-    re-root it onto new inputs. Only possible because it is a graph node, not
-    Python-side state on the holder."""
     X = pt.matrix("X", shape=(None, 1))
-    lik = Gaussian(0.1 + 0.05 * X[:, 0] ** 2, x=X)  # holder; the handle is lik._lik
-    assert isinstance(op_of(lik._lik), GaussianOp)
+    lik = Gaussian(0.1 + 0.05 * X[:, 0] ** 2, x=X)
+    assert isinstance(lik.owner.op, GaussianOp)
     X_new = pt.matrix("X_new", shape=(None, 1))
     X_new_test = np.array([[0.0], [1.0], [2.0]])
     mu = pt.as_tensor_variable(np.zeros(3))
@@ -42,10 +38,10 @@ def test_likelihood_survives_clone_and_reroots_on_the_clone():
     _, orig_var = lik.at(X_new).predict_mean_and_var(mu, var)
     orig_eval = orig_var.eval({X_new: X_new_test})
 
-    [cloned_handle] = clone_replace([lik._lik])
-    assert cloned_handle is not lik._lik
-    assert isinstance(op_of(cloned_handle), GaussianOp)
-    _, cloned_var = predict_mean_and_var(at(cloned_handle, X_new), mu, var)
+    [cloned_lik] = clone_replace([lik])
+    assert cloned_lik is not lik
+    assert isinstance(cloned_lik.owner.op, GaussianOp)
+    _, cloned_var = predict_mean_and_var(at(cloned_lik, X_new), mu, var)
     cloned_eval = cloned_var.eval({X_new: X_new_test})
 
     expected = 1.0 + (0.1 + 0.05 * X_new_test[:, 0] ** 2) ** 2  # var + sigma(X_new)**2
@@ -59,7 +55,7 @@ def test_node_built_without_holder_is_fully_usable():
     come from ``owner.op``."""
     X = pt.matrix("X", shape=(None, 1))
     sigma = 0.1 + 0.05 * X[:, 0] ** 2
-    lik = GaussianOp(("sigma",), has_data=True)(X, sigma)  # a node, no Likelihood object
+    lik = GaussianOp(has_data=True)(X, sigma)  # a node, via the Op directly
 
     assert isinstance(op_of(lik), GaussianOp)
     assert param(lik, "sigma") is sigma  # the parameter is the node's input
@@ -76,11 +72,10 @@ def test_functional_matches_holder():
     var = pt.as_tensor_variable(np.array([0.5, 0.2]))
     new = pt.as_tensor_variable(np.array([[0.5], [1.5]]))
 
-    holder = Gaussian(0.1 + 0.05 * X[:, 0] ** 2, x=X)
-    node = holder._lik  # the likelihood handle (NoneType node); .sigma is the param
+    lik = Gaussian(0.1 + 0.05 * X[:, 0] ** 2, x=X)  # a LikelihoodVariable
 
-    hm, hv = holder.at(new).predict_mean_and_var(mu, var)
-    fm, fv = predict_mean_and_var(at(node, new), mu, var)
+    hm, hv = lik.at(new).predict_mean_and_var(mu, var)  # method API
+    fm, fv = predict_mean_and_var(at(lik, new), mu, var)  # functional API
     np.testing.assert_allclose(_eval(hm), _eval(fm))
     np.testing.assert_allclose(_eval(hv), _eval(fv))
 
@@ -91,7 +86,7 @@ def test_functional_variational_expectation_preserves_rv_identity():
     with pm.Model():
         alpha = pm.HalfNormal("alpha")
         X = pt.matrix("X", shape=(None, 1))
-        lik = GaussianOp(("sigma",), has_data=True)(X, alpha + 0.05 * X[:, 0] ** 2)
+        lik = GaussianOp(has_data=True)(X, alpha + 0.05 * X[:, 0] ** 2)
         new = pt.as_tensor_variable(np.array([[0.0], [2.0]]))
         ve = variational_expectation(
             at(lik, new),

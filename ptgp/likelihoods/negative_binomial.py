@@ -1,10 +1,13 @@
 import pytensor.tensor as pt
 
-from ptgp.likelihoods.base import Likelihood, LikelihoodOp, _param_property
+from ptgp.likelihoods.base import LikelihoodOp, build
 
 
 class NegativeBinomialOp(LikelihoodOp):
     """Negative binomial likelihood Op. Expectations via quadrature."""
+
+    param_names = ("alpha",)
+    default_invlink = staticmethod(pt.exp)
 
     def _log_prob(self, f, y, alpha):
         mu = self.invlink(f)
@@ -24,12 +27,12 @@ class NegativeBinomialOp(LikelihoodOp):
         return mu + mu**2 / alpha
 
 
-class NegativeBinomial(Likelihood):
-    """Negative binomial likelihood: p(y|f) = NB(y; invlink(f), alpha).
+def NegativeBinomial(alpha, invlink=None, n_points=20, x=None):
+    """Build a negative binomial likelihood NB(y; invlink(f), alpha).
 
-    Parameterized as NB(y; mu, alpha) where mu = invlink(f) and alpha is the
-    overdispersion parameter.  Variance is mu + mu^2 / alpha.
-    Default link is log (invlink=exp).
+    Returns a :class:`~ptgp.likelihoods.base.LikelihoodVariable`. Variance is
+    ``mu + mu**2 / alpha`` with ``mu = invlink(f)``; default link is log
+    (``invlink=exp``).
 
     Parameters
     ----------
@@ -41,12 +44,6 @@ class NegativeBinomial(Likelihood):
         Number of Gauss-Hermite quadrature points (default 20).
     x : tensor, optional
         The design matrix ``alpha`` was built against, for a heteroskedastic
-        parameter re-rooted onto the test inputs at predict time.
+        parameter re-rooted onto test inputs via ``.at``.
     """
-
-    op_cls = NegativeBinomialOp
-    param_names = ("alpha",)
-    alpha = _param_property("alpha")
-
-    def __init__(self, alpha, invlink=None, n_points=20, x=None):
-        super().__init__(x=x, n_points=n_points, invlink=invlink or pt.exp, alpha=alpha)
+    return build(NegativeBinomialOp, [alpha], x=x, n_points=n_points, invlink=invlink)

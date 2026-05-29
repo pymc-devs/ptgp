@@ -1,12 +1,14 @@
 import pytensor.tensor as pt
 
-from ptgp.likelihoods.base import Likelihood, LikelihoodOp, _param_property
+from ptgp.likelihoods.base import LikelihoodOp, build
 
 LOG2PI = pt.log(2.0 * pt.pi)
 
 
 class GaussianOp(LikelihoodOp):
     """Gaussian likelihood Op: closed-form expectations (no quadrature)."""
+
+    param_names = ("sigma",)
 
     def _log_prob(self, f, y, sigma):
         return -0.5 * (LOG2PI + pt.log(sigma**2) + (y - f) ** 2 / sigma**2)
@@ -31,25 +33,19 @@ class GaussianOp(LikelihoodOp):
         return -0.5 * (LOG2PI + pt.log(total_var) + (y - mu) ** 2 / total_var)
 
 
-class Gaussian(Likelihood):
-    """Gaussian likelihood p(y|f) = N(y; f, sigma^2).
+def Gaussian(sigma, x=None):
+    """Build a Gaussian likelihood p(y|f) = N(y; f, sigma^2).
 
-    All methods have closed-form expressions (no quadrature needed).
+    Returns a :class:`~ptgp.likelihoods.base.LikelihoodVariable` — a graph node
+    exposing ``.sigma``, ``.at``, ``.predict_mean_and_var``, etc.
 
     Parameters
     ----------
     sigma : tensor
-        Observation noise standard deviation. May be a scalar (homoskedastic)
-        or a vector built against a design matrix ``X`` (heteroskedastic).
+        Observation noise standard deviation. Scalar (homoskedastic) or a vector
+        built against a design matrix ``X`` (heteroskedastic).
     x : tensor, optional
-        The design matrix ``sigma`` was built against. Pass it when ``sigma`` is
-        heteroskedastic so :meth:`Likelihood.at` can re-root
-        sigma onto the test inputs at predict time.
+        The design matrix ``sigma`` was built against; pass it for
+        heteroskedastic noise so ``.at`` can re-root sigma onto test inputs.
     """
-
-    op_cls = GaussianOp
-    param_names = ("sigma",)
-    sigma = _param_property("sigma")
-
-    def __init__(self, sigma, x=None):
-        super().__init__(x=x, sigma=sigma)
+    return build(GaussianOp, [sigma], x=x)

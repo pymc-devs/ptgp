@@ -1,10 +1,12 @@
 import pytensor.tensor as pt
 
-from ptgp.likelihoods.base import Likelihood, LikelihoodOp, _param_property
+from ptgp.likelihoods.base import LikelihoodOp, build
 
 
 class StudentTOp(LikelihoodOp):
     """Student-T likelihood Op. Expectations via Gauss-Hermite quadrature."""
+
+    param_names = ("nu", "sigma")
 
     def _log_prob(self, f, y, nu, sigma):
         z = (y - f) / sigma
@@ -22,10 +24,11 @@ class StudentTOp(LikelihoodOp):
         return pt.ones_like(f) * sigma**2 * nu / (nu - 2.0)
 
 
-class StudentT(Likelihood):
-    """Student-T likelihood p(y|f) = StudentT(y; f, sigma, nu).
+def StudentT(nu, sigma, n_points=20, x=None):
+    """Build a Student-T likelihood p(y|f) = StudentT(y; f, sigma, nu).
 
-    Variational expectation via Gauss-Hermite quadrature.
+    Returns a :class:`~ptgp.likelihoods.base.LikelihoodVariable`. Variational
+    expectation via Gauss-Hermite quadrature.
 
     Parameters
     ----------
@@ -37,13 +40,6 @@ class StudentT(Likelihood):
         Number of Gauss-Hermite quadrature points (default 20).
     x : tensor, optional
         The design matrix ``nu``/``sigma`` were built against, for
-        heteroskedastic parameters re-rooted onto the test inputs at predict.
+        heteroskedastic parameters re-rooted onto test inputs via ``.at``.
     """
-
-    op_cls = StudentTOp
-    param_names = ("nu", "sigma")
-    nu = _param_property("nu")
-    sigma = _param_property("sigma")
-
-    def __init__(self, nu, sigma, n_points=20, x=None):
-        super().__init__(x=x, n_points=n_points, nu=nu, sigma=sigma)
+    return build(StudentTOp, [nu, sigma], x=x, n_points=n_points)

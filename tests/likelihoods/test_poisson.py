@@ -25,9 +25,10 @@ class TestPoisson:
         )
         # Use base-op quadrature via _gauss_hermite directly
         lik = Poisson(n_points=50)
+        op = lik.owner.op
         ve_quad = _eval(
-            lik._op._gauss_hermite(
-                lik._op._log_prob,
+            op._gauss_hermite(
+                op._log_prob,
                 pt.as_tensor_variable(y),
                 pt.as_tensor_variable(mu),
                 pt.as_tensor_variable(var),

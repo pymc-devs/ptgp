@@ -1,57 +1,111 @@
-import copy
-
 import numpy as np
 import pytensor.tensor as pt
 
-from pytensor.graph.basic import Apply
-from pytensor.graph.null_type import NullType
+from pytensor.graph.basic import Apply, Variable
 from pytensor.graph.op import Op
 from pytensor.graph.replace import graph_replace
+from pytensor.graph.type import Type
 
-_NULL = NullType()
+
+class LikelihoodVariable(Variable):
+    """A likelihood that lives in the PyTensor graph *and* carries the accessor API.
+
+    It is the output of a :class:`LikelihoodOp` node, so ``owner.op`` recovers
+    the family (with behaviour) and ``clone`` / ``graph_replace`` carry it. It
+    also exposes the methods we used to put on a holder, each dispatched through
+    ``owner.op`` (the free functions below):
+
+    - parameter access — ``lik.sigma`` / ``lik.nu`` / ... (the node's inputs),
+    - :meth:`at` — re-root the parameters onto new design inputs,
+    - :meth:`variational_expectation` / :meth:`predict_mean_and_var` /
+      :meth:`predict_log_density`.
+    """
+
+    def at(self, X):
+        """Re-root onto design matrix ``X`` (no-op without a design matrix)."""
+        return at(self, X)
+
+    def variational_expectation(self, y, mu, var):
+        """E_{q(f)}[log p(y|f)] where q(f) = N(mu, var)."""
+        return variational_expectation(self, y, mu, var)
+
+    def predict_mean_and_var(self, mu, var):
+        """Predictive mean and variance under q(f) = N(mu, var)."""
+        return predict_mean_and_var(self, mu, var)
+
+    def predict_log_density(self, y, mu, var):
+        """Predictive log-density log E_{q(f)}[p(y|f)] at test points."""
+        return predict_log_density(self, y, mu, var)
+
+    def __getattr__(self, name):
+        # Only fires for attributes not found normally. Expose the named
+        # parameters (node inputs) and a little Op config; everything else
+        # (incl. PyTensor internals) raises AttributeError as usual.
+        if name.startswith("_") or name in ("owner", "type", "index", "tag", "name", "auto_name"):
+            raise AttributeError(name)
+        owner = self.__dict__.get("owner")
+        if owner is None:
+            raise AttributeError(name)
+        op = owner.op
+        if name in op.param_names:
+            off = 1 if op.has_data else 0
+            return owner.inputs[off + op.param_names.index(name)]
+        if name in ("n_points", "invlink", "param_names", "has_data"):
+            return getattr(op, name)
+        raise AttributeError(name)
+
+
+class LikelihoodType(Type):
+    """Type of a likelihood handle. Carries no runtime value — the node it comes
+    from is a structural marker, never consumed by the loss or compiled."""
+
+    def filter(self, value, strict=False, allow_downcast=None):
+        return value
+
+    def make_variable(self, name=None):
+        return LikelihoodVariable(self, None, name=name)
+
+    def __eq__(self, other):
+        return type(self) is type(other)
+
+    def __hash__(self):
+        return hash(type(self))
+
+
+_LIK_TYPE = LikelihoodType()
 
 
 class LikelihoodOp(Op):
     """Structural marker keeping a likelihood inside the PyTensor graph.
 
     The Apply node consumes the design matrix (optional; input 0 when present)
-    and the parameters as its *inputs*, and emits a single ``NoneType`` handle as
-    output. It computes nothing — its sole purpose is to be a real graph node, so
-    ``graph_replace`` / ``fgraph.clone`` / PyMC conditioning carry the likelihood
-    (and re-root its parameters) instead of it being Python-side state those
-    operations would silently drop. The Op *type* (the subclass) encodes the
-    family, so behaviour is recoverable via ``owner.op``; the parameters are the
-    node's inputs.
+    and the parameters as its *inputs*, and emits a single :class:`LikelihoodType`
+    handle (a :class:`LikelihoodVariable`) as output. It computes nothing — it is
+    a real graph node purely so ``graph_replace`` / ``fgraph.clone`` / PyMC
+    conditioning carry the likelihood (and re-root its parameters). The Op *type*
+    (the subclass) encodes the family; behaviour is recoverable via ``owner.op``.
 
     Because the parameters are *inputs* and the handle output is never consumed
     by the loss, the node is never on the differentiation path nor in a compiled
-    loss graph — so it needs no gradient, view, shape, or strip machinery. To
-    keep it alive across graph operations, hold its output (or register it as a
-    PyMC named variable).
+    loss graph — no gradient, view, shape, or strip machinery is needed.
 
-    Parameters
-    ----------
-    param_names : tuple of str
-        Parameter names, in input order (after the optional design matrix).
-    n_points : int
-        Gauss-Hermite quadrature points for the default expectations.
-    invlink : callable or None
-        Inverse link function (set by subclasses that need one).
-    has_data : bool
-        Whether input 0 is the design matrix ``X`` (i.e. parameters depend on it).
+    Subclasses set the class attributes ``param_names`` and (optionally)
+    ``default_invlink`` and implement the behaviour methods.
     """
 
     __props__ = ("param_names", "n_points", "invlink", "has_data")
+    param_names = ()
+    default_invlink = None
 
-    def __init__(self, param_names=(), n_points=20, invlink=None, has_data=False):
-        self.param_names = tuple(param_names)
+    def __init__(self, n_points=20, invlink=None, has_data=False):
+        self.param_names = type(self).param_names
         self.n_points = n_points
-        self.invlink = invlink
+        self.invlink = invlink if invlink is not None else type(self).default_invlink
         self.has_data = has_data
 
     def make_node(self, *args):
         args = [pt.as_tensor_variable(a) for a in args]
-        return Apply(self, args, [_NULL()])
+        return Apply(self, args, [_LIK_TYPE()])
 
     def perform(self, node, inputs, outputs):
         outputs[0][0] = None
@@ -118,13 +172,28 @@ class LikelihoodOp(Op):
         return pt.logsumexp(log_vals, axis=1)
 
 
+def build(op_cls, params, x=None, n_points=20, invlink=None):
+    """Build a :class:`LikelihoodVariable` from an Op class and ordered params.
+
+    ``params`` is the list of parameter graphs in ``op_cls.param_names`` order
+    (empty for parameterless likelihoods). ``x`` (the design matrix) is prepended
+    as input 0 when given, marking the parameters as data-dependent. Used by the
+    family helpers (:func:`~ptgp.likelihoods.Gaussian`, etc.).
+    """
+    has_data = bool(op_cls.param_names) and x is not None
+    op = op_cls(n_points=n_points, invlink=invlink, has_data=has_data)
+    args = [pt.as_tensor_variable(p) for p in params]
+    if has_data:
+        args = [pt.as_tensor_variable(x), *args]
+    return op(*args)
+
+
 # --- Purely functional API ------------------------------------------------
 #
-# A likelihood is fully described by its node: ``owner.op`` is the family (with
-# behaviour), and the node's *inputs* are the optional design matrix followed by
-# the parameters. These free functions take such a node (a "lik" — the NoneType
-# handle) and dispatch through ``owner.op``, so a likelihood can be used with no
-# holder at all. The :class:`Likelihood` holder is a thin view built on these.
+# Operate on a likelihood node (a :class:`LikelihoodVariable`) and dispatch
+# through ``owner.op``. The variable's methods are thin wrappers over these, so
+# either style works; the free functions are handy when a dummy node's outputs
+# are plain TensorVariables rather than a LikelihoodVariable.
 
 
 def _params_of(node):
@@ -148,9 +217,9 @@ def param(lik, name):
 def at(lik, X):
     """Re-root a likelihood node onto design matrix ``X``.
 
-    A no-op for a likelihood with no design matrix (``op.has_data`` is False) —
-    there is no ``X`` input to swap. Otherwise returns a new handle whose
-    parameter inputs are re-expressed over ``X`` (RV-safe via ``graph_replace``).
+    A no-op for a likelihood with no design matrix (``op.has_data`` is False).
+    Otherwise returns a new handle whose parameter inputs are re-expressed over
+    ``X`` (RV-safe via ``graph_replace``).
     """
     node = lik.owner
     if not node.op.has_data:
@@ -171,64 +240,3 @@ def predict_mean_and_var(lik, mu, var):
 def predict_log_density(lik, y, mu, var):
     """Predictive log-density for a likelihood node."""
     return lik.owner.op.predict_log_density(_params_of(lik.owner), y, mu, var)
-
-
-def _param_property(name):
-    """Expose a named parameter as ``self.<name>`` (the parameter input)."""
-    return property(lambda self: self._params[type(self).param_names.index(name)])
-
-
-class Likelihood:
-    """Public likelihood object — a thin view over a :class:`LikelihoodOp` node.
-
-    Every likelihood is a node: construction builds ``op(x?, *params)`` whose
-    single ``NoneType`` output (``self._lik``) is the handle, and whose inputs
-    are the optional design matrix followed by the parameter graphs. The handle
-    keeps the likelihood in the PyTensor graph (carried by ``graph_replace`` /
-    ``clone``); the methods read the parameters off the node's inputs and
-    dispatch behaviour through ``owner.op`` — the same calls the free functions
-    above make.
-
-    The node is never consumed by the loss (the loss uses the parameter graphs
-    directly, via ``.sigma`` etc.), so it stays off the gradient path and out of
-    compiled graphs. :meth:`at` re-roots the parameters when there's a design
-    matrix; it is a no-op otherwise (homoskedastic or parameterless).
-
-    Subclasses set ``op_cls``, ``param_names``, and expose each parameter via
-    :func:`_param_property`.
-    """
-
-    op_cls = LikelihoodOp
-    param_names = ()
-    n_points = 20
-
-    def __init__(self, x=None, n_points=20, invlink=None, **params):
-        self.n_points = n_points
-        self.invlink = invlink
-        has_data = bool(self.param_names) and x is not None
-        self._op = self.op_cls(self.param_names, n_points, invlink, has_data=has_data)
-        ordered = [pt.as_tensor_variable(params[name]) for name in self.param_names]
-        args = ([pt.as_tensor_variable(x)] if has_data else []) + ordered
-        self._lik = self._op(*args)  # NoneType handle — every likelihood is a node
-
-    @property
-    def _params(self):
-        return _params_of(self._lik.owner)
-
-    def at(self, X):
-        """Return a copy with parameters re-rooted onto ``X`` (no-op without a design matrix)."""
-        new = copy.copy(self)
-        new._lik = at(self._lik, X)
-        return new
-
-    def variational_expectation(self, y, mu, var):
-        """E_{q(f)}[log p(y|f)] where q(f) = N(mu, var)."""
-        return self._op.variational_expectation(self._params, y, mu, var)
-
-    def predict_mean_and_var(self, mu, var):
-        """Predictive mean and variance under q(f) = N(mu, var)."""
-        return self._op.predict_mean_and_var(self._params, mu, var)
-
-    def predict_log_density(self, y, mu, var):
-        """Predictive log-density log E_{q(f)}[p(y|f)] at test points."""
-        return self._op.predict_log_density(self._params, y, mu, var)
