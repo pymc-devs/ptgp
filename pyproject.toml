@@ -9,6 +9,7 @@ authors = [
     {name = 'PyMC Developers', email = 'pymc.devs@gmail.com'}
 ]
 description = "A practitioner's toolbox for estimating large-scale Gaussian Process models with PyMC and PyTensor"
+readme = "README.md"
 requires-python = ">=3.12"
 keywords = [
     "gaussian processes",
