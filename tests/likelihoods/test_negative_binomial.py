@@ -29,6 +29,19 @@ class TestNegativeBinomial:
         )
         np.testing.assert_allclose(ve_20, ve_50, atol=1e-6)
 
+    def test_predict_variance_includes_overdispersion(self):
+        """At zero latent variance the predictive variance is mu + mu**2 / alpha,
+        exceeding the Poisson mean-equals-variance."""
+        mu, var, alpha = np.array([0.5, 1.0]), np.zeros(2), 3.0
+        lam = np.exp(mu)
+        pm, pv = _eval(
+            *NegativeBinomial(alpha=alpha).predict_mean_and_var(
+                pt.as_tensor_variable(mu), pt.as_tensor_variable(var)
+            )
+        )
+        np.testing.assert_allclose(pm, lam, atol=1e-10)
+        np.testing.assert_allclose(pv, lam + lam**2 / alpha, atol=1e-10)
+
     def test_converges_to_poisson(self):
         """NB with large alpha should approach Poisson."""
         mu, var = np.array([0.5, 1.0]), np.array([0.1, 0.3])

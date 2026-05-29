@@ -9,6 +9,7 @@ from gpjax.integrators import GHQuadratureIntegrator
 from gpjax.likelihoods import Bernoulli as GPJaxBernoulli
 
 from ptgp.likelihoods import Bernoulli
+from ptgp.likelihoods.base import LikelihoodOp
 
 ATOL = 1e-5
 
@@ -42,13 +43,20 @@ class TestBernoulli:
 
         np.testing.assert_allclose(ve, gpjax_ve, atol=ATOL)
 
-    def test_predict_mean_and_var_closed_form(self):
-        mu, var = np.array([0.0, 2.0, -2.0]), np.array([0.1, 0.5, 1.0])
-        pm_val, pv_val = _eval(
-            *Bernoulli().predict_mean_and_var(pt.as_tensor_variable(mu), pt.as_tensor_variable(var))
+    def test_probit_closed_form_predict_matches_quadrature(self):
+        """The probit closed-form predictive should agree with the base quadrature
+        path it overrides — a correctness check, not just bounds."""
+        mu, var = np.array([0.0, 0.7, -1.2]), np.array([0.2, 0.5, 1.0])
+        op = Bernoulli(n_points=64).owner.op
+        m_closed, v_closed = op.predict_mean_and_var(
+            [], pt.as_tensor_variable(mu), pt.as_tensor_variable(var)
         )
-        assert np.all(pm_val >= 0.0) and np.all(pm_val <= 1.0)
-        assert np.all(pv_val >= 0.0) and np.all(pv_val <= 0.25)
+        m_quad, v_quad = LikelihoodOp.predict_mean_and_var(
+            op, [], pt.as_tensor_variable(mu), pt.as_tensor_variable(var)
+        )
+        mc, vc, mq, vq = _eval(m_closed, v_closed, m_quad, v_quad)
+        np.testing.assert_allclose(mc, mq, atol=1e-4)
+        np.testing.assert_allclose(vc, vq, atol=1e-4)
 
     def test_ve_negative(self):
         mu, var = np.array([0.0, 2.0, -2.0]), np.array([0.1, 0.5, 1.0])

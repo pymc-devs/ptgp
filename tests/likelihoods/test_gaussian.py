@@ -43,18 +43,18 @@ class TestGaussian:
 
         np.testing.assert_allclose(ve, gpjax_ve, atol=ATOL)
 
-    def test_zero_var_matches_log_prob(self):
+    def test_zero_var_collapses_to_log_likelihood(self):
+        """At zero latent variance the VE reduces to the pointwise log N(y; mu, sigma^2)."""
         mu, y, sigma = np.array([0.0, 1.0]), np.array([0.1, 0.9]), 0.3
-        lik = Gaussian(sigma)
         ve = _eval(
-            lik.variational_expectation(
+            Gaussian(sigma).variational_expectation(
                 pt.as_tensor_variable(y),
                 pt.as_tensor_variable(mu),
                 pt.as_tensor_variable(np.zeros(2)),
             )
         )
-        lp = _eval(lik._log_prob(pt.as_tensor_variable(mu), pt.as_tensor_variable(y)))
-        np.testing.assert_allclose(ve, lp, atol=1e-12)
+        expected = -0.5 * (np.log(2 * np.pi * sigma**2) + (y - mu) ** 2 / sigma**2)
+        np.testing.assert_allclose(ve, expected, atol=1e-12)
 
     def test_predict_mean_and_var(self):
         mu, var, sigma = np.array([1.0, 2.0]), np.array([0.5, 1.0]), 0.3
