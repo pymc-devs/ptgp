@@ -4,7 +4,9 @@ import pytensor.tensor as pt
 from pytensor.graph.basic import Apply, Variable
 from pytensor.graph.op import Op
 from pytensor.graph.replace import graph_replace
+from pytensor.graph.rewriting.basic import node_rewriter
 from pytensor.graph.type import Type
+from pytensor.tensor.rewriting.basic import register_specialize
 
 
 class LikelihoodVariable(Variable):
@@ -172,20 +174,79 @@ class LikelihoodOp(Op):
         return pt.logsumexp(log_vals, axis=1)
 
 
+class GPData(Op):
+    """Opaque identity barrier marking the design matrix in a parameter graph.
+
+    The design matrix is routed through this Op before it reaches the
+    parameters (``sigma = f(gp_data(X))``), which keeps a *stable* handle to it:
+    rewrites cannot see through the barrier, so an algebraic cancellation
+    (e.g. ``exp(log(x)) -> x``) cannot dissolve the path from the parameter back
+    to ``X`` and sever the handle. It is also the likelihood node's design-matrix
+    input (input 0), so it is structurally findable and clone-safe.
+
+    It carries no value of its own (identity passthrough) and is stripped at the
+    *specialize* stage (:func:`_strip_gp_data`) — i.e. only when building the
+    final executable, after re-rooting, never during the canonicalization passes
+    a model graph might go through while the handle still matters.
+    """
+
+    __props__ = ()
+    view_map = {0: [0]}
+
+    def make_node(self, x):
+        x = pt.as_tensor_variable(x)
+        return Apply(self, [x], [x.type()])
+
+    def perform(self, node, inputs, outputs):
+        outputs[0][0] = inputs[0]
+
+    def infer_shape(self, fgraph, node, input_shapes):
+        return input_shapes
+
+    def pullback(self, inputs, outputs, cotangents):
+        return list(cotangents)  # identity
+
+
+_gp_data_op = GPData()
+
+
+def gp_data(x):
+    """Wrap the design matrix ``x`` in an opaque :class:`GPData` barrier."""
+    return _gp_data_op(pt.as_tensor_variable(x))
+
+
+@register_specialize
+@node_rewriter([GPData])
+def _strip_gp_data(fgraph, node):
+    """Elide the design-matrix barrier when building the final executable.
+
+    Registered at the *specialize* stage (not canonicalize), so it does not fire
+    during the canonicalization passes the barrier is meant to survive — it only
+    drops the identity Op once all graph transforms (incl. re-rooting) are done.
+    """
+    return [node.inputs[0]]
+
+
 def build(op_cls, params, x=None, n_points=20, invlink=None):
     """Build a :class:`LikelihoodVariable` from an Op class and ordered params.
 
     ``params`` is the list of parameter graphs in ``op_cls.param_names`` order
-    (empty for parameterless likelihoods). ``x`` (the design matrix) is prepended
-    as input 0 when given, marking the parameters as data-dependent. Used by the
-    family helpers (:func:`~ptgp.likelihoods.Gaussian`, etc.).
+    (empty for parameterless likelihoods). When a design matrix ``x`` is given,
+    it is wrapped in a :class:`GPData` barrier, the parameters are re-expressed
+    over that barrier (so it sits between ``X`` and the parameters), and the
+    barrier becomes the node's input 0 — the data demarcator. Used by the family
+    helpers (:func:`~ptgp.likelihoods.Gaussian`, etc.).
     """
     has_data = bool(op_cls.param_names) and x is not None
     op = op_cls(n_points=n_points, invlink=invlink, has_data=has_data)
-    args = [pt.as_tensor_variable(p) for p in params]
+    params = [pt.as_tensor_variable(p) for p in params]
     if has_data:
-        args = [pt.as_tensor_variable(x), *args]
-    return op(*args)
+        x = pt.as_tensor_variable(x)
+        xd = gp_data(x)
+        # Route the parameters through the barrier so it sits between X and them.
+        params = list(graph_replace(params, {x: xd}, strict=False))
+        params = [xd, *params]
+    return op(*params)
 
 
 # --- Purely functional API ------------------------------------------------

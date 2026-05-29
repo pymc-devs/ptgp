@@ -97,3 +97,28 @@ def test_functional_variational_expectation_preserves_rv_identity():
     # alpha is still a free input of the re-rooted expectation graph
     val = pytensor.function([alpha], ve)(0.3)
     assert np.isfinite(val).all()
+
+
+def test_design_matrix_handle_survives_rewrite():
+    """Regression — the "don't lose the handle" case: when the design matrix is an
+    intermediate node (X = log(x)) and a parameter exps it (sigma = exp(X)), an
+    algebraic rewrite would cancel exp(log(x)) -> x and sever our handle to X. The
+    design matrix is routed through an opaque gp_data barrier, so canonicalization
+    cannot see through it: X survives the rewrite and re-rooting still reaches it.
+    """
+    from pytensor.graph.rewriting.utils import rewrite_graph
+    from pytensor.graph.traversal import ancestors
+
+    x = pt.matrix("x", shape=(None, 1))
+    X = pt.log(x)  # design matrix is an intermediate node, not a leaf
+    lik = Gaussian(pt.exp(X[:, 0]), x=X)  # sigma = exp(log(x)) — would cancel without a barrier
+    sigma = lik.owner.inputs[1]  # the parameter, routed through the gp_data barrier
+
+    rewritten = rewrite_graph(sigma, include=("canonicalize",))
+    # The barrier blocked the exp(log(x)) -> x cancellation, so X (=log(x)) survives.
+    assert X in set(ancestors([rewritten]))
+
+    # And re-rooting the (held) likelihood still reaches the design matrix.
+    X_new = pt.matrix("X_new", shape=(None, 1))
+    got = lik.at(X_new).sigma.eval({X_new: np.array([[2.0], [3.0]])})
+    np.testing.assert_allclose(got, np.exp([2.0, 3.0]))

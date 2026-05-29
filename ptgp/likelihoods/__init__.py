@@ -1,8 +1,10 @@
 from ptgp.likelihoods.base import (
+    GPData,
     LikelihoodOp,
     LikelihoodType,
     LikelihoodVariable,
     at,
+    gp_data,
     op_of,
     param,
     predict_log_density,
@@ -26,6 +28,8 @@ __all__ = [
     "LikelihoodOp",
     "LikelihoodType",
     "LikelihoodVariable",
+    "GPData",
+    "gp_data",
     # Purely functional API — operate on a likelihood node via ``owner.op``.
     "op_of",
     "param",
