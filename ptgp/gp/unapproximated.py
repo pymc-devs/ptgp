@@ -19,17 +19,21 @@ class Unapproximated:
         Mean function (default: ``Zero()``).
     sigma : tensor or PyMC random variable
         Observation noise standard deviation.
+    x : tensor, optional
+        The design matrix ``sigma`` was built against, for heteroskedastic
+        noise. Pass it so sigma can be re-rooted onto the test inputs at predict
+        time.
     """
 
     extra_vars = ()
     extra_init = ()
     default_objective = staticmethod(marginal_log_likelihood)
 
-    def __init__(self, kernel, mean=None, sigma=None):
+    def __init__(self, kernel, mean=None, sigma=None, x=None):
         """Store the kernel and mean; build a Gaussian likelihood from sigma."""
         self.kernel = kernel
         self.mean = mean if mean is not None else Zero()
-        self.likelihood = Gaussian(sigma)
+        self.likelihood = Gaussian(sigma, x=x)
 
     def predict_spec(self, X_new, incl_lik=False, X_train=None, y_train=None):
         """Prediction spec for :func:`ptgp.optim.compile_predict`.
@@ -71,5 +75,5 @@ class Unapproximated:
         fvar = Kss_diag - pt.sum(Kns * (Knn_inv @ Kns), axis=0)
 
         if incl_lik:
-            return self.likelihood.clone_replace_data(X_new).predict_mean_and_var(fmean, fvar)
+            return self.likelihood.at(X_new).predict_mean_and_var(fmean, fvar)
         return fmean, fvar

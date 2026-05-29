@@ -33,7 +33,7 @@ class TestUnapproximatedHeteroskedastic:
         X_train, y_train, X_new = _data()
         X = pt.matrix("X", shape=(None, 1))
         gp = Unapproximated(
-            kernel=ExpQuad(input_dim=1, ls=1.0), mean=Zero(), sigma=_hetero_sigma(X)
+            kernel=ExpQuad(input_dim=1, ls=1.0), mean=Zero(), sigma=_hetero_sigma(X), x=X
         )
         X_new_t = pt.matrix("X_new", shape=(None, 1))
         y_t = pt.vector("y", shape=(None,))
@@ -55,6 +55,7 @@ class TestVFEHeteroskedastic:
             kernel=ExpQuad(input_dim=1, ls=1.0),
             mean=Zero(),
             sigma=_hetero_sigma(X),
+            x=X,
             inducing_variable=Points(pt.as_tensor_variable(Z)),
         )
 
@@ -85,7 +86,7 @@ class TestSVGPHeteroskedastic:
         svgp = SVGP(
             kernel=ExpQuad(input_dim=1, ls=1.0),
             mean=Zero(),
-            likelihood=Gaussian(_hetero_sigma(X)),
+            likelihood=Gaussian(_hetero_sigma(X), x=X),
             inducing_variable=Points(pt.as_tensor_variable(Z)),
             variational_params=vp,
         )
@@ -149,10 +150,11 @@ class TestScalarSigmaUnaffected:
 
 
 def test_pm_data_sigma_is_detected_as_data_dependent():
-    """sigma built against a pm.Data SharedVariable must still be treated
-    as data-dependent. The heuristic filters by type (TensorType), not by
-    class (SharedVariable) — without this, pm.Data is silently invisible
-    to clone_replace_data and predictions use the wrong noise.
+    """sigma built against a pm.Data SharedVariable must still be re-rooted.
+
+    The design matrix handle is keyed by identity (the ``x=`` argument), so a
+    pm.Data SharedVariable works exactly like a symbolic placeholder — passing
+    it as ``x=`` lets at swap it for the test inputs.
     """
     X_train_arr = np.linspace(-1.5, 1.5, 10)[:, None].astype(np.float64)
     X_new_arr = np.linspace(-2.0, 2.0, 5)[:, None].astype(np.float64)
@@ -163,6 +165,7 @@ def test_pm_data_sigma_is_detected_as_data_dependent():
             kernel=ExpQuad(input_dim=1, ls=1.0),
             mean=Zero(),
             sigma=_hetero_sigma(X),
+            x=X,
         )
     X_new_t = pt.matrix("X_new", shape=(None, 1))
     y_t = pt.vector("y", shape=(None,))
@@ -187,6 +190,7 @@ def test_collapsed_elbo_with_heteroskedastic_sigma():
         kernel=ExpQuad(input_dim=1, ls=1.0),
         mean=Zero(),
         sigma=_hetero_sigma(X),
+        x=X,
         inducing_variable=Points(pt.as_tensor_variable(Z)),
     )
     elbo = collapsed_elbo(vfe, X, y).elbo

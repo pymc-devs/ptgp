@@ -37,8 +37,8 @@ class TestNegativeBinomial:
         # Use quadrature for both so comparison is apples-to-apples
         poisson_lik = Poisson(n_points=50)
         ve_poisson = _eval(
-            poisson_lik._gauss_hermite(
-                poisson_lik._log_prob,
+            poisson_lik._op._gauss_hermite(
+                poisson_lik._op._log_prob,
                 pt.as_tensor_variable(y),
                 pt.as_tensor_variable(mu),
                 pt.as_tensor_variable(var),
