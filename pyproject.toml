@@ -5,9 +5,11 @@ build-backend = "hatchling.build"
 [project]
 name = "ptgp"
 authors = [
-    {name = 'Bill Engels', email = 'w.j.engels@gmail.com'}
+    {name = 'Bill Engels', email = 'w.j.engels@gmail.com'},
+    {name = 'PyMC Developers', email = 'pymc.devs@gmail.com'}
 ]
 description = "A practitioner's toolbox for estimating large-scale Gaussian Process models with PyMC and PyTensor"
+readme = "README.md"
 requires-python = ">=3.12"
 keywords = [
     "gaussian processes",
@@ -31,8 +33,8 @@ dependencies = [
 dev = ["pytest", "pre-commit", "mypy", "polars"]
 
 [project.urls]
-Repository = "https://github.com/bwengals/ptgp.git"
-Issues = "https://github.com/bwengals/ptgp/issues"
+Repository = "https://github.com/pymc-devs/ptgp.git"
+Issues = "https://github.com/pymc-devs/ptgp/issues"
 
 [tool.hatch.version]
 source = 'vcs'
