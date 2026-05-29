@@ -87,6 +87,5 @@ class VFE:
         fvar = Kss_diag - pt.sum(Kus * ((Kuu_inv - Sigma_inv) @ Kus), axis=0)
 
         if incl_lik:
-            sigma_new = self.likelihood.sigma_at(X_train, X_new)
-            return fmean, fvar + sigma_new**2
+            return self.likelihood.clone_replace_data(X_new).predict_mean_and_var(fmean, fvar)
         return fmean, fvar
