@@ -38,7 +38,7 @@ class TestConfigurableLink:
             )
         )
         ve_logit = _eval(
-            Bernoulli(invlink=pt.sigmoid).variational_expectation(
+            Bernoulli(link="logit").variational_expectation(
                 pt.as_tensor_variable(y), pt.as_tensor_variable(mu), pt.as_tensor_variable(var)
             )
         )
@@ -46,20 +46,19 @@ class TestConfigurableLink:
         assert np.all(ve_probit < 0) and np.all(ve_logit < 0)
         assert not np.allclose(ve_probit, ve_logit)
 
-    def test_poisson_custom_link_uses_quadrature(self):
-        """Poisson with non-exp link should fall back to quadrature and still work."""
-        mu, var = np.array([1.0]), np.array([0.1])
-        y = np.array([2.0])
-
-        def softplus(f):
-            return pt.log1p(pt.exp(f))
-
+    def test_bernoulli_cloglog_link_uses_quadrature(self):
+        """cloglog has no closed-form predictive, so it routes through quadrature."""
+        mu, var, y = np.array([0.0, 1.0]), np.array([0.5, 0.5]), np.array([1.0, 0.0])
         ve = _eval(
-            Poisson(invlink=softplus).variational_expectation(
+            Bernoulli(link="cloglog").variational_expectation(
                 pt.as_tensor_variable(y), pt.as_tensor_variable(mu), pt.as_tensor_variable(var)
             )
         )
-        assert np.isfinite(ve).all()
+        assert np.all(ve < 0)
+
+    def test_unsupported_link_raises(self):
+        with pytest.raises(ValueError, match="does not support link"):
+            Poisson(link="logit")
 
 
 class TestCloneReplaceData:
@@ -103,9 +102,7 @@ class TestCloneReplaceData:
     def test_reroots_all_tensor_params(self):
         X = pt.matrix("X", shape=(None, 1))
         new = np.array([[1.0], [2.0], [3.0]])
-        out = StudentT(nu=3.0 + X[:, 0] ** 2, sigma=_hetero(X), x=X).at(
-            pt.as_tensor_variable(new)
-        )
+        out = StudentT(nu=3.0 + X[:, 0] ** 2, sigma=_hetero(X), x=X).at(pt.as_tensor_variable(new))
         nu_val, sigma_val = _eval(out.nu, out.sigma)
         np.testing.assert_allclose(nu_val, 3.0 + new[:, 0] ** 2)
         np.testing.assert_allclose(sigma_val, _hetero(new))
@@ -113,9 +110,7 @@ class TestCloneReplaceData:
     def test_negative_binomial_alpha(self):
         X = pt.matrix("X", shape=(None, 1))
         new = np.array([[0.0], [2.0]])
-        out = NegativeBinomial(alpha=_hetero(X), x=X).at(
-            pt.as_tensor_variable(new)
-        )
+        out = NegativeBinomial(alpha=_hetero(X), x=X).at(pt.as_tensor_variable(new))
         np.testing.assert_allclose(_eval(out.alpha), _hetero(new))
 
     def test_leaves_scalar_params_untouched(self):

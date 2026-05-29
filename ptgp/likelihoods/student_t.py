@@ -1,6 +1,6 @@
 import pytensor.tensor as pt
 
-from ptgp.likelihoods.base import LikelihoodOp, build
+from ptgp.likelihoods.base import LikelihoodOp, to_inputs
 
 
 class StudentTOp(LikelihoodOp):
@@ -25,7 +25,7 @@ class StudentTOp(LikelihoodOp):
 
 
 def StudentT(nu, sigma, n_points=20, x=None):
-    """Build a Student-T likelihood p(y|f) = StudentT(y; f, sigma, nu).
+    """Build a Student-T likelihood p(y|f) with scale sigma and degrees of freedom nu.
 
     Returns a :class:`~ptgp.likelihoods.base.LikelihoodVariable`. Variational
     expectation via Gauss-Hermite quadrature.
@@ -42,4 +42,5 @@ def StudentT(nu, sigma, n_points=20, x=None):
         The design matrix ``nu``/``sigma`` were built against, for
         heteroskedastic parameters re-rooted onto test inputs via ``.at``.
     """
-    return build(StudentTOp, [nu, sigma], x=x, n_points=n_points)
+    op = StudentTOp(n_points=n_points, has_data=x is not None)
+    return op(*to_inputs([nu, sigma], x))

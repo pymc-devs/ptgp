@@ -1,6 +1,6 @@
 import pytensor.tensor as pt
 
-from ptgp.likelihoods.base import LikelihoodOp, build
+from ptgp.likelihoods.base import LikelihoodOp, to_inputs
 
 LOG2PI = pt.log(2.0 * pt.pi)
 
@@ -48,4 +48,5 @@ def Gaussian(sigma, x=None):
         The design matrix ``sigma`` was built against; pass it for
         heteroskedastic noise so ``.at`` can re-root sigma onto test inputs.
     """
-    return build(GaussianOp, [sigma], x=x)
+    op = GaussianOp(has_data=x is not None)
+    return op(*to_inputs([sigma], x))

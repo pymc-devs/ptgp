@@ -9,6 +9,26 @@ from pytensor.graph.type import Type
 from pytensor.tensor.rewriting.basic import register_specialize
 
 
+def inv_probit(x):
+    """Probit inverse link Phi(x), clamped to (jitter, 1 - jitter)."""
+    jitter = 1e-3
+    return 0.5 * (1.0 + pt.erf(x / pt.sqrt(2.0))) * (1.0 - 2.0 * jitter) + jitter
+
+
+def inv_cloglog(x):
+    """Complementary log-log inverse link, clamped to (jitter, 1 - jitter)."""
+    jitter = 1e-3
+    return (1.0 - pt.exp(-pt.exp(x))) * (1.0 - 2.0 * jitter) + jitter
+
+
+LINKS = {
+    "log": pt.exp,
+    "logit": pt.sigmoid,
+    "probit": inv_probit,
+    "cloglog": inv_cloglog,
+}
+
+
 class LikelihoodVariable(Variable):
     """A likelihood that lives in the PyTensor graph *and* carries the accessor API.
 
@@ -40,9 +60,8 @@ class LikelihoodVariable(Variable):
         return predict_log_density(self, y, mu, var)
 
     def __getattr__(self, name):
-        # Only fires for attributes not found normally. Expose the named
-        # parameters (node inputs) and a little Op config; everything else
-        # (incl. PyTensor internals) raises AttributeError as usual.
+        # The guard keeps __getattr__ from recursing on its own attribute access
+        # and lets dunders and PyTensor internals fall through as AttributeError.
         if name.startswith("_") or name in ("owner", "type", "index", "tag", "name", "auto_name"):
             raise AttributeError(name)
         owner = self.__dict__.get("owner")
@@ -50,9 +69,8 @@ class LikelihoodVariable(Variable):
             raise AttributeError(name)
         op = owner.op
         if name in op.param_names:
-            off = 1 if op.has_data else 0
-            return owner.inputs[off + op.param_names.index(name)]
-        if name in ("n_points", "invlink", "param_names", "has_data"):
+            return param(self, name)
+        if name in ("n_points", "link", "param_names", "has_data"):
             return getattr(op, name)
         raise AttributeError(name)
 
@@ -91,19 +109,33 @@ class LikelihoodOp(Op):
     by the loss, the node is never on the differentiation path nor in a compiled
     loss graph — no gradient, view, shape, or strip machinery is needed.
 
-    Subclasses set the class attributes ``param_names`` and (optionally)
-    ``default_invlink`` and implement the behaviour methods.
+    Subclasses set the class attributes ``param_names`` and ``allowed_links``
+    and implement the behaviour methods.
     """
 
-    __props__ = ("param_names", "n_points", "invlink", "has_data")
+    __props__ = ("param_names", "n_points", "link", "has_data")
     param_names = ()
-    default_invlink = None
+    allowed_links = ()
 
-    def __init__(self, n_points=20, invlink=None, has_data=False):
+    def __init__(self, n_points=20, link=None, has_data=False):
         self.param_names = type(self).param_names
         self.n_points = n_points
-        self.invlink = invlink if invlink is not None else type(self).default_invlink
+        self.link = link if link is not None else self.default_link
+        if self.link is not None and self.link not in self.allowed_links:
+            raise ValueError(
+                f"{type(self).__name__} does not support link {self.link!r}; "
+                f"choose from {self.allowed_links}."
+            )
         self.has_data = has_data
+
+    @property
+    def default_link(self):
+        """Default link name: the first of ``allowed_links`` (``None`` if empty)."""
+        return self.allowed_links[0] if self.allowed_links else None
+
+    def _invlink(self, f):
+        """Map the latent ``f`` to the natural parameter via the inverse link."""
+        return LINKS[self.link](f)
 
     def make_node(self, *args):
         args = [pt.as_tensor_variable(a) for a in args]
@@ -111,8 +143,6 @@ class LikelihoodOp(Op):
 
     def perform(self, node, inputs, outputs):
         outputs[0][0] = None
-
-    # --- symbolic behaviour: subclasses implement these three ---
 
     def _log_prob(self, f, y, *params):
         """Symbolic log p(y|f). Subclasses must implement."""
@@ -125,8 +155,6 @@ class LikelihoodOp(Op):
     def _conditional_variance(self, f, *params):
         """Var[y|f]. Subclasses must implement."""
         raise NotImplementedError
-
-    # --- expectations (defaults via quadrature; subclasses may override) ---
 
     def variational_expectation(self, params, y, mu, var):
         """E_{q(f)}[log p(y|f)] where q(f) = N(mu, var). Default: quadrature."""
@@ -227,34 +255,19 @@ def _strip_gp_data(fgraph, node):
     return [node.inputs[0]]
 
 
-def build(op_cls, params, x=None, n_points=20, invlink=None):
-    """Build a :class:`LikelihoodVariable` from an Op class and ordered params.
+def to_inputs(params, x):
+    """Node inputs for ``params`` and an optional design matrix ``x``.
 
-    ``params`` is the list of parameter graphs in ``op_cls.param_names`` order
-    (empty for parameterless likelihoods). When a design matrix ``x`` is given,
-    it is wrapped in a :class:`GPData` barrier, the parameters are re-expressed
-    over that barrier (so it sits between ``X`` and the parameters), and the
-    barrier becomes the node's input 0 — the data demarcator. Used by the family
-    helpers (:func:`~ptgp.likelihoods.Gaussian`, etc.).
+    Without ``x`` the inputs are just the parameters. With ``x``, it is wrapped in
+    a :class:`GPData` barrier and the parameters are re-expressed over it, so the
+    barrier becomes input 0 — the data demarcator that :func:`at` re-roots.
     """
-    has_data = bool(op_cls.param_names) and x is not None
-    op = op_cls(n_points=n_points, invlink=invlink, has_data=has_data)
     params = [pt.as_tensor_variable(p) for p in params]
-    if has_data:
-        x = pt.as_tensor_variable(x)
-        xd = gp_data(x)
-        # Route the parameters through the barrier so it sits between X and them.
-        params = list(graph_replace(params, {x: xd}, strict=False))
-        params = [xd, *params]
-    return op(*params)
-
-
-# --- Purely functional API ------------------------------------------------
-#
-# Operate on a likelihood node (a :class:`LikelihoodVariable`) and dispatch
-# through ``owner.op``. The variable's methods are thin wrappers over these, so
-# either style works; the free functions are handy when a dummy node's outputs
-# are plain TensorVariables rather than a LikelihoodVariable.
+    if x is None:
+        return params
+    x = pt.as_tensor_variable(x)
+    xd = gp_data(x)
+    return [xd, *graph_replace(params, {x: xd}, strict=False)]
 
 
 def _params_of(node):
@@ -271,8 +284,7 @@ def op_of(lik):
 def param(lik, name):
     """The named parameter input of a likelihood node (e.g. ``"sigma"``)."""
     node = lik.owner
-    off = 1 if node.op.has_data else 0
-    return node.inputs[off + node.op.param_names.index(name)]
+    return _params_of(node)[node.op.param_names.index(name)]
 
 
 def at(lik, X):
