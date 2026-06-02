@@ -12,7 +12,7 @@ PTGP is for practitioners who need flexible, well-supported GP modeling. The goa
 - **PyMC priors:** set priors on any hyperparameter; use PyMC distributions for mean functions and noise models; MAP training by default
 - **Training tools:** L-BFGS-B and Adam optimizers, per-parameter learning rates, staged optimization, frozen variables, inducing point initialization strategies, diagnostic-guided workflows; more are being added, such as carefully monitored training to help diagnose issues early
 - **Agent-readable docs:** `docs/agents/` ships LLM-readable guides for debugging training issues and folk wisdom (VFE training covered). See the [Working with AI coding assistants](#working-with-ai-coding-assistants) section below.
-- **More coming:** see the [issues](https://github.com/bwengals/ptgp/issues)
+- **More coming:** see the [issues](https://github.com/pymc-devs/ptgp/issues)
 
 Researchers benefit from the underlying design: PTGP is built on PyTensor's symbolic graph and rewrite system, so you write GP math directly (`pt.linalg.inv(K)`, `pt.linalg.slogdet(K)`) and the compiler chooses efficient algorithms based on declared matrix structure. This makes it straightforward to implement new GP approximations and create custom models, and will eventually allow matrix structure like Kronecker, Toeplitz, and sparse to be taken advantage of automatically.
 
@@ -54,13 +54,22 @@ with pm.Model() as model:
 mean, var = pg.predict(svgp, np.linspace(-3, 3, 100)[:, None], fit)
 ```
 
-`pg.fit` picks a default objective from the gp type (`Unapproximated` → `marginal_log_likelihood`, `VFE` → `collapsed_elbo`, `SVGP` → `elbo`) and returns a `FitResult` that `pg.predict` consumes. For stochastic mini-batch training, staged VFE, or per-group learning rates, drop down to `pg.optim.compile_training_step` / `pg.optim.compile_scipy_objective` — see [`notebooks/demo.ipynb`](notebooks/demo.ipynb).
+`pg.fit` picks a default objective from the gp type (`Unapproximated` → `marginal_log_likelihood`, `VFE` → `collapsed_elbo`, `SVGP` → `elbo`) and returns a `FitResult` that `pg.predict` consumes. For stochastic mini-batch training, staged VFE, or per-group learning rates, drop down to `pg.optim.compile_training_step` / `pg.optim.compile_scipy_objective` — see [`notebooks/demo.ipynb`](notebooks/demo.ipynb):
+
+```python
+X_var = pt.matrix("X")
+y_var = pt.vector("y")
+
+step, shared_params, shared_extras = pg.optim.compile_training_step(
+    pg.objectives.elbo, svgp, X_var, y_var, model, learning_rate=1e-2
+)
 
 for i in range(500):
     loss = step(X, y)
 
-predict_fn = pg.optim.compile_predict(svgp, pt.matrix("X_new"), model, shared_params,
-                                       extra_vars=vp.extra_vars, shared_extras=shared_extras)
+predict_fn = pg.optim.compile_predict(
+    svgp, pt.matrix("X_new"), model, shared_params, shared_extras=shared_extras
+)
 mean, var = predict_fn(np.linspace(-3, 3, 100)[:, None])
 ```
 
@@ -79,7 +88,9 @@ PTGP is set up to work nicely with AI coding assistants:
 - **[`AGENTS.md`](AGENTS.md)** — project-level instructions for AI coding assistants (architecture, conventions, where things live, how to run tests). Follows the [AGENTS.md](https://agents.md/) cross-tool convention used by Codex, Cursor, Aider, and others.
 - **[`docs/agents/`](docs/agents/)** — backend-agnostic agent-skill docs covering folk wisdom and training-debug recipes. Currently includes [`ptgp-vfe`](docs/agents/ptgp-vfe/) (VFE diagnostic skill: pitfalls, escalation workflow, interpretation of `VFEDiagnostics` and `GreedyVarianceDiagnostics`).
 
-**Claude Code users:** Claude Code reads `CLAUDE.md`, not `AGENTS.md`. Symlink so they stay in sync:
+### Claude Code users
+
+Claude Code reads `CLAUDE.md`, not `AGENTS.md`. Symlink so they stay in sync:
 
 ```bash
 ln -s AGENTS.md CLAUDE.md
@@ -95,17 +106,17 @@ python scripts/install_claude_skills.py --user        # ~/.claude/skills/
 ## Install
 
 ```bash
-pip install git+https://github.com/bwengals/ptgp.git
+pip install git+https://github.com/pymc-devs/ptgp.git
 ```
 
 To hack on PTGP itself, clone and install in editable mode:
 
 ```bash
-git clone https://github.com/bwengals/ptgp.git
+git clone https://github.com/pymc-devs/ptgp.git
 cd ptgp
 pip install -e .
 ```
 
 ## Contributing
 
-See the [issues](https://github.com/bwengals/ptgp/issues) for what's being worked on. Feel free to propose issues, feature requests, or use cases you've been hoping could be made easier. PRs always welcome.
+See the [issues](https://github.com/pymc-devs/ptgp/issues) for what's being worked on. Feel free to propose issues, feature requests, or use cases you've been hoping could be made easier. PRs always welcome.
