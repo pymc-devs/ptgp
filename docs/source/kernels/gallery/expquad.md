@@ -49,8 +49,8 @@ from ptgp.plotting import plot_kernel_decay
 plot_kernel_decay(
     [
         (r"$\ell=0.3$", pg.kernels.ExpQuad(input_dim=1, ls=0.3)),
-        (r"$\ell=1.0$", pg.kernels.ExpQuad(input_dim=1, ls=1.0)),
-        (r"$\ell=3.0$", pg.kernels.ExpQuad(input_dim=1, ls=3.0)),
+        (r"$\ell=1.5$", pg.kernels.ExpQuad(input_dim=1, ls=1.5)),
+        (r"$\ell=5.0$", pg.kernels.ExpQuad(input_dim=1, ls=5.0)),
     ],
     max_distance=5.0,
 )
@@ -66,8 +66,8 @@ from ptgp.plotting import plot_prior_samples
 plot_prior_samples(
     [
         (r"$\ell=0.3$", pg.kernels.ExpQuad(input_dim=1, ls=0.3)),
-        (r"$\ell=1.0$", pg.kernels.ExpQuad(input_dim=1, ls=1.0)),
-        (r"$\ell=3.0$", pg.kernels.ExpQuad(input_dim=1, ls=3.0)),
+        (r"$\ell=1.5$", pg.kernels.ExpQuad(input_dim=1, ls=1.5)),
+        (r"$\ell=5.0$", pg.kernels.ExpQuad(input_dim=1, ls=5.0)),
     ],
     n_samples=4,
 )
@@ -83,8 +83,8 @@ from ptgp.plotting import plot_conditional
 plot_conditional(
     [
         (r"$\ell=0.3$", pg.kernels.ExpQuad(input_dim=1, ls=0.3)),
-        (r"$\ell=1.0$", pg.kernels.ExpQuad(input_dim=1, ls=1.0)),
-        (r"$\ell=3.0$", pg.kernels.ExpQuad(input_dim=1, ls=3.0)),
+        (r"$\ell=1.5$", pg.kernels.ExpQuad(input_dim=1, ls=1.5)),
+        (r"$\ell=5.0$", pg.kernels.ExpQuad(input_dim=1, ls=5.0)),
     ],
     n_draws=3,
 )
@@ -114,8 +114,8 @@ print(K.shape, K.diagonal()[:3])
 The three lengthscales show the kernel's effect on prior beliefs:
 
 - **$\ell=0.3$** — short lengthscale, wiggly draws, posterior reverts to the prior quickly outside data.
-- **$\ell=1.0$** — default starting point for most modelling, smooth interpolation between observations.
-- **$\ell=3.0$** — long lengthscale, very smooth, draws nearly straight between observations and extrapolate confidently.
+- **$\ell=1.5$** — moderate lengthscale, smooth interpolation between observations.
+- **$\ell=5.0$** — long lengthscale, very smooth, draws nearly straight between observations and extrapolate confidently.
 
 ```{seealso}
 - [Matern52](matern52.md) — same family at smoothness $\nu = 5/2$. Sample functions are twice mean-square differentiable. Recommended default when ExpQuad's $C^\infty$ assumption is too strong.

@@ -1,15 +1,18 @@
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pytensor
 import pytensor.tensor as pt
 
+mpl.rcParams["font.family"] = "serif"
+
 _BG_COLOR = "#eff3f7"
 _GRID_COLOR = "black"
 _GRID_LW = 0.3
-_GRID_LS = "--"
+_GRID_LS = "-"
 _SAMPLE_PALETTE = ["#e8543f", "#f3a712", "#9b4dca", "#1f4e79", "#2a9d8f"]
-_LINE_LW = 3.5
-_LINE_ALPHA = 0.5
+_LINE_LW = 2.0
+_LINE_ALPHA = 0.8
 _PANEL_W = 3.5
 _PANEL_H = 2.6
 _DPI = 144
@@ -42,7 +45,7 @@ def _style_ax(ax):
     ax.set_facecolor(_BG_COLOR)
     ax.set_axisbelow(True)
     ax.grid(True, color=_GRID_COLOR, lw=_GRID_LW, ls=_GRID_LS, zorder=0)
-    ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
+    ax.tick_params(left=False, bottom=False, labelleft=True, labelbottom=True)
     for side in ("top", "right", "bottom", "left"):
         ax.spines[side].set_visible(False)
 
@@ -119,6 +122,7 @@ def plot_prior_samples(
     kernels_and_labels,
     n_samples=4,
     x_range=(-3.0, 3.0),
+    y_range=(-3.0, 3.0),
     n_x=200,
     seed=1,
 ):
@@ -132,6 +136,8 @@ def plot_prior_samples(
         Number of sample functions drawn per panel. Default 4.
     x_range : tuple of float
         ``(low, high)`` range for the evaluation grid. Default ``(-3, 3)``.
+    y_range : tuple of float
+        ``(low, high)`` fixed y-axis limits. Default ``(-3, 3)``.
     n_x : int
         Number of grid points per panel. Default 200.
     seed : int
@@ -146,7 +152,7 @@ def plot_prior_samples(
     fig, axes = _make_axes(len(kernels_and_labels))
     X_np = np.linspace(x_range[0], x_range[1], n_x)[:, None]
     rng = np.random.default_rng(seed)
-    for ax, (label, kernel) in zip(axes, kernels_and_labels):
+    for i_ax, (ax, (label, kernel)) in enumerate(zip(axes, kernels_and_labels)):
         K = _compile_k(kernel)(X_np)
         K = 0.5 * (K + K.T) + _JITTER * np.eye(n_x)
         L = np.linalg.cholesky(K)
@@ -161,12 +167,16 @@ def plot_prior_samples(
             )
         ax.set_title(label, fontsize=11)
         _style_ax(ax)
-
+        ax.set_xlim(x_range)
+        ax.set_ylim(y_range, auto=False)
+        if i_ax > 0:
+            ax.tick_params(labelleft=False)
 
 def plot_conditional(
     kernels_and_labels,
     n_draws=3,
     x_range=(-3.0, 3.0),
+    y_range=(-3.0, 3.0),
     n_x=200,
     obs_x=None,
     obs_y=None,
@@ -187,6 +197,8 @@ def plot_conditional(
         Number of posterior sample functions drawn per panel. Default 3.
     x_range : tuple of float
         ``(low, high)`` range for the evaluation grid. Default ``(-3, 3)``.
+    y_range : tuple of float
+        ``(low, high)`` fixed y-axis limits. Default ``(-3, 3)``.
     n_x : int
         Number of grid points per panel. Default 200.
     obs_x : ndarray, optional
@@ -211,7 +223,7 @@ def plot_conditional(
     fig, axes = _make_axes(len(kernels_and_labels))
     X_np = np.linspace(x_range[0], x_range[1], n_x)[:, None]
     rng = np.random.default_rng(seed)
-    for ax, (label, kernel) in zip(axes, kernels_and_labels):
+    for i_ax, (ax, (label, kernel)) in enumerate(zip(axes, kernels_and_labels)):
         fn_k = _compile_k(kernel)
         fn_kxy = _compile_kxy(kernel)
         K_oo = fn_k(obs_x) + (sigma**2 + _JITTER) * np.eye(len(obs_x))
@@ -259,3 +271,7 @@ def plot_conditional(
         )
         ax.set_title(label, fontsize=11)
         _style_ax(ax)
+        ax.set_xlim(x_range)
+        ax.set_ylim(y_range, auto=False)
+        if i_ax > 0:
+            ax.tick_params(labelleft=False)

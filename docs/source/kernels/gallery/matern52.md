@@ -50,8 +50,8 @@ from ptgp.plotting import plot_kernel_decay
 plot_kernel_decay(
     [
         (r"$\ell=0.3$", pg.kernels.Matern52(input_dim=1, ls=0.3)),
-        (r"$\ell=1.0$", pg.kernels.Matern52(input_dim=1, ls=1.0)),
-        (r"$\ell=3.0$", pg.kernels.Matern52(input_dim=1, ls=3.0)),
+        (r"$\ell=1.5$", pg.kernels.Matern52(input_dim=1, ls=1.5)),
+        (r"$\ell=5.0$", pg.kernels.Matern52(input_dim=1, ls=5.0)),
     ],
     max_distance=5.0,
 )
@@ -67,8 +67,8 @@ from ptgp.plotting import plot_prior_samples
 plot_prior_samples(
     [
         (r"$\ell=0.3$", pg.kernels.Matern52(input_dim=1, ls=0.3)),
-        (r"$\ell=1.0$", pg.kernels.Matern52(input_dim=1, ls=1.0)),
-        (r"$\ell=3.0$", pg.kernels.Matern52(input_dim=1, ls=3.0)),
+        (r"$\ell=1.5$", pg.kernels.Matern52(input_dim=1, ls=1.5)),
+        (r"$\ell=5.0$", pg.kernels.Matern52(input_dim=1, ls=5.0)),
     ],
     n_samples=4,
 )
@@ -84,8 +84,8 @@ from ptgp.plotting import plot_conditional
 plot_conditional(
     [
         (r"$\ell=0.3$", pg.kernels.Matern52(input_dim=1, ls=0.3)),
-        (r"$\ell=1.0$", pg.kernels.Matern52(input_dim=1, ls=1.0)),
-        (r"$\ell=3.0$", pg.kernels.Matern52(input_dim=1, ls=3.0)),
+        (r"$\ell=1.5$", pg.kernels.Matern52(input_dim=1, ls=1.5)),
+        (r"$\ell=5.0$", pg.kernels.Matern52(input_dim=1, ls=5.0)),
     ],
     n_draws=3,
 )

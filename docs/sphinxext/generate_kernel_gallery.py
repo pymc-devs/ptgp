@@ -22,6 +22,7 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
+matplotlib.rcParams["font.family"] = "serif"
 import matplotlib.pyplot as plt
 import numpy as np
 import pytensor
@@ -29,6 +30,7 @@ import pytensor.tensor as pt
 
 from ptgp.kernels import (
     ExpQuad,
+    Linear,
     Matern12,
     Matern32,
     Matern52,
@@ -86,6 +88,10 @@ def _build_matern12():
     return Matern12(input_dim=1, ls=1.0), _line()
 
 
+def _build_linear():
+    return Linear(input_dim=1, c=0.0), _line()
+
+
 def _build_random_walk():
     # Wiener process requires positive inputs.
     return RandomWalk(input_dim=1), _line(low=0.05, high=5.0, n=200)
@@ -101,6 +107,7 @@ KERNEL_RECIPES: list[CoverRecipe] = [
     CoverRecipe("Matern52", "Matérn 5/2", _build_matern52, "conditional"),
     CoverRecipe("Matern32", "Matérn 3/2", _build_matern32, "conditional"),
     CoverRecipe("Matern12", "Matérn 1/2", _build_matern12, "conditional"),
+    CoverRecipe("Linear", "Linear", _build_linear, "conditional"),
     CoverRecipe(
         "RandomWalk",
         "Random Walk",
@@ -141,10 +148,10 @@ _RNG_SEED = 1
 _BG_COLOR = "#eff3f7"
 _GRID_COLOR = "black"
 _GRID_LW = 0.3
-_GRID_LS = "--"
+_GRID_LS = "-"
 _SAMPLE_PALETTE = ["#e8543f", "#f3a712", "#9b4dca", "#1f4e79", "#2a9d8f"]
-_LINE_LW = 3.5
-_LINE_ALPHA = 0.5
+_LINE_LW = 2.0
+_LINE_ALPHA = 0.8
 
 # Conditional ("McElreath") render: a few noisy observations with thick
 # popsicle errorbars and GP posterior draws threaded through them.
