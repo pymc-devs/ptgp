@@ -172,6 +172,7 @@ def plot_prior_samples(
         if i_ax > 0:
             ax.tick_params(labelleft=False)
 
+
 def plot_conditional(
     kernels_and_labels,
     n_draws=3,

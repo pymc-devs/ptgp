@@ -20,9 +20,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import matplotlib
-
-matplotlib.use("Agg")
-matplotlib.rcParams["font.family"] = "serif"
 import matplotlib.pyplot as plt
 import numpy as np
 import pytensor
@@ -45,6 +42,9 @@ try:
     logger = _sphinx_logging.getLogger(__name__)
 except ImportError:
     logger = logging.getLogger(__name__)
+
+matplotlib.use("Agg")
+matplotlib.rcParams["font.family"] = "serif"
 
 
 @dataclass
