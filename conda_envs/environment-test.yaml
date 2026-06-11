@@ -29,4 +29,3 @@ dependencies:
         - jax
         - jaxlib
         - optax
-        - gpjax

@@ -1,16 +1,12 @@
-"""Gaussian likelihood tests against GPJax reference and analytical results."""
+"""Gaussian likelihood tests against closed-form analytic results."""
 
-import jax.numpy as jnp
 import numpy as np
 import pytensor
 import pytensor.tensor as pt
 
-from gpjax.integrators import AnalyticalGaussianIntegrator
-from gpjax.likelihoods import Gaussian as GPJaxGaussian
-
 from ptgp.likelihoods import Gaussian
 
-ATOL = 1e-5
+ATOL = 1e-12
 
 
 def _eval(*tensors):
@@ -19,7 +15,7 @@ def _eval(*tensors):
 
 
 class TestGaussian:
-    def test_ve_against_gpjax(self):
+    def test_ve_closed_form(self):
         mu, var = np.array([0.0, 0.5, -1.0]), np.array([0.1, 0.5, 1.0])
         y, sigma = np.array([0.1, 0.3, -0.8]), 0.5
 
@@ -29,19 +25,11 @@ class TestGaussian:
             )
         )
 
-        gpjax_ve = np.array(
-            GPJaxGaussian(
-                num_datapoints=3,
-                obs_stddev=jnp.array(sigma),
-                integrator=AnalyticalGaussianIntegrator(),
-            ).expected_log_likelihood(
-                y=jnp.array(y)[:, None],
-                mean=jnp.array(mu)[:, None],
-                variance=jnp.array(var)[:, None],
-            )
-        )
+        # E_{q(f)}[log N(y | f, sigma^2)] for q(f) = N(mu, var) has the closed form
+        #   -0.5 log(2 pi sigma^2) - 0.5 ((y - mu)^2 + var) / sigma^2
+        expected = -0.5 * np.log(2 * np.pi * sigma**2) - 0.5 * ((y - mu) ** 2 + var) / sigma**2
 
-        np.testing.assert_allclose(ve, gpjax_ve, atol=ATOL)
+        np.testing.assert_allclose(ve, expected, atol=ATOL)
 
     def test_zero_var_matches_log_prob(self):
         mu, y, sigma = np.array([0.0, 1.0]), np.array([0.1, 0.9]), 0.3
