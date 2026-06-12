@@ -12,13 +12,9 @@ import pytest
 
 from ptgp.kernels import ExpQuad, Matern12, Matern32, Matern52
 
-# ExpQuad and Matern12 evaluate exactly in float64, so the comparison is tight.
+# All kernels evaluate in float64, so the comparison against the analytic
+# reference is tight.
 ATOL = 1e-10
-# Matern52/32 carry a sqrt(5)/sqrt(3) constant that PTGP evaluates via pt.sqrt,
-# which pytensor computes in floatX (float32 by default). That injects ~3e-8 of
-# error relative to the exact formula, so the Matern comparisons use a looser
-# tolerance — still far tighter than any real formula error would survive.
-MATERN_ATOL = 1e-6
 
 
 def _ptgp_eval(kernel, X_np, Y_np=None):
@@ -122,19 +118,19 @@ class TestMatern52:
         ls, eta = 1.2, 1.5
         ptgp_k = eta**2 * Matern52(input_dim=1, ls=ls)
         ref = _analytic(X_1d, X_1d, ls, eta, "matern52")
-        np.testing.assert_allclose(_ptgp_eval(ptgp_k, X_1d), ref, atol=MATERN_ATOL)
+        np.testing.assert_allclose(_ptgp_eval(ptgp_k, X_1d), ref, atol=ATOL)
 
     def test_cross_1d(self, X_1d, X_1d_other):
         ls, eta = 1.2, 1.5
         ptgp_k = eta**2 * Matern52(input_dim=1, ls=ls)
         ref = _analytic(X_1d, X_1d_other, ls, eta, "matern52")
-        np.testing.assert_allclose(_ptgp_eval(ptgp_k, X_1d, X_1d_other), ref, atol=MATERN_ATOL)
+        np.testing.assert_allclose(_ptgp_eval(ptgp_k, X_1d, X_1d_other), ref, atol=ATOL)
 
     def test_gram_2d(self, X_2d):
         ls, eta = 0.5, 2.0
         ptgp_k = eta**2 * Matern52(input_dim=2, ls=ls)
         ref = _analytic(X_2d, X_2d, ls, eta, "matern52")
-        np.testing.assert_allclose(_ptgp_eval(ptgp_k, X_2d), ref, atol=MATERN_ATOL)
+        np.testing.assert_allclose(_ptgp_eval(ptgp_k, X_2d), ref, atol=ATOL)
 
 
 class TestMatern32:
@@ -142,13 +138,13 @@ class TestMatern32:
         ls, eta = 2.0, 1.0
         ptgp_k = Matern32(input_dim=1, ls=ls)
         ref = _analytic(X_1d, X_1d, ls, eta, "matern32")
-        np.testing.assert_allclose(_ptgp_eval(ptgp_k, X_1d), ref, atol=MATERN_ATOL)
+        np.testing.assert_allclose(_ptgp_eval(ptgp_k, X_1d), ref, atol=ATOL)
 
     def test_cross_2d(self, X_2d, X_2d_other):
         ls, eta = 0.7, 1.3
         ptgp_k = eta**2 * Matern32(input_dim=2, ls=ls)
         ref = _analytic(X_2d, X_2d_other, ls, eta, "matern32")
-        np.testing.assert_allclose(_ptgp_eval(ptgp_k, X_2d, X_2d_other), ref, atol=MATERN_ATOL)
+        np.testing.assert_allclose(_ptgp_eval(ptgp_k, X_2d, X_2d_other), ref, atol=ATOL)
 
 
 class TestMatern12:
@@ -198,4 +194,4 @@ class TestARD:
         ls = np.array([0.5, 1.2])
         ptgp_k = Matern52(input_dim=2, ls=ls)
         ref = _analytic(X_2d, X_2d, ls, 1.0, "matern52")
-        np.testing.assert_allclose(_ptgp_eval(ptgp_k, X_2d), ref, atol=MATERN_ATOL)
+        np.testing.assert_allclose(_ptgp_eval(ptgp_k, X_2d), ref, atol=ATOL)

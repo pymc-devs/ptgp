@@ -25,7 +25,3 @@ dependencies:
     - threadpoolctl
     - typing_extensions
     - pip
-    - pip:
-        - jax
-        - jaxlib
-        - optax
