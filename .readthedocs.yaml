@@ -1,0 +1,18 @@
+version: 2
+
+sphinx:
+  configuration: docs/source/conf.py
+  fail_on_warning: false
+
+conda:
+  environment: conda_envs/environment-docs.yaml
+
+python:
+  install:
+    - method: pip
+      path: .
+
+build:
+  os: "ubuntu-22.04"
+  tools:
+    python: "mambaforge-latest"
