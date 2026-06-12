@@ -1,3 +1,4 @@
+import pytensor
 import pytensor.tensor as pt
 
 from ptgp.kernels.base import Kernel
@@ -87,8 +88,9 @@ class Matern52(Stationary):
 
     def _eval(self, X, Y):
         tau = self._scaled_euclid_dist(X, Y)
-        sqrt5 = pt.sqrt(5.0)
-        return (1.0 + sqrt5 * tau + 5.0 / 3.0 * pt.square(tau)) * pt.exp(-sqrt5 * tau)
+        sqrt5 = pt.constant(5.0**0.5, dtype=pytensor.config.floatX)
+        five_thirds = pt.constant(5.0 / 3.0, dtype=pytensor.config.floatX)
+        return (1.0 + sqrt5 * tau + five_thirds * pt.square(tau)) * pt.exp(-sqrt5 * tau)
 
 
 class Matern32(Stationary):
@@ -100,7 +102,7 @@ class Matern32(Stationary):
 
     def _eval(self, X, Y):
         tau = self._scaled_euclid_dist(X, Y)
-        sqrt3 = pt.sqrt(3.0)
+        sqrt3 = pt.constant(3.0**0.5, dtype=pytensor.config.floatX)
         return (1.0 + sqrt3 * tau) * pt.exp(-sqrt3 * tau)
 
 

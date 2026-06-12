@@ -1,16 +1,14 @@
-"""Bernoulli likelihood tests against GPJax reference and analytical results."""
+"""Bernoulli likelihood tests against an independent quadrature reference."""
 
-import jax.numpy as jnp
 import numpy as np
 import pytensor
 import pytensor.tensor as pt
 
-from gpjax.integrators import GHQuadratureIntegrator
-from gpjax.likelihoods import Bernoulli as GPJaxBernoulli
+from scipy.special import erf
 
 from ptgp.likelihoods import Bernoulli
 
-ATOL = 1e-5
+ATOL = 1e-10
 
 
 def _eval(*tensors):
@@ -18,8 +16,26 @@ def _eval(*tensors):
     return f()
 
 
+def _bernoulli_ve_reference(y, mu, var, n_points=20):
+    """Gauss-Hermite quadrature of E_{q(f)}[log p(y | f)] for the probit Bernoulli.
+
+    Reimplements the same quadrature rule PTGP uses (physicist Hermite nodes,
+    weights divided by sqrt(pi), f = mu + sqrt(2 var) t) and the same clamped
+    probit link, in plain NumPy. This validates PTGP's pytensor implementation
+    against a from-scratch reference rather than against another GP library.
+    """
+    jitter = 1e-3  # mirrors ptgp.likelihoods.bernoulli.inv_probit clamping
+    nodes, weights = np.polynomial.hermite.hermgauss(n_points)
+    weights = weights / np.sqrt(np.pi)
+    sd = np.sqrt(var)[:, None]
+    F = mu[:, None] + np.sqrt(2.0) * sd * nodes[None, :]
+    p = 0.5 * (1.0 + erf(F / np.sqrt(2.0))) * (1.0 - 2.0 * jitter) + jitter
+    log_prob = y[:, None] * np.log(p) + (1.0 - y[:, None]) * np.log(1.0 - p)
+    return np.sum(log_prob * weights[None, :], axis=1)
+
+
 class TestBernoulli:
-    def test_ve_against_gpjax(self):
+    def test_ve_matches_quadrature(self):
         mu, var = np.array([0.0, 1.0, -1.0]), np.array([0.25, 0.5, 1.0])
         y = np.array([1.0, 1.0, 0.0])
 
@@ -29,18 +45,9 @@ class TestBernoulli:
             )
         )
 
-        gpjax_ve = np.array(
-            GPJaxBernoulli(
-                num_datapoints=3,
-                integrator=GHQuadratureIntegrator(num_points=20),
-            ).expected_log_likelihood(
-                y=jnp.array(y)[:, None],
-                mean=jnp.array(mu)[:, None],
-                variance=jnp.array(var)[:, None],
-            )
-        )
+        expected = _bernoulli_ve_reference(y, mu, var, n_points=20)
 
-        np.testing.assert_allclose(ve, gpjax_ve, atol=ATOL)
+        np.testing.assert_allclose(ve, expected, atol=ATOL)
 
     def test_predict_mean_and_var_closed_form(self):
         mu, var = np.array([0.0, 2.0, -2.0]), np.array([0.1, 0.5, 1.0])

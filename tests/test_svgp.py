@@ -1,27 +1,37 @@
-"""SVGP tests for non-Gaussian likelihoods, cross-checked against GPJax.
+"""SVGP tests for non-Gaussian likelihoods, cross-checked against an
+independent numpy+scipy reference.
 
 The likelihood unit tests already verify the Gauss-Hermite
 ``variational_expectation`` in isolation. These tests close the remaining
 gap: exercising the full SVGP ELBO wiring (predict + KL + variational
-expectation) with a non-Gaussian likelihood end-to-end.
+expectation) with a non-Gaussian likelihood end-to-end. The reference ELBO
+machinery lives in ``tests/_svgp_ref.py``.
 """
 
-import jax
+import numpy as np
+import pymc as pm
+import pytensor
+import pytensor.tensor as pt
 
-jax.config.update("jax_enable_x64", True)
+from scipy.special import erf, gammaln
 
-import gpjax as gpx  # noqa: E402
-import jax.numpy as jnp  # noqa: E402
-import numpy as np  # noqa: E402
-import pymc as pm  # noqa: E402
-import pytensor  # noqa: E402
-import pytensor.tensor as pt  # noqa: E402
+import ptgp as pg
 
-from scipy.special import erf  # noqa: E402
+from tests._svgp_ref import fixed_config, reference_elbo
 
-import ptgp as pg  # noqa: E402
+ATOL = 1e-5
 
-ATOL = 1e-4  # cross-library noise is ~3e-5 once both libs jitter at 1e-6
+
+def _bernoulli_logprob(f, y):
+    """Numpy log p(y | f) for the probit Bernoulli (matches ptgp's clamped link)."""
+    jitter = 1e-3  # mirrors ptgp.likelihoods.bernoulli.inv_probit clamping
+    p = 0.5 * (1.0 + erf(f / np.sqrt(2.0))) * (1.0 - 2.0 * jitter) + jitter
+    return y * np.log(p) + (1.0 - y) * np.log(1.0 - p)
+
+
+def _poisson_logprob(f, y):
+    """Numpy log p(y | f) for the log-link Poisson: y f - exp(f) - log(y!)."""
+    return y * f - np.exp(f) - gammaln(y + 1.0)
 
 
 def _binary_data(rng, n=80):
@@ -94,23 +104,13 @@ class TestSVGPBernoulliSmoke:
         assert acc > 0.85, f"classification accuracy {acc:.2f} too low"
 
 
-class TestSVGPBernoulliElboMatchesGPJax:
-    """Evaluate the whitened-SVGP ELBO in PTGP and GPJax at a fixed
-    configuration (hyperparameters, inducing points, q_mu, q_sqrt all
-    identical) and require the two scalars to match at atol=1e-5. No
+class TestSVGPBernoulliElboMatchesReference:
+    """Evaluate the whitened-SVGP ELBO in PTGP and in the numpy+scipy
+    reference at a fixed configuration (hyperparameters, inducing points,
+    q_mu, q_sqrt all identical) and require the two scalars to match. No
     optimizer — this pins the ELBO math (predict + KL + variational
-    expectation) against a reference implementation.
+    expectation) against a first-principles reference.
     """
-
-    def _fixed_config(self, rng, N=40, M=8):
-        X = np.sort(rng.uniform(-3, 3, N))[:, None]
-        y = rng.integers(0, 2, N).astype(np.float64)
-        Z = np.linspace(-3, 3, M)[:, None]
-        q_mu = rng.normal(0, 0.3, M)
-        # Lower-triangular factor with positive diagonal.
-        L = np.tril(rng.normal(0, 0.2, (M, M)))
-        L[np.arange(M), np.arange(M)] = np.abs(L[np.arange(M), np.arange(M)]) + 0.5
-        return X, y, Z, q_mu, L
 
     def _ptgp_elbo(self, X, y, Z, q_mu_val, q_sqrt_val, ls_val, eta_val):
         """Evaluate PTGP whitened-SVGP ELBO at the fixed configuration."""
@@ -132,35 +132,16 @@ class TestSVGPBernoulliElboMatchesGPJax:
         fn = pytensor.function([X_var, y_var, *vp.extra_vars, ls, eta], elbo_expr)
         return float(fn(X, y, *vp.extra_init, ls_val, eta_val))
 
-    def _gpjax_elbo(self, X, y, Z, q_mu_val, q_sqrt_val, ls_val, eta_val):
-        """Evaluate GPJax whitened-SVGP ELBO at the same configuration."""
-        kernel = gpx.kernels.Matern52(
-            active_dims=[0], lengthscale=jnp.array(ls_val), variance=jnp.array(eta_val**2)
-        )
-        meanf = gpx.mean_functions.Zero()
-        prior = gpx.gps.Prior(mean_function=meanf, kernel=kernel)
-        likelihood = gpx.likelihoods.Bernoulli(num_datapoints=X.shape[0])
-        posterior = prior * likelihood
-        # Match ptgp's _DEFAULT_JITTER = 1e-6 so the two libraries' Kzz match.
-        q = gpx.variational_families.WhitenedVariationalGaussian(
-            posterior=posterior,
-            inducing_inputs=jnp.array(Z),
-            variational_mean=jnp.array(q_mu_val)[:, None],
-            variational_root_covariance=jnp.array(q_sqrt_val),
-            jitter=1e-6,
-        )
-        data = gpx.Dataset(X=jnp.array(X), y=jnp.array(y)[:, None])
-        return float(gpx.objectives.elbo(q, data))
-
     def test_elbo_match(self):
         rng = np.random.default_rng(1)
-        X, y, Z, q_mu_val, q_sqrt_val = self._fixed_config(rng)
+        X, Z, q_mu_val, q_sqrt_val = fixed_config(rng, x_range=(-3.0, 3.0))
+        y = rng.integers(0, 2, X.shape[0]).astype(np.float64)
         ls_val, eta_val = 1.3, 0.9
 
         e_ptgp = self._ptgp_elbo(X, y, Z, q_mu_val, q_sqrt_val, ls_val, eta_val)
-        e_gpjax = self._gpjax_elbo(X, y, Z, q_mu_val, q_sqrt_val, ls_val, eta_val)
+        e_ref = reference_elbo(X, y, Z, q_mu_val, q_sqrt_val, ls_val, eta_val, _bernoulli_logprob)
 
-        np.testing.assert_allclose(e_ptgp, e_gpjax, atol=ATOL)
+        np.testing.assert_allclose(e_ptgp, e_ref, atol=ATOL)
 
 
 def _count_data(rng, n=80):
@@ -233,23 +214,13 @@ class TestSVGPPoissonSmoke:
         assert r > 0.8, f"rate correlation {r:.2f} too low"
 
 
-class TestSVGPPoissonElboMatchesGPJax:
-    """Evaluate the whitened-SVGP ELBO in PTGP and GPJax at a fixed
-    Poisson configuration and require the two scalars to match at
-    atol=1e-5. Pins the closed-form Poisson variational expectation
-    plus the rest of the ELBO (predict + KL) against GPJax, independent
-    of any optimizer.
+class TestSVGPPoissonElboMatchesReference:
+    """Evaluate the whitened-SVGP ELBO in PTGP and in the numpy+scipy
+    reference at a fixed Poisson configuration and require the two scalars
+    to match. Pins the closed-form Poisson variational expectation plus the
+    rest of the ELBO (predict + KL) against a first-principles reference,
+    independent of any optimizer.
     """
-
-    def _fixed_config(self, rng, N=40, M=8):
-        X = np.sort(rng.uniform(-2, 2, N))[:, None]
-        rate = np.exp(0.5 * X[:, 0] + 0.3)
-        y = rng.poisson(rate).astype(np.float64)
-        Z = np.linspace(-2, 2, M)[:, None]
-        q_mu = rng.normal(0, 0.3, M)
-        L = np.tril(rng.normal(0, 0.2, (M, M)))
-        L[np.arange(M), np.arange(M)] = np.abs(L[np.arange(M), np.arange(M)]) + 0.5
-        return X, y, Z, q_mu, L
 
     def _ptgp_elbo(self, X, y, Z, q_mu_val, q_sqrt_val, ls_val, eta_val):
         """Evaluate PTGP whitened-SVGP ELBO at the fixed configuration."""
@@ -271,35 +242,17 @@ class TestSVGPPoissonElboMatchesGPJax:
         fn = pytensor.function([X_var, y_var, *vp.extra_vars, ls, eta], elbo_expr)
         return float(fn(X, y, *vp.extra_init, ls_val, eta_val))
 
-    def _gpjax_elbo(self, X, y, Z, q_mu_val, q_sqrt_val, ls_val, eta_val):
-        """Evaluate GPJax whitened-SVGP ELBO at the same configuration."""
-        kernel = gpx.kernels.Matern52(
-            active_dims=[0], lengthscale=jnp.array(ls_val), variance=jnp.array(eta_val**2)
-        )
-        meanf = gpx.mean_functions.Zero()
-        prior = gpx.gps.Prior(mean_function=meanf, kernel=kernel)
-        likelihood = gpx.likelihoods.Poisson(num_datapoints=X.shape[0])
-        posterior = prior * likelihood
-        # Match ptgp's _DEFAULT_JITTER = 1e-6 so the two libraries' Kzz match.
-        q = gpx.variational_families.WhitenedVariationalGaussian(
-            posterior=posterior,
-            inducing_inputs=jnp.array(Z),
-            variational_mean=jnp.array(q_mu_val)[:, None],
-            variational_root_covariance=jnp.array(q_sqrt_val),
-            jitter=1e-6,
-        )
-        data = gpx.Dataset(X=jnp.array(X), y=jnp.array(y)[:, None])
-        return float(gpx.objectives.elbo(q, data))
-
     def test_elbo_match(self):
         rng = np.random.default_rng(3)
-        X, y, Z, q_mu_val, q_sqrt_val = self._fixed_config(rng)
+        X, Z, q_mu_val, q_sqrt_val = fixed_config(rng)
+        rate = np.exp(0.5 * X[:, 0] + 0.3)
+        y = rng.poisson(rate).astype(np.float64)
         ls_val, eta_val = 1.3, 0.9
 
         e_ptgp = self._ptgp_elbo(X, y, Z, q_mu_val, q_sqrt_val, ls_val, eta_val)
-        e_gpjax = self._gpjax_elbo(X, y, Z, q_mu_val, q_sqrt_val, ls_val, eta_val)
+        e_ref = reference_elbo(X, y, Z, q_mu_val, q_sqrt_val, ls_val, eta_val, _poisson_logprob)
 
-        np.testing.assert_allclose(e_ptgp, e_gpjax, atol=ATOL)
+        np.testing.assert_allclose(e_ptgp, e_ref, atol=ATOL)
 
 
 class TestSVGPPointsUnwhitenedRegression:
