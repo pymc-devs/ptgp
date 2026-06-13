@@ -45,6 +45,8 @@ extensions = [
     "sphinx_design",
     "sphinx_copybutton",
     "sphinx_codeautolink",
+    "sphinx_sitemap",
+    "notfound.extension",
     "jupyter_sphinx",
     "sphinxcontrib.bibtex",
     "generate_gallery",
@@ -133,7 +135,7 @@ html_theme_options = {
     "show_prev_next": True,
     "icon_links": [
         {
-            "url": "https://github.com/bwengals/ptgp",
+            "url": "https://github.com/pymc-devs/ptgp",
             "icon": "fa-brands fa-github",
             "name": "GitHub",
             "type": "fontawesome",
@@ -144,7 +146,7 @@ html_theme_options = {
 github_version = version if "." in rtd_version else "main"
 html_context = {
     "github_url": "https://github.com",
-    "github_user": "bwengals",
+    "github_user": "pymc-devs",
     "github_repo": "ptgp",
     "github_version": github_version,
     "doc_path": "docs/source",
