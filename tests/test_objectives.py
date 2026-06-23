@@ -10,8 +10,8 @@ from ptgp.gp import SVGP, VFE, Unapproximated, VariationalParams
 from ptgp.inducing import Points
 from ptgp.kernels import ExpQuad
 from ptgp.likelihoods import Gaussian
-from ptgp.mean import Zero
-from ptgp.objectives import collapsed_elbo, elbo, marginal_log_likelihood
+from ptgp.mean import Constant, Linear, Zero
+from ptgp.objectives import collapsed_elbo, elbo, marginal_log_likelihood, variance_budget
 
 
 def _eval(*tensors):
@@ -188,3 +188,65 @@ class TestCollapsedELBO:
         )
 
         assert celbo <= mll_val + 1e-6  # collapsed ELBO <= MLL
+
+
+class TestVarianceBudget:
+    @pytest.fixture
+    def data(self):
+        rng = np.random.default_rng(0)
+        X = np.sort(rng.uniform(0, 5, 30))[:, None].astype(np.float64)
+        # nonzero offset (2.0) to exercise mean-invariance
+        y = np.sin(X.ravel()) + 0.1 * rng.standard_normal(30) + 2.0
+        return X, y
+
+    def _gp(self, eta=1.0, sigma=0.3, mean=None):
+        return Unapproximated(
+            kernel=eta**2 * ExpQuad(input_dim=1, ls=1.0),
+            mean=mean if mean is not None else Zero(),
+            sigma=sigma,
+        )
+
+    def _budget(self, gp, X, y):
+        b = variance_budget(gp, pt.as_tensor_variable(X), pt.as_tensor_variable(y))
+        return b._make(_eval(*b))
+
+    def test_fractions_sum_to_one(self, data):
+        X, y = data
+        b = self._budget(self._gp(), X, y)
+        assert np.isclose(b.frac_mean + b.frac_signal + b.frac_noise, 1.0)
+
+    def test_mean_invariance(self, data):
+        X, y = data
+        b0 = self._budget(self._gp(), X, y)
+        b1 = self._budget(self._gp(), X, y + 10.0)
+        for f in ("frac_mean", "frac_signal", "frac_noise", "var_ratio"):
+            assert np.isclose(getattr(b0, f), getattr(b1, f)), f
+
+    def test_scale_invariance(self, data):
+        X, y = data
+        a = 7.0
+        b0 = self._budget(self._gp(eta=1.0, sigma=0.3), X, y)
+        # scale y, and the model's amplitude and noise, by a
+        b1 = self._budget(self._gp(eta=a, sigma=a * 0.3), X, a * y)
+        for f in ("frac_mean", "frac_signal", "frac_noise", "var_ratio"):
+            assert np.isclose(getattr(b0, f), getattr(b1, f)), f
+
+    def test_linear_mean_contributes_variance(self, data):
+        X, y = data
+        gp_lin = self._gp(mean=Linear(coeffs=pt.as_tensor_variable(np.array([1.0]))))
+        assert self._budget(gp_lin, X, y).frac_mean > 0.0
+        # a constant mean sets the level, not the variance -> 0 contribution
+        gp_const = self._gp(mean=Constant(c=5.0))
+        assert np.isclose(self._budget(gp_const, X, y).frac_mean, 0.0)
+
+    def test_heteroskedastic_sigma(self, data):
+        X, y = data
+        Xt = pt.as_tensor_variable(X)
+        sigma = 0.1 + 0.05 * Xt[:, 0] ** 2  # length-N vector
+        gp = Unapproximated(kernel=ExpQuad(input_dim=1, ls=1.0), mean=Zero(), sigma=sigma)
+        b = variance_budget(gp, Xt, pt.as_tensor_variable(y))._make(
+            _eval(*variance_budget(gp, Xt, pt.as_tensor_variable(y)))
+        )
+        expected_noise = float(np.mean((0.1 + 0.05 * X[:, 0] ** 2) ** 2))
+        assert np.isclose(b.noise_var, expected_noise)
+        assert np.isclose(b.frac_mean + b.frac_signal + b.frac_noise, 1.0)

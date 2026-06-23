@@ -284,6 +284,68 @@ def dpp_regularizer(vfe, jitter=_DEFAULT_JITTER):
     return logdet_Kuu
 
 
+VarianceBudget = namedtuple(
+    "VarianceBudget",
+    [
+        "mean_var",
+        "signal_var",
+        "noise_var",
+        "total_var",
+        "frac_mean",
+        "frac_signal",
+        "frac_noise",
+        "var_ratio",
+    ],
+)
+
+
+def variance_budget(gp, X, y):
+    """Decompose the model-implied response variance into mean / GP / noise parts.
+
+    Under the model ``y = m(x) + f(x) + e`` with ``f ~ GP(0, K)`` and
+    ``e ~ N(0, sigma^2(x))``, the law of total variance gives::
+
+        Var(y) = Var_x(m(x)) + E_x[K(x, x)] + E_x[sigma^2(x)]
+
+    Returns a ``VarianceBudget`` namedtuple of symbolic TensorVariables. The
+    fractions are invariant to the mean and scale of ``y`` and are well defined
+    for any mean function, composed kernel (the GP term is the prior signal
+    variance ``mean(diag(K))``, so no single amplitude is needed), and scalar or
+    ``x``-dependent (heteroskedastic) ``sigma``.
+
+    Fields
+    ------
+    mean_var, signal_var, noise_var
+        Variance contributed by the mean function, the prior GP signal, and the
+        observation noise.
+    total_var
+        Their sum — the model-implied marginal variance of ``y``.
+    frac_mean, frac_signal, frac_noise
+        Each contribution as a fraction of ``total_var`` (sum to one).
+    var_ratio
+        ``total_var / Var(y)`` — calibration against the empirical data variance
+        (~1 when calibrated, >1 over-dispersed, <1 under-dispersed).
+    """
+    N = X.shape[0]
+    mean_var = pt.var(gp.mean(X))
+    signal_var = pt.mean(gp.kernel.diag(X))
+    # sigma may be a scalar or a length-N heteroskedastic vector; the broadcast
+    # against ones(N) handles both, and mean(sigma**2) is the noise contribution.
+    sigma_vec = gp.likelihood.sigma * pt.ones(N)
+    noise_var = pt.mean(sigma_vec**2)
+    total_var = mean_var + signal_var + noise_var
+    return VarianceBudget(
+        mean_var=mean_var,
+        signal_var=signal_var,
+        noise_var=noise_var,
+        total_var=total_var,
+        frac_mean=mean_var / total_var,
+        frac_signal=signal_var / total_var,
+        frac_noise=noise_var / total_var,
+        var_ratio=total_var / pt.var(y),
+    )
+
+
 VFEDiagnostics = namedtuple(
     "VFEDiagnostics",
     ["elbo", "fit", "trace_penalty", "nystrom_residual", "sigma", "fit_per_n", "excess_fit_per_n"],
