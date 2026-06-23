@@ -10,7 +10,7 @@ class Overlap(Kernel):
 
     where D is the number of active categorical columns. The kernel returns
     the fraction of active columns whose levels match. With one active column,
-    this is simply ``1[x == y]``.
+    this is ``1[x == y]``.
 
     Values are expected to be non-negative integer level codes stored in a
     float matrix (the library-wide convention). Entries are cast to ``int64``
@@ -50,7 +50,7 @@ class LowRankCategorical(Kernel):
     kernel. Operates on a single categorical column. Level codes are expected
     to be non-negative integers stored in a float matrix (the library-wide
     convention). Codes are cast to ``int64`` inside ``_eval`` and ``diag``;
-    they are not range-checked — passing a code >= ``num_levels`` is user
+    they are not range-checked; passing a code >= ``num_levels`` is user
     error.
 
     Parameters

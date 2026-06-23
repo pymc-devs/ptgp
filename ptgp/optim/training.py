@@ -1,7 +1,7 @@
 """Training and prediction compilation for PTGP models with PyMC priors.
 
 Uses ``pytensor.shared`` variables so that training automatically updates
-the parameters used by prediction — no model reconstruction needed.
+the parameters used by prediction; no model reconstruction needed.
 """
 
 import logging
@@ -96,7 +96,7 @@ def _make_initial_point(model, init="prior_median", rng=None, n_median_samples=5
     Some priors cannot be sampled or quantiled. Improper priors like
     ``pm.HalfFlat`` and ``pm.Flat`` raise ``NotImplementedError`` from both
     ``pm.icdf`` and ``pm.draw`` because they have no proper measure. When
-    every method fails for a given RV — or returns non-finite values — that
+    every method fails for a given RV, or returns non-finite values, that
     RV's value is taken from ``model.initial_point()`` instead. PyMC's
     initial point is 0 in unconstrained space for every parameter unless
     ``initval`` was set explicitly, which corresponds to:
@@ -185,7 +185,7 @@ def _make_shared_params(
     If ``frozen_vars`` is given, value vars appearing as keys are initialized
     to their freeze values rather than the PyMC initial point. Without this,
     a frozen var's shared slot (and its scipy theta slice) would carry the
-    initial point — wrong for diagnostics and for ``unpack_to_shared``.
+    initial point, wrong for diagnostics and for ``unpack_to_shared``.
 
     Returns
     -------
@@ -275,7 +275,7 @@ def compile_training_step(
     model : pm.Model, optional
         PyMC model. Uses the enclosing ``with pm.Model()`` context if
         None. Every continuous free RV in the model is automatically
-        made into a trainable shared variable — you do not need to list
+        made into a trainable shared variable, so you do not need to list
         them.
     optimizer_fn : callable, optional
         Optimizer function (default: ``adam``). Must have signature
@@ -320,7 +320,7 @@ def compile_training_step(
         ``(X_batch, y_batch) -> loss_value``. Updates shared parameters
         in place.
     shared_params : dict
-        ``{value_var: shared_var}`` — the shared variables holding the
+        ``{value_var: shared_var}``, the shared variables holding the
         unconstrained parameter values. Needed by ``compile_predict``.
     shared_extras : list
         Shared variables for ``extra_vars``. Needed by ``compile_predict``.
@@ -440,7 +440,7 @@ def compile_scipy_objective(
         PTGP model whose hyperparameters are PyMC RVs.
     X_var : TensorVariable
         Symbolic input placeholder. ``X`` is passed to the compiled
-        function on each scipy iteration — typically the full training
+        function on each scipy iteration, typically the full training
         inputs for GP/VFE (batching is not used with quasi-Newton methods).
     y_var : TensorVariable
         Symbolic target placeholder, handled like ``X_var``.
@@ -516,7 +516,7 @@ def compile_scipy_objective(
     shared_params : dict
         ``{value_var: shared_var}`` for every continuous PyMC value var.
         Needed by :func:`compile_predict` and :func:`get_trained_params`.
-        Not read by ``fun`` — present only for the predict handoff.
+        Not read by ``fun``; present only for the predict handoff.
     shared_extras : list
         Shared variables for ``extra_vars``, in the same order. Needed
         by :func:`compile_predict`. Not read by ``fun``.
@@ -749,7 +749,7 @@ def tracked_minimize(fun, theta0, args, diag_fn=None, print_every=None, **scipy_
     theta0 : ndarray
         Initial parameter vector.
     args : tuple
-        Extra arguments forwarded to both ``fun`` and ``diag_fn`` — typically
+        Extra arguments forwarded to both ``fun`` and ``diag_fn``, typically
         ``(X, y)``.
     diag_fn : callable, optional
         ``(theta, *args) -> namedtuple`` from
@@ -924,17 +924,17 @@ def minimize_staged_vfe(
     the trace penalty instead of improving ``Z``. This function blocks that
     failure mode with a structured four-phase schedule:
 
-    1. **Phase 1** — freeze ``sigma`` at ``sigma_init``; train all other
+    1. **Phase 1**: freeze ``sigma`` at ``sigma_init``; train all other
        hyperparameters and (by default) ``Z`` together.
-    2. **Phase 2a** — freeze all hyperparameters; train ``Z`` only.
-    3. **Phase 2b** — freeze ``Z``; train all hyperparameters (sigma now free).
-    4. **Phase 3** — joint fine-tuning of everything (nothing frozen).
+    2. **Phase 2a**: freeze all hyperparameters; train ``Z`` only.
+    3. **Phase 2b**: freeze ``Z``; train all hyperparameters (sigma now free).
+    4. **Phase 3**: joint fine-tuning of everything (nothing frozen).
 
     Phases 2a/2b repeat ``phase2_cycles`` times. Pass ``phase2_cycles=0`` to
     skip straight from phase 1 to phase 3 when the ``Z`` initialisation is
     already good (e.g. from ``greedy_variance_init``).
 
-    ``sigma`` is auto-detected from ``gp_model.likelihood.sigma`` — no need to
+    ``sigma`` is auto-detected from ``gp_model.likelihood.sigma``; no need to
     pass a separate ``sigma_rv`` argument.
 
     All diagnostic history entries are :class:`ptgp.objectives.VFEDiagnostics`
@@ -977,7 +977,7 @@ def minimize_staged_vfe(
     init : str
         Initialisation strategy for phase 1 hyperparameters. Same options as
         :func:`compile_scipy_objective`: ``"prior_median"`` (default),
-        ``"prior_draw"``, or ``"unconstrained_zero"`` (PyMC initial point —
+        ``"prior_draw"``, or ``"unconstrained_zero"`` (PyMC initial point,
         0 in unconstrained space). Only affects phase 1; later phases
         inherit converged values from the previous phase.
     init_rng : int or numpy Generator, optional

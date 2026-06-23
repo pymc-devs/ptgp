@@ -8,7 +8,7 @@ from ptgp.objectives import collapsed_elbo
 class VFE:
     """Variational Free Energy (SGPR) sparse Gaussian Process.
 
-    Uses Titsias' collapsed bound — inducing variables are analytically
+    Uses Titsias' collapsed bound; inducing variables are analytically
     integrated out. The observation model is Gaussian; parameterize the noise
     via ``sigma``.
 

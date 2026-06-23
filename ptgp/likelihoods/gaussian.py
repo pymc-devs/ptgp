@@ -33,7 +33,7 @@ class Gaussian(Likelihood):
 
         Sigma is treated as data-dependent iff it has any free symbolic
         tensor input in its graph (covers both raw ``pt.matrix`` X and
-        ``pm.Data`` X — the latter is a SharedVariable but its type is
+        ``pm.Data`` X, the latter is a SharedVariable but its type is
         ``TensorType``). For data-independent sigma the call is a no-op.
         For data-dependent sigma, strict-mode ``graph_replace`` raises a
         clear error if ``X_train`` is not in sigma's graph.

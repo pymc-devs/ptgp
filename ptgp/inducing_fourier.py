@@ -360,7 +360,7 @@ class FourierFeatures1D(InducingVariables):
     def Kuu_sqrt_solve(self, kernel, rhs):
         """Apply ``R^{-1}`` where ``R @ R.T = Kuu = diag(d) + U @ U.T``. ``rhs`` is ``(M, K)``.
 
-        Uses ``delta = -1 / (sqrt(1 + lam) * (1 + sqrt(1 + lam)))`` — algebraically
+        Uses ``delta = -1 / (sqrt(1 + lam) * (1 + sqrt(1 + lam)))``, algebraically
         equivalent to ``1/sqrt(1+lam) - 1`` divided by ``lam`` but with no division by
         ``lam`` or ``sqrt(lam)``, so it stays finite as ``lam -> 0``.
         """

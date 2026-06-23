@@ -23,18 +23,18 @@ def to_idata(
 
     Groups produced (empty groups are omitted):
 
-    - ``point_estimate`` — every optimized value in constrained space, on its
+    - ``point_estimate``: every optimized value in constrained space, on its
       own dims with no ``chain``/``draw`` axes (nothing was sampled). Includes
       PyMC RVs (``sigma``, ``eta``, …) *and* non-PyMC extras (``Z``, ``q_mu``,
       ``q_sqrt_flat``, …).
-    - ``unconstrained_point_estimate`` — the same values in value-var
+    - ``unconstrained_point_estimate``: the same values in value-var
       (transformed) space.
-    - ``optimizer_result`` — scalar fields from the scipy ``OptimizeResult``
+    - ``optimizer_result``: scalar fields from the scipy ``OptimizeResult``
       (``fun``, ``success``, ``status``, ``message``, ``nit``, ``nfev``,
       ``njev``) plus per-iteration trajectory DataArrays from ``history``
       (``elbo``, ``trace_penalty``, …) on an ``iteration`` dimension. There is
       no ``sample_stats``: nothing was sampled.
-    - ``observed_data`` / ``constant_data`` — pulled from the PyMC model.
+    - ``observed_data`` / ``constant_data``: pulled from the PyMC model.
 
     Parameters
     ----------
@@ -103,7 +103,7 @@ def _collect_optimized(model, shared_params, shared_extras):
 
     PyMC RVs contribute to both dicts: the constrained dict uses ``rv.name`` and
     applies the backward transform; the unconstrained dict uses ``vv.name`` and
-    keeps the value-var-space value. Non-PyMC extras have no transform — they
+    keeps the value-var-space value. Non-PyMC extras have no transform, so they
     appear in both dicts under ``sv.name`` so callers can find them in either
     group.
     """
@@ -154,7 +154,7 @@ def _build_optimizer_result(result, history, phase_labels):
     populates ``elbo``, ``trace_penalty``, …).
 
     If a history field name collides with a result-scalar name, the trajectory
-    wins — it's strictly more informative than the terminal value.
+    wins, it's strictly more informative than the terminal value.
     """
     data_vars = {}
     coords = {}

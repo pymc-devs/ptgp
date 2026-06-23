@@ -77,7 +77,7 @@ def init_variational_params(M, q_mu_init=None, q_sqrt_init=None):
 
     ``q_sqrt`` is stored as a flat vector of length ``M·(M+1)/2`` and
     materialised by filling a lower-triangular matrix and applying
-    ``pt.softplus`` to the diagonal — guarantees a true Cholesky factor
+    ``pt.softplus`` to the diagonal, which guarantees a true Cholesky factor
     (lower-triangular with strictly positive diagonal) at every optimizer step.
     ``q_mu`` is stored as a length-``M`` flat vector.
 
@@ -203,7 +203,7 @@ class SVGP:
     def predict_marginal(self, X, incl_lik=False):
         """Posterior marginal mean and variance at each point in X.
 
-        Returns the per-point posterior — correlations between test
+        Returns the per-point posterior. Correlations between test
         points are discarded. Use ``predict_joint`` for the full (N, N)
         covariance or ``predict_f_samples`` to draw smooth function samples.
 
@@ -265,7 +265,7 @@ class SVGP:
         """Draw samples of the latent f at X from the joint posterior.
 
         Samples are produced via a Cholesky transform of caller-supplied
-        iid-standard-normal noise. The caller owns the RNG — the function
+        iid-standard-normal noise. The caller owns the RNG; the function
         itself is deterministic.
 
         Parameters
