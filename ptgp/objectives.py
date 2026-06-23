@@ -348,12 +348,24 @@ def variance_budget(gp, X, y):
 
 VFEDiagnostics = namedtuple(
     "VFEDiagnostics",
-    ["elbo", "fit", "trace_penalty", "nystrom_residual", "sigma", "fit_per_n", "excess_fit_per_n"],
+    [
+        "elbo",
+        "fit",
+        "trace_penalty",
+        "nystrom_residual",
+        "sigma",
+        "fit_per_n",
+        "excess_fit_per_n",
+        "frac_mean",
+        "frac_signal",
+        "frac_noise",
+        "var_ratio",
+    ],
 )
 
 
 def vfe_diagnostics(vfe, X, y):
-    """Collapsed ELBO terms plus sigma and two normalised fit metrics.
+    """Collapsed ELBO terms, fit metrics, and the mean/GP/noise variance budget.
 
     Returns a ``VFEDiagnostics`` namedtuple of symbolic TensorVariables,
     suitable for use with :func:`ptgp.optim.compile_scipy_diagnostics`.
@@ -365,19 +377,28 @@ def vfe_diagnostics(vfe, X, y):
     nystrom_residual
         ``tr(Kff - Qff) / N`` — per-point Nyström approximation error.
     sigma
-        Likelihood noise (constrained space).
+        Likelihood noise (constrained space); the mean of ``sigma`` when it is
+        heteroskedastic.
     fit_per_n
-        ``fit / N`` — scale-invariant data fit.
+        ``fit / N`` — per-point data fit.
     excess_fit_per_n
-        ``fit_per_n + 0.5 * log(2π σ²)`` — how much better than noise floor.
-        Goes to zero when the model fits at the noise level only.
+        ``fit_per_n + 0.5 * log(2π * Var(y - m(X))) + 0.5`` — per-point fit
+        relative to a constant-mean Gaussian at the residual variance. Reads 0
+        when the kernel does no better than a flat mean and grows as it explains
+        structure. Referencing the residual variance (not ``sigma**2``) makes it
+        invariant to the scale of ``y``; pair it with the variance budget for the
+        mean-invariant view.
+    frac_mean, frac_signal, frac_noise, var_ratio
+        The mean/GP/noise variance budget — see :func:`variance_budget`.
     """
     terms = collapsed_elbo(vfe, X, y)
+    budget = variance_budget(vfe, X, y)
     N = X.shape[0]
     sigma_vec = vfe.likelihood.sigma * pt.ones(N)
-    sigma_mean = pt.mean(sigma_vec)  # scalar; mean of a constant vector = that constant
+    sigma_mean = pt.mean(sigma_vec)
     fit_per_n = terms.fit / N
-    excess_fit_per_n = fit_per_n + 0.5 * pt.log(2.0 * np.pi * sigma_mean**2)
+    resid_var = pt.var(y - vfe.mean(X))
+    excess_fit_per_n = fit_per_n + 0.5 * pt.log(2.0 * np.pi * resid_var) + 0.5
     return VFEDiagnostics(
         elbo=terms.elbo,
         fit=terms.fit,
@@ -386,4 +407,8 @@ def vfe_diagnostics(vfe, X, y):
         sigma=sigma_mean,
         fit_per_n=fit_per_n,
         excess_fit_per_n=excess_fit_per_n,
+        frac_mean=budget.frac_mean,
+        frac_signal=budget.frac_signal,
+        frac_noise=budget.frac_noise,
+        var_ratio=budget.var_ratio,
     )

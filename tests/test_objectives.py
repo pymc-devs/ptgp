@@ -11,7 +11,13 @@ from ptgp.inducing import Points
 from ptgp.kernels import ExpQuad
 from ptgp.likelihoods import Gaussian
 from ptgp.mean import Constant, Linear, Zero
-from ptgp.objectives import collapsed_elbo, elbo, marginal_log_likelihood, variance_budget
+from ptgp.objectives import (
+    collapsed_elbo,
+    elbo,
+    marginal_log_likelihood,
+    variance_budget,
+    vfe_diagnostics,
+)
 
 
 def _eval(*tensors):
@@ -250,3 +256,35 @@ class TestVarianceBudget:
         expected_noise = float(np.mean((0.1 + 0.05 * X[:, 0] ** 2) ** 2))
         assert np.isclose(b.noise_var, expected_noise)
         assert np.isclose(b.frac_mean + b.frac_signal + b.frac_noise, 1.0)
+
+
+class TestVFEDiagnostics:
+    @pytest.fixture
+    def setup(self):
+        rng = np.random.default_rng(1)
+        X = np.sort(rng.uniform(0, 5, 30))[:, None].astype(np.float64)
+        y = np.sin(X.ravel()) + 0.1 * rng.standard_normal(30) + 3.0  # offset
+        Z = np.linspace(0.5, 4.5, 6)[:, None].astype(np.float64)
+        return X, y, Z
+
+    def _diag(self, X, y, Z, eta=1.0, sigma=0.3):
+        vfe = VFE(
+            kernel=eta**2 * ExpQuad(input_dim=1, ls=1.0),
+            mean=Zero(),
+            sigma=sigma,
+            inducing_variable=Points(pt.as_tensor_variable(Z)),
+        )
+        d = vfe_diagnostics(vfe, pt.as_tensor_variable(X), pt.as_tensor_variable(y))
+        return d._make(_eval(*d))
+
+    def test_budget_fields_present(self, setup):
+        X, y, Z = setup
+        d = self._diag(X, y, Z)
+        assert np.isclose(d.frac_mean + d.frac_signal + d.frac_noise, 1.0)
+
+    def test_excess_fit_scale_invariant(self, setup):
+        X, y, Z = setup
+        a = 5.0
+        d0 = self._diag(X, y, Z, eta=1.0, sigma=0.3)
+        d1 = self._diag(X, a * y, Z, eta=a, sigma=a * 0.3)
+        assert np.isclose(d0.excess_fit_per_n, d1.excess_fit_per_n)
