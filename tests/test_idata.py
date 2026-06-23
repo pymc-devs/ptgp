@@ -117,6 +117,10 @@ def test_optimizer_result_combines_scalars_and_trajectory():
     assert opt.sizes["iteration"] == len(history)
     assert opt.elbo.dims == ("iteration",)
     assert opt.trace_penalty.dims == ("iteration",)
+    # The mean/GP/noise variance budget and the redefined excess fit flow through too.
+    assert opt.excess_fit_per_n.dims == ("iteration",)
+    assert opt.frac_signal.dims == ("iteration",)
+    assert opt.var_ratio.dims == ("iteration",)
 
 
 def test_no_result_no_history_omits_optimizer_result():

@@ -284,14 +284,88 @@ def dpp_regularizer(vfe, jitter=_DEFAULT_JITTER):
     return logdet_Kuu
 
 
+VarianceBudget = namedtuple(
+    "VarianceBudget",
+    [
+        "mean_var",
+        "signal_var",
+        "noise_var",
+        "total_var",
+        "frac_mean",
+        "frac_signal",
+        "frac_noise",
+        "var_ratio",
+    ],
+)
+
+
+def variance_budget(gp, X, y):
+    """Decompose the model-implied response variance into mean / GP / noise parts.
+
+    Under the model ``y = m(x) + f(x) + e`` with ``f ~ GP(0, K)`` and
+    ``e ~ N(0, sigma^2(x))``, the law of total variance gives::
+
+        Var(y) = Var_x(m(x)) + E_x[K(x, x)] + E_x[sigma^2(x)]
+
+    Returns a ``VarianceBudget`` namedtuple of symbolic TensorVariables. The
+    fractions are invariant to the mean and scale of ``y`` and are well defined
+    for any mean function, composed kernel (the GP term is the prior signal
+    variance ``mean(diag(K))``, so no single amplitude is needed), and scalar or
+    ``x``-dependent (heteroskedastic) ``sigma``.
+
+    Fields
+    ------
+    mean_var, signal_var, noise_var
+        Variance contributed by the mean function, the prior GP signal, and the
+        observation noise.
+    total_var
+        Their sum — the model-implied marginal variance of ``y``.
+    frac_mean, frac_signal, frac_noise
+        Each contribution as a fraction of ``total_var`` (sum to one).
+    var_ratio
+        ``total_var / Var(y)`` — calibration against the empirical data variance
+        (~1 when calibrated, >1 over-dispersed, <1 under-dispersed).
+    """
+    N = X.shape[0]
+    mean_var = pt.var(gp.mean(X))
+    signal_var = pt.mean(gp.kernel.diag(X))
+    # sigma may be a scalar or a length-N heteroskedastic vector; the broadcast
+    # against ones(N) handles both, and mean(sigma**2) is the noise contribution.
+    sigma_vec = gp.likelihood.sigma * pt.ones(N)
+    noise_var = pt.mean(sigma_vec**2)
+    total_var = mean_var + signal_var + noise_var
+    return VarianceBudget(
+        mean_var=mean_var,
+        signal_var=signal_var,
+        noise_var=noise_var,
+        total_var=total_var,
+        frac_mean=mean_var / total_var,
+        frac_signal=signal_var / total_var,
+        frac_noise=noise_var / total_var,
+        var_ratio=total_var / pt.var(y),
+    )
+
+
 VFEDiagnostics = namedtuple(
     "VFEDiagnostics",
-    ["elbo", "fit", "trace_penalty", "nystrom_residual", "sigma", "fit_per_n", "excess_fit_per_n"],
+    [
+        "elbo",
+        "fit",
+        "trace_penalty",
+        "nystrom_residual",
+        "sigma",
+        "fit_per_n",
+        "excess_fit_per_n",
+        "frac_mean",
+        "frac_signal",
+        "frac_noise",
+        "var_ratio",
+    ],
 )
 
 
 def vfe_diagnostics(vfe, X, y):
-    """Collapsed ELBO terms plus sigma and two normalised fit metrics.
+    """Collapsed ELBO terms, fit metrics, and the mean/GP/noise variance budget.
 
     Returns a ``VFEDiagnostics`` namedtuple of symbolic TensorVariables,
     suitable for use with :func:`ptgp.optim.compile_scipy_diagnostics`.
@@ -303,19 +377,28 @@ def vfe_diagnostics(vfe, X, y):
     nystrom_residual
         ``tr(Kff - Qff) / N`` — per-point Nyström approximation error.
     sigma
-        Likelihood noise (constrained space).
+        Likelihood noise (constrained space); the mean of ``sigma`` when it is
+        heteroskedastic.
     fit_per_n
-        ``fit / N`` — scale-invariant data fit.
+        ``fit / N`` — per-point data fit.
     excess_fit_per_n
-        ``fit_per_n + 0.5 * log(2π σ²)`` — how much better than noise floor.
-        Goes to zero when the model fits at the noise level only.
+        ``fit_per_n + 0.5 * log(2π * Var(y - m(X))) + 0.5`` — per-point fit
+        relative to a constant-mean Gaussian at the residual variance. Reads 0
+        when the kernel does no better than a flat mean and grows as it explains
+        structure. Referencing the residual variance (not ``sigma**2``) makes it
+        invariant to the scale of ``y``; pair it with the variance budget for the
+        mean-invariant view.
+    frac_mean, frac_signal, frac_noise, var_ratio
+        The mean/GP/noise variance budget — see :func:`variance_budget`.
     """
     terms = collapsed_elbo(vfe, X, y)
+    budget = variance_budget(vfe, X, y)
     N = X.shape[0]
     sigma_vec = vfe.likelihood.sigma * pt.ones(N)
-    sigma_mean = pt.mean(sigma_vec)  # scalar; mean of a constant vector = that constant
+    sigma_mean = pt.mean(sigma_vec)
     fit_per_n = terms.fit / N
-    excess_fit_per_n = fit_per_n + 0.5 * pt.log(2.0 * np.pi * sigma_mean**2)
+    resid_var = pt.var(y - vfe.mean(X))
+    excess_fit_per_n = fit_per_n + 0.5 * pt.log(2.0 * np.pi * resid_var) + 0.5
     return VFEDiagnostics(
         elbo=terms.elbo,
         fit=terms.fit,
@@ -324,4 +407,73 @@ def vfe_diagnostics(vfe, X, y):
         sigma=sigma_mean,
         fit_per_n=fit_per_n,
         excess_fit_per_n=excess_fit_per_n,
+        frac_mean=budget.frac_mean,
+        frac_signal=budget.frac_signal,
+        frac_noise=budget.frac_noise,
+        var_ratio=budget.var_ratio,
+    )
+
+
+UnapproximatedDiagnostics = namedtuple(
+    "UnapproximatedDiagnostics",
+    [
+        "mll",
+        "fit",
+        "logdet",
+        "sigma",
+        "fit_per_n",
+        "logdet_per_n",
+        "excess_fit_per_n",
+        "frac_mean",
+        "frac_signal",
+        "frac_noise",
+        "var_ratio",
+    ],
+)
+
+
+def unapproximated_diagnostics(gp, X, y):
+    """Exact-GP marginal-likelihood terms, fit metrics, and the variance budget.
+
+    The exact-GP analogue of :func:`vfe_diagnostics`, for
+    :class:`ptgp.gp.Unapproximated`. Returns an ``UnapproximatedDiagnostics``
+    namedtuple of symbolic TensorVariables, for use with
+    :func:`ptgp.optim.compile_scipy_diagnostics`.
+
+    Fields
+    ------
+    mll, fit, logdet
+        Direct from :func:`marginal_log_likelihood` (``mll = fit + logdet``;
+        ``fit`` is the data-fit quadratic, ``logdet`` the Occam complexity term).
+    sigma
+        Likelihood noise (the mean of ``sigma`` when it is heteroskedastic).
+    fit_per_n, logdet_per_n
+        ``fit / N`` and ``logdet / N`` — per-point data fit and complexity.
+    excess_fit_per_n
+        ``mll / N + 0.5 * log(2π * Var(y - m(X))) + 0.5`` — per-point evidence
+        relative to a constant-mean Gaussian at the residual variance. Reads 0 at
+        that baseline and is invariant to the scale of ``y`` (the residual-variance
+        reference cancels the log-determinant's scale dependence).
+    frac_mean, frac_signal, frac_noise, var_ratio
+        The mean/GP/noise variance budget — see :func:`variance_budget`.
+    """
+    terms = marginal_log_likelihood(gp, X, y)
+    budget = variance_budget(gp, X, y)
+    N = X.shape[0]
+    sigma_vec = gp.likelihood.sigma * pt.ones(N)
+    sigma_mean = pt.mean(sigma_vec)
+    resid_var = pt.var(y - gp.mean(X))
+    excess_fit_per_n = terms.mll / N + 0.5 * pt.log(2.0 * np.pi * resid_var) + 0.5
+    return UnapproximatedDiagnostics(
+        mll=terms.mll,
+        fit=terms.fit,
+        logdet=terms.logdet,
+        sigma=sigma_mean,
+        fit_per_n=terms.fit / N,
+        logdet_per_n=terms.logdet / N,
+        excess_fit_per_n=excess_fit_per_n,
+        frac_mean=budget.frac_mean,
+        frac_signal=budget.frac_signal,
+        frac_noise=budget.frac_noise,
+        var_ratio=budget.var_ratio,
     )
