@@ -15,6 +15,7 @@ from ptgp.objectives import (
     collapsed_elbo,
     elbo,
     marginal_log_likelihood,
+    unapproximated_diagnostics,
     variance_budget,
     vfe_diagnostics,
 )
@@ -288,3 +289,40 @@ class TestVFEDiagnostics:
         d0 = self._diag(X, y, Z, eta=1.0, sigma=0.3)
         d1 = self._diag(X, a * y, Z, eta=a, sigma=a * 0.3)
         assert np.isclose(d0.excess_fit_per_n, d1.excess_fit_per_n)
+
+
+class TestUnapproximatedDiagnostics:
+    @pytest.fixture
+    def data(self):
+        rng = np.random.default_rng(2)
+        X = np.sort(rng.uniform(0, 5, 25))[:, None].astype(np.float64)
+        y = np.sin(X.ravel()) + 0.1 * rng.standard_normal(25) + 4.0  # offset
+        return X, y
+
+    def _diag(self, X, y, eta=1.0, sigma=0.3):
+        gp = Unapproximated(kernel=eta**2 * ExpQuad(input_dim=1, ls=1.0), mean=Zero(), sigma=sigma)
+        d = unapproximated_diagnostics(gp, pt.as_tensor_variable(X), pt.as_tensor_variable(y))
+        return d._make(_eval(*d))
+
+    def test_terms_and_budget(self, data):
+        X, y = data
+        d = self._diag(X, y)
+        assert np.isclose(d.mll, d.fit + d.logdet)
+        assert np.isclose(d.frac_mean + d.frac_signal + d.frac_noise, 1.0)
+
+    def test_excess_fit_scale_invariant(self, data):
+        X, y = data
+        a = 6.0
+        d0 = self._diag(X, y, eta=1.0, sigma=0.3)
+        d1 = self._diag(X, a * y, eta=a, sigma=a * 0.3)
+        assert np.isclose(d0.excess_fit_per_n, d1.excess_fit_per_n)
+
+    def test_heteroskedastic_sigma(self, data):
+        X, y = data
+        Xt = pt.as_tensor_variable(X)
+        sigma = 0.1 + 0.05 * Xt[:, 0] ** 2  # length-N vector
+        gp = Unapproximated(kernel=ExpQuad(input_dim=1, ls=1.0), mean=Zero(), sigma=sigma)
+        d = unapproximated_diagnostics(gp, Xt, pt.as_tensor_variable(y))
+        d = d._make(_eval(*d))
+        assert np.isfinite(d.mll)
+        assert np.isclose(d.frac_mean + d.frac_signal + d.frac_noise, 1.0)

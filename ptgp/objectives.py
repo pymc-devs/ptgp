@@ -412,3 +412,68 @@ def vfe_diagnostics(vfe, X, y):
         frac_noise=budget.frac_noise,
         var_ratio=budget.var_ratio,
     )
+
+
+UnapproximatedDiagnostics = namedtuple(
+    "UnapproximatedDiagnostics",
+    [
+        "mll",
+        "fit",
+        "logdet",
+        "sigma",
+        "fit_per_n",
+        "logdet_per_n",
+        "excess_fit_per_n",
+        "frac_mean",
+        "frac_signal",
+        "frac_noise",
+        "var_ratio",
+    ],
+)
+
+
+def unapproximated_diagnostics(gp, X, y):
+    """Exact-GP marginal-likelihood terms, fit metrics, and the variance budget.
+
+    The exact-GP analogue of :func:`vfe_diagnostics`, for
+    :class:`ptgp.gp.Unapproximated`. Returns an ``UnapproximatedDiagnostics``
+    namedtuple of symbolic TensorVariables, for use with
+    :func:`ptgp.optim.compile_scipy_diagnostics`.
+
+    Fields
+    ------
+    mll, fit, logdet
+        Direct from :func:`marginal_log_likelihood` (``mll = fit + logdet``;
+        ``fit`` is the data-fit quadratic, ``logdet`` the Occam complexity term).
+    sigma
+        Likelihood noise (the mean of ``sigma`` when it is heteroskedastic).
+    fit_per_n, logdet_per_n
+        ``fit / N`` and ``logdet / N`` — per-point data fit and complexity.
+    excess_fit_per_n
+        ``mll / N + 0.5 * log(2π * Var(y - m(X))) + 0.5`` — per-point evidence
+        relative to a constant-mean Gaussian at the residual variance. Reads 0 at
+        that baseline and is invariant to the scale of ``y`` (the residual-variance
+        reference cancels the log-determinant's scale dependence).
+    frac_mean, frac_signal, frac_noise, var_ratio
+        The mean/GP/noise variance budget — see :func:`variance_budget`.
+    """
+    terms = marginal_log_likelihood(gp, X, y)
+    budget = variance_budget(gp, X, y)
+    N = X.shape[0]
+    sigma_vec = gp.likelihood.sigma * pt.ones(N)
+    sigma_mean = pt.mean(sigma_vec)
+    resid_var = pt.var(y - gp.mean(X))
+    excess_fit_per_n = terms.mll / N + 0.5 * pt.log(2.0 * np.pi * resid_var) + 0.5
+    return UnapproximatedDiagnostics(
+        mll=terms.mll,
+        fit=terms.fit,
+        logdet=terms.logdet,
+        sigma=sigma_mean,
+        fit_per_n=terms.fit / N,
+        logdet_per_n=terms.logdet / N,
+        excess_fit_per_n=excess_fit_per_n,
+        frac_mean=budget.frac_mean,
+        frac_signal=budget.frac_signal,
+        frac_noise=budget.frac_noise,
+        var_ratio=budget.var_ratio,
+    )
