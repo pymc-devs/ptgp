@@ -12,6 +12,7 @@ from ptgp.likelihoods.base import (
     variational_expectation,
 )
 from ptgp.likelihoods.bernoulli import Bernoulli
+from ptgp.likelihoods.composite import CompositeLikelihood
 from ptgp.likelihoods.gaussian import Gaussian
 from ptgp.likelihoods.negative_binomial import NegativeBinomial
 from ptgp.likelihoods.poisson import Poisson
@@ -24,6 +25,7 @@ __all__ = [
     "StudentT",
     "Poisson",
     "NegativeBinomial",
+    "CompositeLikelihood",
     # Graph types.
     "LikelihoodOp",
     "LikelihoodType",
