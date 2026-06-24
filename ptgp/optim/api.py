@@ -49,7 +49,7 @@ def fit(
     compile_kwargs=None,
     **scipy_kwargs,
 ):
-    """Batteries-included estimation method for GP models.
+    """Estimation method for GP models.
 
     Estimation uses reasonable defaults based on the provided approximation. For
     fine-grained control, use the low-level API.
@@ -70,18 +70,18 @@ def fit(
         ``gp_model.default_objective``.
     method : str
         Optimization method passed to :func:`scipy.optimize.minimize`. Must
-        accept a Jacobian — ``fit`` always supplies one (``jac=True``).
+        accept a Jacobian; ``fit`` always supplies one (``jac=True``).
         Default ``"L-BFGS-B"``.
     init : str
         Strategy for the initial parameter vector. One of:
 
-        - ``"prior_median"`` (default) — median of each prior via
+        - ``"prior_median"`` (default): median of each prior via
           ``pm.icdf(rv, 0.5)``, with a 500-sample fallback when icdf is
           unimplemented and a per-RV fallback to PyMC's initial point for
           improper priors.
-        - ``"prior_draw"`` — one draw from each prior. Stochastic; pin with
+        - ``"prior_draw"``: one draw from each prior. Stochastic; pin with
           ``init_rng`` for reproducibility.
-        - ``"unconstrained_zero"`` — PyMC's ``model.initial_point()`` (0 in
+        - ``"unconstrained_zero"``: PyMC's ``model.initial_point()`` (0 in
           unconstrained space unless ``initval=`` was set on the RV).
     init_rng : int or numpy.random.Generator, optional
         Seed for the sampling-based portions of ``"prior_median"`` and
@@ -93,7 +93,7 @@ def fit(
     **scipy_kwargs
         Additional keyword arguments forwarded to
         :func:`scipy.optimize.minimize` (e.g. ``tol``, ``options``,
-        ``bounds``). Do not pass ``jac`` — it is set internally.
+        ``bounds``). Do not pass ``jac``; it is set internally.
 
     Returns
     -------

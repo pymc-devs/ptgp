@@ -60,7 +60,7 @@ class Likelihood:
         return E_mean, E_var + E_mean_sq - E_mean**2
 
     def predict_log_density(self, y, mu, var):
-        """log E_{q(f)}[p(y|f)] — predictive log-density at test points.
+        """log E_{q(f)}[p(y|f)], the predictive log-density at test points.
 
         Default: Gauss-Hermite quadrature in log-space for numerical stability.
         """

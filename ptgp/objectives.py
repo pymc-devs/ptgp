@@ -153,7 +153,7 @@ def collapsed_elbo(vfe, X, y):
 def fitc_log_marginal_likelihood(vfe, X, y):
     """FITC (Fully Independent Training Conditional) approximate log marginal likelihood.
 
-    Unlike ``collapsed_elbo``, FITC is not a lower bound — it approximates the
+    Unlike ``collapsed_elbo``, FITC is not a lower bound; it approximates the
     log marginal likelihood using the true per-point diagonal rather than the
     Nystrom diagonal throughout. The FITC covariance is::
 
@@ -185,9 +185,9 @@ def fitc_log_marginal_likelihood(vfe, X, y):
     Returns
     -------
     FITCTerms
-        ``fitc`` — FITC approximate log marginal likelihood (fit + logdet).
-        ``fit`` — quadratic term: ``-0.5 * (y^T K_fitc^{-1} y + N log 2π)``.
-        ``logdet`` — log-determinant term: ``-0.5 log|K_fitc|``.
+        ``fitc``: FITC approximate log marginal likelihood (fit + logdet).
+        ``fit``: quadratic term: ``-0.5 * (y^T K_fitc^{-1} y + N log 2π)``.
+        ``logdet``: log-determinant term: ``-0.5 log|K_fitc|``.
     """
     sigma2 = vfe.likelihood.sigma**2
     N = X.shape[0]
@@ -294,20 +294,20 @@ def vfe_diagnostics(vfe, X, y):
     """Collapsed ELBO terms plus sigma and two normalised fit metrics.
 
     Returns a ``VFEDiagnostics`` namedtuple of symbolic TensorVariables,
-    suitable for use with :func:`ptgp.optim.compile_scipy_diagnostics`.
+    for use with :func:`ptgp.optim.compile_scipy_diagnostics`.
 
     Fields
     ------
     elbo, fit, trace_penalty
         Direct from :func:`collapsed_elbo`.
     nystrom_residual
-        ``tr(Kff - Qff) / N`` — per-point Nyström approximation error.
+        ``tr(Kff - Qff) / N``, the per-point Nyström approximation error.
     sigma
         Likelihood noise (constrained space).
     fit_per_n
-        ``fit / N`` — scale-invariant data fit.
+        ``fit / N``, the per-point data fit.
     excess_fit_per_n
-        ``fit_per_n + 0.5 * log(2π σ²)`` — how much better than noise floor.
+        ``fit_per_n + 0.5 * log(2π σ²)``, how much better than the noise floor.
         Goes to zero when the model fits at the noise level only.
     """
     terms = collapsed_elbo(vfe, X, y)

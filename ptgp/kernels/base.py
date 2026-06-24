@@ -38,7 +38,7 @@ class Kernel:
         return self._eval(X, Y)
 
     def _eval(self, X, Y):
-        """Raw kernel matrix — subclasses implement."""
+        """Raw kernel matrix; subclasses implement."""
         raise NotImplementedError
 
     def diag(self, X):

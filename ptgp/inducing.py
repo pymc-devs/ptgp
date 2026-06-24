@@ -111,9 +111,9 @@ class KernelHealthDiagnostics:
         Per-data-point residual conditional variance ``Kff_diag - Q_diag``.
         Large values identify points poorly covered by ``Z``.
     total_variance : float
-        ``tr(Kff)`` — the kernel diagonal sum on ``X`` before conditioning.
+        ``tr(Kff)``, the kernel diagonal sum on ``X`` before conditioning.
     nystrom_residual : float
-        ``sum(d_final) = tr(Kff - Q)`` — total unexplained variance.
+        ``sum(d_final) = tr(Kff - Q)``, total unexplained variance.
     kuu_min_eigenvalue : float
         Smallest eigenvalue of ``K(Z, Z) + jitter * I``.
     kuu_max_eigenvalue : float
@@ -159,7 +159,7 @@ class RandomSubsampleDiagnostics:
         The ``M`` argument.
     M_returned : int
         Rows in the returned ``Z``. Always equals ``M_requested`` for this
-        routine — kept for API symmetry with the other init routines.
+        routine, kept for API symmetry with the other init routines.
     N_candidates : int
         Rows in the input ``X``.
     n_unique : int
@@ -223,7 +223,7 @@ class KMeansDiagnostics:
     dedup_tol : float
         The Euclidean-distance threshold used for deduplication.
     inertia : float
-        ``sum_i ||X[i] - centroid[label[i]]||^2`` — k-means' standard
+        ``sum_i ||X[i] - centroid[label[i]]||^2``, k-means' standard
         within-cluster sum of squares. Smaller is tighter.
     pairwise_min_distance : float
         Minimum Euclidean distance between returned centroids. ``nan`` if
@@ -529,7 +529,7 @@ def greedy_variance_init(
     Implements the "ConditionalVariance" initialization of Burt et al. (2020),
     *Convergence of Sparse Variational Inference in GP Regression*. At each
     step, the next inducing point is the row of ``X`` with largest remaining
-    conditional variance given the already-selected points — equivalent to
+    conditional variance given the already-selected points, equivalent to
     running a partial pivoted Cholesky decomposition of ``K(X, X)`` with the
     standard max-diagonal pivot rule. Selected points are a **subset of X**;
     this is discrete subset selection, not continuous optimization.
@@ -539,7 +539,7 @@ def greedy_variance_init(
     Recommended workflow
     --------------------
     Burt et al. show that with a good greedy initialization, ``Z`` typically
-    does **not** need to be gradient-optimized during training — for most
+    does **not** need to be gradient-optimized during training. For most
     problems the frozen subset is within noise of jointly-optimized ``Z`` at a
     tiny fraction of the compute. The standard recipe:
 
@@ -682,7 +682,7 @@ def compute_inducing_diagnostics(
     Computes the same kernel-derived metrics that
     :func:`greedy_variance_init` reports (Kuu eigenvalues, per-point
     residual conditional variance, total variance), but for a ``Z`` that
-    you already have — from k-means, manual placement, post-training, or
+    you already have, from k-means, manual placement, post-training, or
     elsewhere. No greedy selection is performed; no ``trace_curve``
     history is available.
 

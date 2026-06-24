@@ -55,7 +55,7 @@ def conditional_unwhitened(A, Kmn, Knn, f, q_sqrt=None, full_cov=False):
 def base_conditional(Kmn, Kmm, Knn, f, q_sqrt=None, white=False, full_cov=False):
     """Back-compat wrapper. Materialises Kmm; use the helpers above directly
     when you have a structured Kuu_solve / Kuu_sqrt_solve."""
-    # Add jitter to keep Kmm PSD under float noise — matches GPflow / PyMC default.
+    # Add jitter to keep Kmm PSD under float noise; matches GPflow / PyMC default.
     # Re-annotate after the addition: PyTensor canonicalizes ``Kmm + c·I`` into a
     # ``set_subtensor`` on the diagonal, which our PSD-inference rules don't see
     # through. The mathematical identity (PSD + c·I PSD ⇒ PSD) is sound.

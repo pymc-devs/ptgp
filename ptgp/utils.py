@@ -12,7 +12,7 @@ def get_initial_params(model, init="prior_median", rng=None, n_median_samples=50
     """Return constrained-space initial values for all free RVs in a PyMC model.
 
     Uses the same initialization strategies as ``compile_scipy_objective``.
-    Useful for building proxy kernels with concrete float values to pass to
+    Use it to build proxy kernels with concrete float values to pass to
     ``greedy_variance_init``.
 
     Parameters

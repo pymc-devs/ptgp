@@ -136,7 +136,7 @@ class WarpedInput(Kernel):
     ----------
     input_dim : int
         Number of columns of ``X`` this kernel expects. May differ from
-        ``kernel_func.input_dim`` — the warp may change dimensionality.
+        ``kernel_func.input_dim``; the warp may change dimensionality.
     kernel_func : Kernel
         Inner kernel applied to the warped inputs.
     warp_func : callable
