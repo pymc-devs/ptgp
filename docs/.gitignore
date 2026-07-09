@@ -14,6 +14,7 @@ source/api/**/classmethods/
 # Notebook gallery artifacts written by docs/sphinxext/generate_gallery.py
 source/examples/gallery.rst
 source/examples/examples/
+source/examples/introduction/
 source/examples/introductory/
 source/examples/advanced/
 source/examples/case_study/

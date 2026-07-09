@@ -188,4 +188,6 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 .idea/
-/docs/source/
+
+# Dataset cached at runtime by the introductory notebook
+mcycle.csv
