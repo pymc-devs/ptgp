@@ -121,5 +121,4 @@ print(K.shape, K.diagonal()[:3])
 The Matérn family and its smoothness-tuning role in GP modeling is discussed in {cite:t}`rasmussen-williams-2006` Chapter 4.
 
 ```{bibliography}
-:filter: docname in docnames
 ```

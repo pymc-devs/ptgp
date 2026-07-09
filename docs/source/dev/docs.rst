@@ -62,7 +62,7 @@ commit anything under ``source/kernels/img/``, ``source/_thumbnails/``,
 ``source/examples/<category>/``, ``source/api/**/generated/``, or
 ``source/kernels/gallery.rst`` / ``source/examples/gallery.rst``.
 
-The two custom Sphinx extensions live at ``docs/sphinxext/``:
+The custom Sphinx extensions live at ``docs/sphinxext/``:
 
 * ``generate_gallery.py`` — discovers notebooks under ``notebooks/``, copies
   them into ``docs/source/examples/<category>/``, extracts thumbnails, and
@@ -71,6 +71,12 @@ The two custom Sphinx extensions live at ``docs/sphinxext/``:
   ``KERNEL_RECIPES``, emits ``kernels/gallery.rst`` with grid cards. Cards
   link to per-kernel pages when a matching ``kernels/gallery/<slug>.md``
   exists on disk.
+* ``simplebib.py`` — per-page citations. Provides the ``{cite:t}`` /
+  ``{cite:p}`` roles and the ``{bibliography}`` directive, parsing
+  ``references.bib`` with :mod:`pybtex`. Each page is self-contained: its
+  citations render as numbered ``[n]`` footnotes that link down to a numbered
+  reference list on the same page, so numbering and anchors never collide
+  across pages.
 
 Adding a new kernel to the covariance gallery
 ---------------------------------------------
@@ -145,26 +151,29 @@ Adding a citation
 -----------------
 
 Append the BibTeX entry to ``docs/source/references.bib``, then cite from
-prose with either textual or parenthetical form:
+prose with ``{cite:t}`` or ``{cite:p}`` (both render as a numbered footnote
+marker):
 
 .. code-block:: markdown
 
     The kernel ridge regression view is discussed by {cite:t}`somekey-2024`.
     This approach goes back decades {cite:p}`smith-1985`.
 
-Each page that uses citations should also include a per-page bibliography:
+End each page that cites anything with a ``{bibliography}`` directive, which
+renders the numbered reference list for that page:
 
 .. code-block:: markdown
 
+    ## References
+
     ```{bibliography}
-    :filter: docname in docnames
     ```
 
-The ``:filter: docname in docnames`` clause restricts the rendered
-bibliography to entries cited on the current page. Sphinx will emit
-"duplicate citation" warnings when the same key is rendered from multiple
-pages — these are tolerated; we prefer per-page bibliographies for
-readability.
+Citations are handled by the ``simplebib`` extension and are page-local:
+``{bibliography}`` lists only the works cited on that page, numbered in
+citation order, and the in-text markers link down to it. There is no central
+bibliography page and no cross-page numbering, so the same key can be cited on
+any number of pages without collisions.
 
 Plot helpers
 ------------

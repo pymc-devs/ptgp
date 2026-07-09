@@ -109,5 +109,4 @@ The three centers show the kernel's effect on prior beliefs:
 The linear kernel and its connection to Bayesian linear regression are discussed in {cite:t}`rasmussen-williams-2006` Chapter 2.
 
 ```{bibliography}
-:filter: docname in docnames
 ```

@@ -28,7 +28,7 @@ dependencies:
     - sphinx-notfound-page
     - sphinx-autobuild
     - jupyter-sphinx
-    - sphinxcontrib-bibtex
+    - pybtex  # .bib parsing for the simplebib extension (docs/sphinxext/simplebib.py)
     - pip
     - pip:
         - git+https://github.com/pymc-devs/pytensor@main

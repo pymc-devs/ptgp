@@ -99,5 +99,4 @@ Prior samples fan out from the origin; the posterior pinches around each observa
 The random walk kernel and the broader connection between GPs and stochastic processes are covered in {cite:t}`rasmussen-williams-2006` Chapter 4.
 
 ```{bibliography}
-:filter: docname in docnames
 ```

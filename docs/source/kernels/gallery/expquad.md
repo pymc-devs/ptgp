@@ -126,5 +126,4 @@ The three lengthscales show the kernel's effect on prior beliefs:
 The exponentiated quadratic is the canonical GP covariance and is discussed across all standard treatments; {cite:t}`rasmussen-williams-2006` Chapter 4 is the standard reference.
 
 ```{bibliography}
-:filter: docname in docnames
 ```
