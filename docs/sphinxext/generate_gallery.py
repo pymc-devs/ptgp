@@ -44,6 +44,7 @@ NOTEBOOKS_ROOT = REPO_ROOT / "notebooks"
 # Pretty titles for known subfolders. Anything not listed is title-cased.
 CATEGORY_TITLES = {
     "introduction": "Introduction",
+    "approximations": "Approximations",
     "examples": "Examples",
     "introductory": "Introductory",
     "advanced": "Advanced",
@@ -52,7 +53,14 @@ CATEGORY_TITLES = {
 
 # Order the sections appear in the gallery. Categories not listed here follow,
 # sorted alphabetically.
-CATEGORY_ORDER = ["introduction", "examples", "introductory", "advanced", "case_study"]
+CATEGORY_ORDER = [
+    "introduction",
+    "approximations",
+    "examples",
+    "introductory",
+    "advanced",
+    "case_study",
+]
 
 
 def _category_sort_key(category):
