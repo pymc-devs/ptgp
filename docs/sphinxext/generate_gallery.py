@@ -228,14 +228,8 @@ def main(app):
     for category in sorted(grouped, key=_category_sort_key):
         nb_paths = grouped[category]
         title = CATEGORY_TITLES.get(category, category.replace("_", " ").title())
-        section_lines.append(
-            SECTION_TEMPLATE.format(
-                section_title=title,
-                section_id=category,
-                underlines="-" * len(title),
-            )
-        )
 
+        item_lines: list[str] = []
         for nb_path in nb_paths:
             if not is_tracked_by_git(nb_path):
                 logger.info(
@@ -259,7 +253,7 @@ def main(app):
             # Sphinx resolve it from the source root, matching gEconpy's
             # convention so users can drop in custom thumbnails too.
             img_path = f"/_thumbnails/{category}/{nbg.stripped_name}.png"
-            section_lines.append(
+            item_lines.append(
                 ITEM_TEMPLATE.format(
                     doc_name=doc_name,
                     image=img_path,
@@ -267,6 +261,19 @@ def main(app):
                     link_type="doc",
                 )
             )
+
+        # A section with no tracked notebooks would emit a bare, cardless
+        # grid that sphinx-codeautolink chokes on, so skip it entirely.
+        if not item_lines:
+            continue
+        section_lines.append(
+            SECTION_TEMPLATE.format(
+                section_title=title,
+                section_id=category,
+                underlines="-" * len(title),
+            )
+        )
+        section_lines.extend(item_lines)
 
     # Assemble: title, hidden toctree (so notebooks register with Sphinx),
     # then the visible grid-card sections.
