@@ -293,7 +293,7 @@ def _compute_kernel_health(kernel, X, Z, jitter=1e-6, eig_threshold=1e-4, compil
     Y_sym = pt.matrix("_Y", shape=(None, D), dtype="float64")
     ck = compile_kwargs or {}
     k_cross_fn = pytensor.function([X_sym, Y_sym], kernel(X_sym, Y_sym), **ck)
-    k_diag_fn = pytensor.function([X_sym], pt.diag(kernel(X_sym)), **ck)
+    k_diag_fn = pytensor.function([X_sym], kernel.diag(X_sym), **ck)
 
     Kff_diag = k_diag_fn(X)
     Kuu = k_cross_fn(Z, Z) + jitter * np.eye(M)
@@ -599,7 +599,7 @@ def greedy_variance_init(
     Y_sym = pt.matrix("_Y", shape=(None, D), dtype="float64")
     ck = compile_kwargs or {}
     k_cross_fn = pytensor.function([X_sym, Y_sym], kernel(X_sym, Y_sym), **ck)
-    k_diag_fn = pytensor.function([X_sym], pt.diag(kernel(X_sym)), **ck)
+    k_diag_fn = pytensor.function([X_sym], kernel.diag(X_sym), **ck)
 
     perm = rng.permutation(N)
     Xp = X[perm]
