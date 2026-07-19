@@ -227,6 +227,29 @@ class TestGreedyVariance:
         with pytest.raises(ValueError, match="exceeds"):
             greedy_variance_init(X, 20, kernel)
 
+    def test_diag_does_not_materialize_full_gram(self, monkeypatch):
+        """The candidate diagonal must not build a full N×N gram per product factor."""
+        compiled = []
+        real_function = pytensor.function
+        monkeypatch.setattr(
+            pytensor,
+            "function",
+            lambda *a, **k: compiled.append(real_function(*a, **k)) or compiled[-1],
+        )
+
+        X = np.random.default_rng(0).standard_normal((20, 1))
+        kernel = ExpQuad(input_dim=1, ls=1.0) * ExpQuad(input_dim=1, ls=1.0)
+        greedy_variance_init(X, 5, kernel, rng=0)
+
+        diag_fn = next(fn for fn in compiled if len(fn.maker.fgraph.inputs) == 1)
+        two_d_nodes = [
+            out
+            for node in diag_fn.maker.fgraph.toposort()
+            for out in node.outputs
+            if out.type.ndim == 2
+        ]
+        assert two_d_nodes == []
+
 
 class TestIntegrationWithSVGP:
     """Sanity check: output feeds into SVGP without hand-wrapping in pt.as_tensor_variable."""
