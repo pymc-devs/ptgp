@@ -189,3 +189,12 @@ cython_debug/
 .pypirc
 .idea/
 /docs/source/
+
+# Jupyter MCP / collaborative-session artifacts
+.jupyter/
+.jupyter_ystore.db
+*.ipynb.invalid
+
+# Notebook parameter/data caches (regenerable)
+notebooks/*.pkl
+notebooks/*_theta.npy
