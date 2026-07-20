@@ -12,7 +12,8 @@ dependencies:
     - scipy
     - libblas=*=*mkl
     - mkl-service
-    - pymc
+    - pymc>=6.1.0,<6.2
+    - pytensor>=3.1.2,<3.2
     - matplotlib
     # Docs build deps.
     - ipython
@@ -31,6 +32,5 @@ dependencies:
     - sphinxcontrib-bibtex
     - pip
     - pip:
-        - git+https://github.com/pymc-devs/pytensor@main
         # ptgp itself so autodoc resolves the current source tree.
         - -e ..
