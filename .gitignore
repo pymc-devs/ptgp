@@ -199,7 +199,7 @@ cython_debug/
 notebooks/*.pkl
 notebooks/*_theta.npy
 
-# Exception: frozen 7-fold CV outputs, committed for the cross-machine handoff so the
-# laptop can continue without rerunning the multi-hour CV. Drop before merging to main.
+# Exception: frozen 7-fold CV outputs, tracked so the notebook and dev scripts reproduce
+# without rerunning the multi-hour CV. Regenerable; drop before merging to main.
 !notebooks/watermains_cv_seq97_*.pkl
 !notebooks/watermains_cv_m4_*.pkl
