@@ -259,10 +259,52 @@ python notebooks/dev/m4_cv.py                (M3-final 7-fold at 2500 steps; cac
 First run re-downloads the Kitchener data into notebooks/watermains_cache.pkl. All pickles
 are gitignored; the dev scripts derive paths from their own location.
 
-NEXT: (1) both CVs on the desktop; (2) freeze the pooled five-row table; (3) notebook:
+NEXT (superseded by the 2026-07-20 section below): (1) both CVs on the desktop; (2) freeze the
+pooled five-row table; (3) notebook:
 refresh hidden cells to the seq97/m4 caches, add the Model 3 section, the kappa_t
 anomaly-detection figure, then the decision-theory sections; (4) supplement; (5) M3 tweaks
 only if the full CV results warrant them.
+
+## Desktop CV complete (2026-07-20)
+
+Both walk-forward CVs reran on the Ubuntu desktop with ALL THREE GP MODELS AT 3000 STEPS
+(user-set, superseding the 700-step M1/M2 and 2500-step M3 budgets). The dev scripts now run
+folds parallel-by-fold via a WM_FOLDS subset selector (2 folds x 6 MKL threads on the 12-core
+desktop); ladder ~2.4h, M3 ~1.7h wall-clock.
+
+FROZEN POOLED 7-fold (1997 panel, M=1024, 3000 steps): ELPD / ROC / AP / cap@5M / z2 / bias
+M1  -2310.1 / 0.925 / 0.053 / 49.0 / 0.86 / 16.4
+M2  -2260.1 / 0.928 / 0.070 / 53.0 / 1.07 /  9.1
+HGB -2244.6 / 0.927 / 0.068 / 77.0 / 2.08 /  3.3
+GLM -2351.4 / 0.916 / 0.054 / 59.0 / 1.62 /  5.8
+M3  -2232.4 / 0.929 / 0.074 / 54.8 / 1.34 /  9.2
+M3 beats tuned HGB on ELPD (+12.2 +- 9.4 pooled, ~1.3 SE, inside 2 SE) and on ROC/AP/z2; the
+hard target is met, though not by a >2 SE ELPD margin. m3-m2 +27.7 +- 8.6. GLM reproduced the
+laptop to the decimal (-2351.4), confirming the pipeline is faithful across machines. M3
+posterior budget phi ~ [0.20 base, 0.23 trend, 0.33 hist, 0.07 year, 0.16 frailty],
+sigma_y ~ 0.25, R2 ~ 0.005.
+
+BETA_YEAR SIGN CHANGE (supersedes "beta_year ~ 0 on the honest panel" in the earlier sections):
+at 3000 steps M2's year coefficient is CONSISTENTLY NEGATIVE, beta_year ~ -0.09 (range -0.04 to
+-0.14 across folds), not the near-zero value the 700-step fits showed. The longer optimization
+lets the single linear year term pick up a mild declining calendar drift, coherent with the
+honest 2010-2024 downtrend. M2 allocation 61/20/18 (GP/hist/year), R2hat ~ 0.008,
+beta_hist ~ 0.21. Interpret this when the Model 3 / model-criticism narrative is written.
+
+NOTEBOOK: watermains.ipynb rewired to the seq97 caches (run_model reads them, no refit) and
+executed top-to-bottom through Model 2 (0 errors); the M1/M2/HGB/GLM tables and the M2
+commentary are refreshed to the 3000-step numbers. Still to author: the Model 3 section, the
+kappa_t anomaly figure, and the decision-theory sections. Minor: cell-18 R2 anchor figures
+(realized ~1.4%, amplitude ~0.7%) not yet synced.
+
+HANDOFF: the 14 seq97/m4 caches are committed on this branch (targeted .gitignore exception) so a
+second machine continues without rerunning the multi-hour CV. Drop them before merging to main
+(regenerable; the docs notebook ships with baked-in outputs). The raw data cache
+(watermains_cache.pkl) is NOT committed; first run re-downloads the Kitchener data.
+
+NEXT: (1) author the Model 3 + decision-theory sections against the m4 caches; (2) interpret the
+negative beta_year; (3) sync the cell-18 figures; (4) supplement; (5) drop the handoff caches
+before merge.
 
 DEFERRED, OUT OF SCOPE for this example (filed in lifetracker projects/ptgp-future.md):
 HSGP component blocks; the Titsias 2025 tighter SVGP/VFE bounds; the component-VI block
