@@ -18,17 +18,24 @@ import watermains as wm
 
 import ptgp as pg
 
-FOLDS = [2025, 2019, 2020, 2021, 2022, 2023, 2024]
-M_IND, N_STEPS, BATCH, EVAL_SIZE = 1024, 700, 1024, 32768
+ALL_FOLDS = [2025, 2019, 2020, 2021, 2022, 2023, 2024]
+# WM_FOLDS lets a worker fit a subset of folds (parallel-by-fold launcher); the pooled
+# summary only runs when the full fold set is requested (the final summary pass).
+FOLDS = (
+    [int(x) for x in os.environ["WM_FOLDS"].split(",")] if os.environ.get("WM_FOLDS") else ALL_FOLDS
+)
+RUN_SUMMARY = set(FOLDS) == set(ALL_FOLDS)
+M_IND, N_STEPS, BATCH, EVAL_SIZE = 1024, 3000, 1024, 32768
 
 breaks, mains, mains_geoms = wm.load_kitchener_data(cache_path="watermains_cache.pkl")
 folds = {t: wm.build_panel(mains, breaks, float(t)) for t in FOLDS}
-tr25 = folds[2025][0]
-print(
-    f"1997 panel, fold 2025: {len(tr25):,} train rows, {int(tr25['y'].sum()):,} breaks, "
-    f"mean rate/row {tr25['y'].mean():.5f}",
-    flush=True,
-)
+if 2025 in FOLDS:
+    tr25 = folds[2025][0]
+    print(
+        f"1997 panel, fold 2025: {len(tr25):,} train rows, {int(tr25['y'].sum()):,} breaks, "
+        f"mean rate/row {tr25['y'].mean():.5f}",
+        flush=True,
+    )
 
 
 def fit_m1(train, test, seed=0):
@@ -118,6 +125,10 @@ for t in FOLDS:
         f"betas={np.round(d2['betas'], 3)} | m2-m1: {d21:+.1f}+-{se21:.1f} m2-hgb: {d2h:+.1f}+-{se2h:.1f}",
         flush=True,
     )
+
+if not RUN_SUMMARY:
+    print(f"folds {FOLDS} done (subset run); pooled summary skipped", flush=True)
+    raise SystemExit(0)
 
 rows = {}
 etas = []

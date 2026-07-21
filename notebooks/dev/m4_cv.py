@@ -1,5 +1,5 @@
 """M4 7-fold CV: step-4 architecture, twin composition, NGD on Gaussian blocks,
-variational q on the R2D2 budget and c. 2500 steps/fold, caches watermains_cv_m4_{t}.pkl.
+variational q on the R2D2 budget and c. 3000 steps/fold, caches watermains_cv_m4_{t}.pkl.
 Ends with the pooled five-model table (m1/m2/hgb/glm from the seq97 caches)."""
 # ruff: noqa: E402
 
@@ -23,8 +23,14 @@ from scipy.linalg import cho_factor, cho_solve
 
 import ptgp as pg
 
-FOLDS = [2025, 2019, 2020, 2021, 2022, 2023, 2024]
-N_STEPS = 2500
+ALL_FOLDS = [2025, 2019, 2020, 2021, 2022, 2023, 2024]
+# WM_FOLDS lets a worker fit a subset of folds (parallel-by-fold launcher); the pooled
+# five-model table only runs when the full fold set is requested (the final summary pass).
+FOLDS = (
+    [int(x) for x in os.environ["WM_FOLDS"].split(",")] if os.environ.get("WM_FOLDS") else ALL_FOLDS
+)
+RUN_SUMMARY = set(FOLDS) == set(ALL_FOLDS)
+N_STEPS = 3000
 M_BASE, M_HIST = 1024, 256
 S_DRAWS = 16
 BATCH, EVAL_SIZE, EVAL_EVERY = 1024, 32768, 50
@@ -385,6 +391,10 @@ for t in FOLDS:
     )
 
 # ---- pooled five-model table ---------------------------------------------
+if not RUN_SUMMARY:
+    print(f"folds {FOLDS} done (subset run); pooled table skipped", flush=True)
+    raise SystemExit(0)
+
 rows = {}
 diff_rows = {"m2": [], "hgb": []}
 for key in ("m1", "m2", "hgb", "glm", "m4"):
@@ -429,7 +439,7 @@ for key in ("m1", "m2", "hgb", "glm", "m4"):
         "bias/yr": round(float(np.mean(np.array(tot_pred) - np.array(tot_real))), 1),
     }
 
-print("\n===== POOLED (1997 panel, M=1024, m4 @ 2500 steps) =====")
+print(f"\n===== POOLED (1997 panel, M=1024, m4 @ {N_STEPS} steps) =====")
 print(pd.DataFrame(rows).T.to_string())
 for ref in ("m2", "hgb"):
     dr = np.concatenate(diff_rows[ref])
