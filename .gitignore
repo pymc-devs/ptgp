@@ -189,3 +189,17 @@ cython_debug/
 .pypirc
 .idea/
 /docs/source/
+
+# Jupyter MCP / collaborative-session artifacts
+.jupyter/
+.jupyter_ystore.db
+*.ipynb.invalid
+
+# Notebook parameter/data caches (regenerable)
+notebooks/*.pkl
+notebooks/*_theta.npy
+
+# Exception: frozen 7-fold CV outputs, tracked so the notebook and dev scripts reproduce
+# without rerunning the multi-hour CV. Regenerable; drop before merging to main.
+!notebooks/watermains_cv_seq97_*.pkl
+!notebooks/watermains_cv_m4_*.pkl
