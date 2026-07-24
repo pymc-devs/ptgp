@@ -102,6 +102,10 @@ ignore = [
 [tool.ruff.lint.isort]
 lines-between-types = 1
 
+[tool.ruff.lint.per-file-ignores]
+# Notebooks are hand-formatted for teaching; don't reorganize their imports.
+"*.ipynb" = ["I001", "E402"]
+
 [tool.mypy]
 python_version = "3.12"
 ignore_missing_imports = true

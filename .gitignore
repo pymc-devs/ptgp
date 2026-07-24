@@ -188,4 +188,12 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 .idea/
-/docs/source/
+
+# Dataset cached at runtime by the introductory notebook
+mcycle.csv
+
+# Dataset cached at runtime by the SVGP notebook
+housing.csv
+
+# California boundary cached at runtime by the SVGP notebook
+california.geojson

@@ -43,11 +43,30 @@ NOTEBOOKS_ROOT = REPO_ROOT / "notebooks"
 
 # Pretty titles for known subfolders. Anything not listed is title-cased.
 CATEGORY_TITLES = {
+    "introduction": "Introduction",
+    "approximations": "Approximations",
     "examples": "Examples",
     "introductory": "Introductory",
     "advanced": "Advanced",
     "case_study": "Case Studies",
 }
+
+# Order the sections appear in the gallery. Categories not listed here follow,
+# sorted alphabetically.
+CATEGORY_ORDER = [
+    "introduction",
+    "approximations",
+    "examples",
+    "introductory",
+    "advanced",
+    "case_study",
+]
+
+
+def _category_sort_key(category):
+    rank = CATEGORY_ORDER.index(category) if category in CATEGORY_ORDER else len(CATEGORY_ORDER)
+    return rank, category
+
 
 DEFAULT_IMG_LOC = None
 
@@ -214,17 +233,11 @@ def main(app):
     toctree_entries: list[str] = []
     section_lines: list[str] = []
 
-    for category in sorted(grouped):
+    for category in sorted(grouped, key=_category_sort_key):
         nb_paths = grouped[category]
         title = CATEGORY_TITLES.get(category, category.replace("_", " ").title())
-        section_lines.append(
-            SECTION_TEMPLATE.format(
-                section_title=title,
-                section_id=category,
-                underlines="-" * len(title),
-            )
-        )
 
+        item_lines: list[str] = []
         for nb_path in nb_paths:
             if not is_tracked_by_git(nb_path):
                 logger.info(
@@ -248,7 +261,7 @@ def main(app):
             # Sphinx resolve it from the source root, matching gEconpy's
             # convention so users can drop in custom thumbnails too.
             img_path = f"/_thumbnails/{category}/{nbg.stripped_name}.png"
-            section_lines.append(
+            item_lines.append(
                 ITEM_TEMPLATE.format(
                     doc_name=doc_name,
                     image=img_path,
@@ -256,6 +269,19 @@ def main(app):
                     link_type="doc",
                 )
             )
+
+        # A section with no tracked notebooks would emit a bare, cardless
+        # grid that sphinx-codeautolink chokes on, so skip it entirely.
+        if not item_lines:
+            continue
+        section_lines.append(
+            SECTION_TEMPLATE.format(
+                section_title=title,
+                section_id=category,
+                underlines="-" * len(title),
+            )
+        )
+        section_lines.extend(item_lines)
 
     # Assemble: title, hidden toctree (so notebooks register with Sphinx),
     # then the visible grid-card sections.

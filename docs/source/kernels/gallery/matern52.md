@@ -11,7 +11,7 @@ kernelspec:
 
 # Matérn 5/2 Kernel
 
-[Stationary](../gallery_tags.rst#stationary), [Isotropic](../gallery_tags.rst#isotropic), [Smooth](../gallery_tags.rst#smooth)
+{ref}`Stationary <stationary>`, {ref}`Isotropic <isotropic>`, {ref}`Smooth <smooth>`
 
 The Matérn 5/2 kernel is the smoothest member of the Matérn family that is *not* infinitely differentiable. Sample functions are twice mean-square differentiable — the function and its first derivative are well-defined and continuous, but the curvature can have jumps. This is enough smoothness for most real-world processes and avoids the overconfident extrapolation that the [exponentiated quadratic](expquad.md) tends to produce when the true function is not analytic.
 
@@ -121,5 +121,4 @@ print(K.shape, K.diagonal()[:3])
 The Matérn family and its smoothness-tuning role in GP modeling is discussed in {cite:t}`rasmussen-williams-2006` Chapter 4.
 
 ```{bibliography}
-:filter: docname in docnames
 ```

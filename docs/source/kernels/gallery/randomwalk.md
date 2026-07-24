@@ -11,7 +11,7 @@ kernelspec:
 
 # Random Walk Kernel
 
-[Non-stationary](../gallery_tags.rst#non-stationary), [1-D](../gallery_tags.rst#one-d), [Rough](../gallery_tags.rst#rough)
+{ref}`Non-stationary <non-stationary>`, {ref}`1-D <one-d>`, {ref}`Rough <rough>`
 
 The random walk kernel — the covariance function of standard Brownian motion (the Wiener process) — is the textbook example of a non-stationary GP kernel. Its covariance depends not just on the distance between inputs but on their actual locations: $k(x, y) = \min(x, y)$ means that variance grows linearly with the input value, and two points are correlated only via their shared "history" from the origin.
 
@@ -99,5 +99,4 @@ Prior samples fan out from the origin; the posterior pinches around each observa
 The random walk kernel and the broader connection between GPs and stochastic processes are covered in {cite:t}`rasmussen-williams-2006` Chapter 4.
 
 ```{bibliography}
-:filter: docname in docnames
 ```

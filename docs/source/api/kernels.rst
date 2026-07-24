@@ -28,6 +28,7 @@ Non-stationary
 .. autosummary::
     :toctree: generated/
 
+    Linear
     Gibbs
     RandomWalk
     WarpedInput
