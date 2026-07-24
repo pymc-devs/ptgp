@@ -43,11 +43,22 @@ NOTEBOOKS_ROOT = REPO_ROOT / "notebooks"
 
 # Pretty titles for known subfolders. Anything not listed is title-cased.
 CATEGORY_TITLES = {
+    "introduction": "Introduction",
     "examples": "Examples",
     "introductory": "Introductory",
     "advanced": "Advanced",
     "case_study": "Case Studies",
 }
+
+# Order the sections appear in the gallery. Categories not listed here follow,
+# sorted alphabetically.
+CATEGORY_ORDER = ["introduction", "examples", "introductory", "advanced", "case_study"]
+
+
+def _category_sort_key(category):
+    rank = CATEGORY_ORDER.index(category) if category in CATEGORY_ORDER else len(CATEGORY_ORDER)
+    return rank, category
+
 
 DEFAULT_IMG_LOC = None
 
@@ -214,7 +225,7 @@ def main(app):
     toctree_entries: list[str] = []
     section_lines: list[str] = []
 
-    for category in sorted(grouped):
+    for category in sorted(grouped, key=_category_sort_key):
         nb_paths = grouped[category]
         title = CATEGORY_TITLES.get(category, category.replace("_", " ").title())
         section_lines.append(

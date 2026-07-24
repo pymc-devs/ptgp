@@ -11,7 +11,7 @@ kernelspec:
 
 # Matérn 1/2 (Exponential) Kernel
 
-[Stationary](../gallery_tags.rst#stationary), [Isotropic](../gallery_tags.rst#isotropic), [Very Rough](../gallery_tags.rst#very-rough)
+{ref}`Stationary <stationary>`, {ref}`Isotropic <isotropic>`, {ref}`Very Rough <very-rough>`
 
 The Matérn 1/2 kernel — also known as the **exponential kernel** — produces sample functions that are continuous but nowhere differentiable. The resulting GP is equivalent to an Ornstein–Uhlenbeck process: a mean-reverting random walk in continuous time. Sample paths look like noisy zig-zag trajectories rather than smooth curves.
 
@@ -121,5 +121,4 @@ print(K.shape, K.diagonal()[:3])
 The Matérn family and its smoothness-tuning role in GP modeling is discussed in {cite:t}`rasmussen-williams-2006` Chapter 4.
 
 ```{bibliography}
-:filter: docname in docnames
 ```
