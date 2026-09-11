@@ -58,8 +58,11 @@ jobs:
       - uses: mamba-org/setup-micromamba@add3a49764cedee8ee24e82dfde87f5bc2914462 # v2.0.7
         with:
           environment-file: conda_envs/environment-test.yaml
+          # gxx_win-64 16.2 is broken on conda-forge (ld cannot find dllcrt2.o), which
+          # kills pytensor's C backend; hold the toolchain at 16.1 until fixed upstream.
           create-args: >-
             python=${{ matrix.python-version }}
+            ${{ matrix.os == 'windows-latest' && 'gxx_win-64=16.1' || '' }}
           environment-name: ptgp-test
           init-shell: ${{ matrix.os == 'windows-latest' && 'cmd.exe' || 'bash' }}
           cache-environment: true
