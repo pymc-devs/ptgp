@@ -9,7 +9,9 @@ dependencies:
     - pytest
     - mypy
     - polars
-    - scipy
+    # scipy 1.18.1 renames the fused cython_special symbols pytensor's numba
+    # dispatch looks up (KeyError on psi); hold back until pytensor adapts.
+    - scipy<1.18.1
     - filelock
     - numba
     - setuptools
