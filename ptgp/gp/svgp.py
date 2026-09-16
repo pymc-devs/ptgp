@@ -1,6 +1,7 @@
 import dataclasses
 
 import numpy as np
+import pytensor
 import pytensor.assumptions as pta
 import pytensor.tensor as pt
 
@@ -44,7 +45,7 @@ def _matrix_to_softplus_flat_init(L_init, M):
     flat = L_init[rows, cols].astype(np.float64)
     diag_positions = np.cumsum(np.arange(1, M + 1)) - 1
     flat[diag_positions] = np.log(np.expm1(diag_vals.astype(np.float64)))
-    return flat
+    return flat.astype(pytensor.config.floatX)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -110,9 +111,9 @@ def init_variational_params(M, q_mu_init=None, q_sqrt_init=None):
     ... )
     """
     if q_mu_init is None:
-        q_mu_init = np.zeros(M, dtype=np.float64)
+        q_mu_init = np.zeros(M, dtype=pytensor.config.floatX)
     else:
-        q_mu_init = np.asarray(q_mu_init, dtype=np.float64)
+        q_mu_init = np.asarray(q_mu_init, dtype=pytensor.config.floatX)
         if q_mu_init.shape != (M,):
             raise ValueError(f"q_mu_init must have shape ({M},); got {q_mu_init.shape}.")
     if q_sqrt_init is None:
@@ -121,8 +122,8 @@ def init_variational_params(M, q_mu_init=None, q_sqrt_init=None):
         q_sqrt_init = np.asarray(q_sqrt_init, dtype=np.float64)
 
     n_lower = M * (M + 1) // 2
-    q_mu = pt.vector("q_mu", shape=(M,), dtype="float64")
-    q_sqrt_flat = pt.vector("q_sqrt_flat", shape=(n_lower,), dtype="float64")
+    q_mu = pt.vector("q_mu", shape=(M,), dtype=pytensor.config.floatX)
+    q_sqrt_flat = pt.vector("q_sqrt_flat", shape=(n_lower,), dtype=pytensor.config.floatX)
     q_sqrt = pta.assume(
         _softplus_lower_triangular(q_sqrt_flat, M),
         lower_triangular=True,
