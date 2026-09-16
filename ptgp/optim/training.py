@@ -847,8 +847,7 @@ def tracked_minimize(fun, theta0, args, diag_fn=None, print_every=None, **scipy_
         result = scipy.optimize.minimize(fun, theta0, args=args, callback=callback, **scipy_kwargs)
     except KeyboardInterrupt:
         logger.warning(
-            f"[tracked_minimize] interrupted at iter {iteration[0]}; "
-            f"returning last-iterate state."
+            f"[tracked_minimize] interrupted at iter {iteration[0]}; returning last-iterate state."
         )
         f_val, g_val = float("nan"), np.zeros_like(last_theta[0])
         try:
