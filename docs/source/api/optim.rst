@@ -3,6 +3,16 @@ Optimization
 
 .. currentmodule:: ptgp.optim
 
+High-level API
+--------------
+
+.. autosummary::
+    :toctree: generated/
+
+    fit
+    predict
+    FitResult
+
 Training compilers
 ------------------
 

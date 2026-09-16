@@ -63,9 +63,9 @@ ruff format ptgp/ tests/
 python scripts/joint_graph_analysis.py        # op-count tables per model, with/without ptgp rewrites
 python scripts/inplace_audit.py               # which linalg ops are inplace and why others aren't
 
-# execute the demo notebook in place
+# execute the introduction notebook in place
 python -m jupyter nbconvert --to notebook --execute --inplace \
-    notebooks/demo.ipynb --ExecutePreprocessor.kernel_name=ptgp
+    notebooks/introduction/introduction.ipynb --ExecutePreprocessor.kernel_name=ptgp
 
 # install the bundled agent-skill docs into a Claude Code skill dir (optional)
 python scripts/install_claude_skills.py --project .   # ./.claude/skills/
@@ -73,7 +73,7 @@ python scripts/install_claude_skills.py --user        # ~/.claude/skills/
 ```
 
 The reference usage example for all three models is
-[`notebooks/demo.ipynb`](notebooks/demo.ipynb).
+[`notebooks/introduction/introduction.ipynb`](notebooks/introduction/introduction.ipynb).
 
 ## Where things live
 

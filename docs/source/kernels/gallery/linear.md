@@ -11,7 +11,7 @@ kernelspec:
 
 # Linear Kernel
 
-[Non-stationary](../gallery_tags.rst#non-stationary), [Isotropic](../gallery_tags.rst#isotropic)
+{ref}`Non-stationary <non-stationary>`, {ref}`Isotropic <isotropic>`
 
 The linear (dot-product) kernel produces sample functions that are straight lines through the center point $c$. It is the GP equivalent of Bayesian linear regression: the posterior mean is a linear function of the inputs and the posterior variance reflects uncertainty in the slope.
 
@@ -109,5 +109,4 @@ The three centers show the kernel's effect on prior beliefs:
 The linear kernel and its connection to Bayesian linear regression are discussed in {cite:t}`rasmussen-williams-2006` Chapter 2.
 
 ```{bibliography}
-:filter: docname in docnames
 ```

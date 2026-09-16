@@ -54,7 +54,7 @@ with pm.Model() as model:
 mean, var = pg.predict(svgp, np.linspace(-3, 3, 100)[:, None], fit)
 ```
 
-`pg.fit` picks a default objective from the gp type (`Unapproximated` → `marginal_log_likelihood`, `VFE` → `collapsed_elbo`, `SVGP` → `elbo`) and returns a `FitResult` that `pg.predict` consumes. For stochastic mini-batch training, staged VFE, or per-group learning rates, drop down to `pg.optim.compile_training_step` / `pg.optim.compile_scipy_objective` — see [`notebooks/demo.ipynb`](notebooks/demo.ipynb):
+`pg.fit` picks a default objective from the gp type (`Unapproximated` → `marginal_log_likelihood`, `VFE` → `collapsed_elbo`, `SVGP` → `elbo`) and returns a `FitResult` that `pg.predict` consumes. For stochastic mini-batch training, staged VFE, or per-group learning rates, drop down to `pg.optim.compile_training_step` / `pg.optim.compile_scipy_objective` — see [`notebooks/introduction/introduction.ipynb`](notebooks/introduction/introduction.ipynb):
 
 ```python
 X_var = pt.matrix("X")
@@ -73,7 +73,7 @@ predict_fn = pg.optim.compile_predict(
 mean, var = predict_fn(np.linspace(-3, 3, 100)[:, None])
 ```
 
-Training uses MAP by default: the PyMC log-prior is added to the objective. Pass `include_prior=False` for pure ELBO. For exact GPs and VFE, use `compile_scipy_objective` with L-BFGS-B instead. See [`notebooks/demo.ipynb`](notebooks/demo.ipynb) for end-to-end examples covering all three models.
+Training uses MAP by default: the PyMC log-prior is added to the objective. Pass `include_prior=False` for pure ELBO. For exact GPs and VFE, use `compile_scipy_objective` with L-BFGS-B instead. See [`notebooks/introduction/introduction.ipynb`](notebooks/introduction/introduction.ipynb) for end-to-end examples covering all three models.
 
 ## How it works
 

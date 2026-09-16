@@ -20,7 +20,7 @@ repos:
     - id: ruff
       args: [ --fix, --unsafe-fixes, --exit-non-zero-on-fix ]
     - id: ruff-format
-      types_or: [ python, pyi, jupyter ]
+      types_or: [ python, pyi ]  # notebooks are hand-formatted; keep ruff-format off them
 
 - repo: https://github.com/MarcoGorelli/madforhooks
   rev: 0.4.1

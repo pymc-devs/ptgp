@@ -11,7 +11,7 @@ kernelspec:
 
 # Matérn 3/2 Kernel
 
-[Stationary](../gallery_tags.rst#stationary), [Isotropic](../gallery_tags.rst#isotropic), [Rough](../gallery_tags.rst#rough)
+{ref}`Stationary <stationary>`, {ref}`Isotropic <isotropic>`, {ref}`Rough <rough>`
 
 The Matérn 3/2 kernel produces sample functions that are once mean-square differentiable but no smoother — the function itself and its first derivative exist and are continuous, but the second derivative does not. This is the right kernel when the process you are modeling has a clearly defined velocity but acceleration is a meaningless concept (e.g. abrupt regime changes, piecewise-linear-ish behavior on small scales).
 
@@ -121,5 +121,4 @@ print(K.shape, K.diagonal()[:3])
 The Matérn family and its smoothness-tuning role in GP modeling is discussed in {cite:t}`rasmussen-williams-2006` Chapter 4.
 
 ```{bibliography}
-:filter: docname in docnames
 ```

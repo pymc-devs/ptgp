@@ -48,16 +48,15 @@ extensions = [
     "sphinx_sitemap",
     "notfound.extension",
     "jupyter_sphinx",
-    "sphinxcontrib.bibtex",
+    "simplebib",
     "generate_gallery",
     "generate_kernel_gallery",
 ]
 
-# Bibliographic citations: drop new entries into docs/source/references.bib
-# and cite from prose with `{cite:t}` (textual) or `{cite:p}` (parenthetical).
-bibtex_bibfiles = ["references.bib"]
-bibtex_default_style = "unsrt"
-bibtex_reference_style = "author_year"
+# Bibliographic citations: drop new entries into docs/source/references.bib and
+# cite from prose with `{cite:t}` / `{cite:p}`. Each page renders its own numbered
+# reference list via `{bibliography}` (see docs/sphinxext/simplebib.py).
+simplebib_bibfiles = ["references.bib"]
 
 # Use the document path as prefix for autosectionlabel anchors so the same
 # section title in two files doesn't collide.
@@ -155,6 +154,7 @@ html_context = {
 
 html_sidebars = {"**": ["sidebar-nav-bs.html", "searchbox.html"]}
 html_static_path = ["_static"]
+html_css_files = ["custom.css"]
 
 # -- MyST / MyST-NB config ---------------------------------------------------
 myst_enable_extensions = [

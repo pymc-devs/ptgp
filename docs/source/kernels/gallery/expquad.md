@@ -11,7 +11,7 @@ kernelspec:
 
 # Exponentiated Quadratic Kernel
 
-[Stationary](../gallery_tags.rst#stationary), [Isotropic](../gallery_tags.rst#isotropic), [Smooth](../gallery_tags.rst#smooth), [Universal](../gallery_tags.rst#universal)
+{ref}`Stationary <stationary>`, {ref}`Isotropic <isotropic>`, {ref}`Smooth <smooth>`, {ref}`Universal <universal>`
 
 The exponentiated quadratic kernel — also known as the **squared exponential**, **RBF**, or **Gaussian** kernel — measures covariance with the squared Euclidean distance between inputs, decaying as a Gaussian in distance. It is the default first choice in most GP applications.
 
@@ -126,5 +126,4 @@ The three lengthscales show the kernel's effect on prior beliefs:
 The exponentiated quadratic is the canonical GP covariance and is discussed across all standard treatments; {cite:t}`rasmussen-williams-2006` Chapter 4 is the standard reference.
 
 ```{bibliography}
-:filter: docname in docnames
 ```
