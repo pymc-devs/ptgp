@@ -22,7 +22,7 @@ def gauss_kl(q_mu, q_sqrt, K=None):
     scalar
         KL divergence.
     """
-    M = q_mu.shape[0]
+    M = q_mu.shape[0].astype(q_mu.dtype)
     q_cov = q_sqrt @ q_sqrt.T
 
     if K is None:
@@ -50,7 +50,7 @@ def gauss_kl_structured(q_mu, q_sqrt, K_solve, K_logdet):
     K_logdet is a scalar tensor with log|K|.
     Vector q_mu is promoted internally; caller must pass an (M,) tensor.
     """
-    M = q_mu.shape[0]
+    M = q_mu.shape[0].astype(q_mu.dtype)
     Kinv_qsqrt = K_solve(q_sqrt)
     trace = pt.sum(Kinv_qsqrt * q_sqrt)
     Kinv_qmu = K_solve(q_mu[:, None])[:, 0]

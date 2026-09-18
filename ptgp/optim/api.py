@@ -2,6 +2,7 @@ from typing import Any, NamedTuple
 
 import numpy as np
 import pymc as pm
+import pytensor
 import pytensor.tensor as pt
 import scipy.optimize
 
@@ -30,7 +31,7 @@ def _default_objective(gp_model):
 
 
 def _as_2d(X):
-    X = np.asarray(X, dtype=np.float64)
+    X = np.asarray(X, dtype=pytensor.config.floatX)
     if X.ndim == 1:
         X = X[:, None]
     return X
@@ -106,7 +107,7 @@ def fit(
         objective = _default_objective(gp_model)
 
     X = _as_2d(X)
-    y = np.asarray(y, dtype=np.float64)
+    y = np.asarray(y, dtype=pytensor.config.floatX)
     if y.ndim == 2 and y.shape[1] == 1:
         y = y[:, 0]
     if y.ndim != 1:
@@ -196,7 +197,7 @@ def predict(
                 "the conditional posterior needs the training data."
             )
         X_train_arg = _as_2d(X_train)
-        y_train_arg = np.asarray(y_train, dtype=np.float64)
+        y_train_arg = np.asarray(y_train, dtype=pytensor.config.floatX)
     else:
         X_train_arg = y_train_arg = None
 

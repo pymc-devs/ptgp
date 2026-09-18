@@ -83,7 +83,7 @@ def sgd(loss, params, learning_rate=1e-2, param_groups=None):
 
     updates = OrderedDict()
     for param, grad, lr in zip(params, grads, lrs):
-        updates[param] = param - lr * grad
+        updates[param] = param - (lr * grad).astype(param.dtype)
     updates[t_prev] = t
     return updates
 
@@ -130,7 +130,7 @@ def adam(
 
         m_t = beta1 * m_prev + (one - beta1) * g_t
         v_t = beta2 * v_prev + (one - beta2) * g_t**2
-        step = lr * bias_correction * m_t / (pt.sqrt(v_t) + epsilon)
+        step = (lr * bias_correction * m_t / (pt.sqrt(v_t) + epsilon)).astype(param.dtype)
 
         updates[m_prev] = m_t
         updates[v_prev] = v_t

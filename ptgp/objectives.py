@@ -43,7 +43,7 @@ def marginal_log_likelihood(gp, X, y):
     K_inv = pt.linalg.inv(K)
     N = X.shape[0]
 
-    fit = -0.5 * (diff @ K_inv @ diff + N * pt.log(2.0 * pt.pi))
+    fit = -0.5 * (diff @ K_inv @ diff + N.astype(X.dtype) * pt.log(2.0 * pt.pi))
     logdet = -0.5 * logdet_K
     return MLLTerms(mll=fit + logdet, fit=fit, logdet=logdet)
 
@@ -139,7 +139,7 @@ def collapsed_elbo(vfe, X, y):
     _, logdet_inner = pt.linalg.slogdet(inner)
     logdet_cov = pt.sum(pt.log(sigma2_vec)) + logdet_inner
 
-    fit = -0.5 * (quad + logdet_cov + N * pt.log(2.0 * pt.pi))
+    fit = -0.5 * (quad + logdet_cov + N.astype(X.dtype) * pt.log(2.0 * pt.pi))
     nystrom_residual = pt.sum(Kff_diag - Q_diag)
     trace_penalty = -0.5 * pt.dot(Kff_diag - Q_diag, 1.0 / sigma2_vec)
     return CollapsedELBOTerms(
@@ -225,7 +225,7 @@ def fitc_log_marginal_likelihood(vfe, X, y):
     _, logdet_B = pt.linalg.slogdet(B)
     logdet_Kfitc = pt.sum(pt.log(nu)) + logdet_B
 
-    fit = -0.5 * (quad + N * pt.log(2.0 * pt.pi))
+    fit = -0.5 * (quad + N.astype(X.dtype) * pt.log(2.0 * pt.pi))
     logdet = -0.5 * logdet_Kfitc
     return FITCTerms(fitc=fit + logdet, fit=fit, logdet=logdet)
 
@@ -394,16 +394,17 @@ def vfe_diagnostics(vfe, X, y):
     terms = collapsed_elbo(vfe, X, y)
     budget = variance_budget(vfe, X, y)
     N = X.shape[0]
+    N_float = N.astype(X.dtype)
     sigma_vec = vfe.likelihood.sigma * pt.ones(N)
     sigma_mean = pt.mean(sigma_vec)
-    fit_per_n = terms.fit / N
+    fit_per_n = terms.fit / N_float
     resid_var = pt.var(y - vfe.mean(X))
     excess_fit_per_n = fit_per_n + 0.5 * pt.log(2.0 * np.pi * resid_var) + 0.5
     return VFEDiagnostics(
         elbo=terms.elbo,
         fit=terms.fit,
         trace_penalty=terms.trace_penalty,
-        nystrom_residual=terms.nystrom_residual / N,
+        nystrom_residual=terms.nystrom_residual / N_float,
         sigma=sigma_mean,
         fit_per_n=fit_per_n,
         excess_fit_per_n=excess_fit_per_n,
@@ -460,17 +461,18 @@ def unapproximated_diagnostics(gp, X, y):
     terms = marginal_log_likelihood(gp, X, y)
     budget = variance_budget(gp, X, y)
     N = X.shape[0]
+    N_float = N.astype(X.dtype)
     sigma_vec = gp.likelihood.sigma * pt.ones(N)
     sigma_mean = pt.mean(sigma_vec)
     resid_var = pt.var(y - gp.mean(X))
-    excess_fit_per_n = terms.mll / N + 0.5 * pt.log(2.0 * np.pi * resid_var) + 0.5
+    excess_fit_per_n = terms.mll / N_float + 0.5 * pt.log(2.0 * np.pi * resid_var) + 0.5
     return UnapproximatedDiagnostics(
         mll=terms.mll,
         fit=terms.fit,
         logdet=terms.logdet,
         sigma=sigma_mean,
-        fit_per_n=terms.fit / N,
-        logdet_per_n=terms.logdet / N,
+        fit_per_n=terms.fit / N_float,
+        logdet_per_n=terms.logdet / N_float,
         excess_fit_per_n=excess_fit_per_n,
         frac_mean=budget.frac_mean,
         frac_signal=budget.frac_signal,

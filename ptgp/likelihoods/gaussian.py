@@ -1,3 +1,4 @@
+import numpy as np
 import pytensor.tensor as pt
 
 from pytensor.graph.basic import Constant
@@ -7,7 +8,8 @@ from pytensor.tensor.type import TensorType
 
 from ptgp.likelihoods.base import Likelihood
 
-LOG2PI = pt.log(2.0 * pt.pi)
+# A Python float takes the dtype of whatever it meets, so this never fixes floatX at import time.
+LOG2PI = float(np.log(2.0 * np.pi))
 
 
 class Gaussian(Likelihood):

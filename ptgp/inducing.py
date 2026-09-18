@@ -13,6 +13,8 @@ import pytensor
 import pytensor.tensor as pt
 import scipy.cluster.vq
 
+from pytensor.graph.basic import Variable
+
 from ptgp.kernels.base import Kernel
 
 logger = logging.getLogger(__name__)
@@ -66,16 +68,17 @@ class Points(InducingVariables):
 
     Parameters
     ----------
-    Z : tensor or PyMC random variable, shape (M, D)
-        Inducing point locations.
+    Z : ndarray, tensor, or PyMC random variable, shape (M, D)
+        Inducing point locations. An array is cast to ``floatX``.
     Z_init : ndarray, optional
         Initial values when ``Z`` is a trainable symbolic placeholder. Omit
         for constant ``Z`` (e.g. ``pt.as_tensor_variable(Z_array)``).
     """
 
     def __init__(self, Z, Z_init=None):
-        self.Z = Z
-        self.Z_init = None if Z_init is None else np.asarray(Z_init, dtype=np.float64)
+        floatX = pytensor.config.floatX
+        self.Z = Z if isinstance(Z, Variable) else np.asarray(Z, dtype=floatX)
+        self.Z_init = None if Z_init is None else np.asarray(Z_init, dtype=floatX)
 
     @property
     def extra_vars(self):

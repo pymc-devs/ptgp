@@ -1,4 +1,5 @@
 import numpy as np
+import pytensor
 import pytensor.tensor as pt
 
 
@@ -66,11 +67,15 @@ class Likelihood:
         """
         return self._gauss_hermite_logspace(lambda f, y: self._log_prob(f, y), y, mu, var)
 
+    def _quadrature_rule(self):
+        """Gauss-Hermite nodes and weights for E[g(f)] under N(mu, var), at ``floatX``."""
+        gh_points, gh_weights = np.polynomial.hermite.hermgauss(self.n_points)
+        floatX = pytensor.config.floatX
+        return gh_points.astype(floatX), (gh_weights / np.sqrt(np.pi)).astype(floatX)
+
     def _gauss_hermite(self, func, y, mu, var):
         """E_{q(f)}[func(f, y)] via Gauss-Hermite quadrature."""
-        gh_points, gh_weights = np.polynomial.hermite.hermgauss(self.n_points)
-        gh_points = pt.as_tensor_variable(gh_points)
-        gh_weights = pt.as_tensor_variable(gh_weights / np.sqrt(np.pi))
+        gh_points, gh_weights = self._quadrature_rule()
 
         # f = mu + sqrt(2 * var) * t_j, shape (N, n_points)
         sd = pt.sqrt(var)[:, None]
@@ -86,9 +91,8 @@ class Likelihood:
 
         Uses logsumexp for numerical stability.
         """
-        gh_points, gh_weights = np.polynomial.hermite.hermgauss(self.n_points)
-        gh_points = pt.as_tensor_variable(gh_points)
-        log_weights = pt.as_tensor_variable(np.log(gh_weights / np.sqrt(np.pi)))
+        gh_points, gh_weights = self._quadrature_rule()
+        log_weights = np.log(gh_weights)
 
         sd = pt.sqrt(var)[:, None]
         F = mu[:, None] + pt.sqrt(2.0) * sd * gh_points[None, :]

@@ -200,15 +200,15 @@ def _make_shared_params(
     shared_params = {}
     for vv in model.continuous_value_vars:
         if frozen_vars is not None and vv in frozen_vars:
-            init_val = np.asarray(frozen_vars[vv], dtype=np.float64)
+            init_val = np.asarray(frozen_vars[vv], dtype=vv.dtype)
         else:
-            init_val = np.asarray(ip[vv.name], dtype=np.float64)
+            init_val = np.asarray(ip[vv.name], dtype=vv.dtype)
         shared_params[vv] = pytensor.shared(init_val, name=vv.name)
 
     shared_extras = []
     if extra_vars is not None:
         for var, init in zip(extra_vars, extra_init):
-            shared_extras.append(pytensor.shared(np.asarray(init, dtype=np.float64), name=var.name))
+            shared_extras.append(pytensor.shared(np.asarray(init, dtype=var.dtype), name=var.name))
 
     all_shared = list(shared_params.values()) + shared_extras
     return shared_params, shared_extras, all_shared
@@ -237,11 +237,16 @@ def _replace_graph(
             replace_map[var] = sv
     if frozen_vars is not None:
         for var, value in frozen_vars.items():
-            replace_map[var] = pt.as_tensor_variable(np.asarray(value, dtype=np.float64))
+            replace_map[var] = pt.as_tensor_variable(np.asarray(value, dtype=var.dtype))
 
     # strict=False because not all parameters may appear in every graph
     # (e.g. likelihood sigma is absent from SVGP's predict graph)
     return [graph_replace(r, replace_map, strict=False) for r in replaced]
+
+
+def _with_input_downcast(compile_kwargs):
+    """Compiled functions take float64 data whatever ``floatX`` is, unless the caller says otherwise."""
+    return {"allow_input_downcast": True, **(compile_kwargs or {})}
 
 
 def compile_training_step(
@@ -399,12 +404,26 @@ def compile_training_step(
         [X_var, y_var],
         loss_replaced,
         updates={**updates, **extra_updates},
-        **compile_kwargs,
+        **_with_input_downcast(compile_kwargs),
     )
     from ptgp.inducing_fourier import _maybe_wrap_with_domain_check
 
     train_step = _maybe_wrap_with_domain_check(train_step, gp_model, input_index=0)
     return train_step, shared_params, shared_extras
+
+
+def _split_theta(theta_var, layout):
+    """Slice the flat scipy vector into one tensor per ``(shared, shape, size)`` entry.
+
+    Scipy owns ``theta`` in float64 whatever the graph runs in, and ``graph_replace`` substitutes
+    by exact type, so each piece is cast to the dtype of the shared variable it stands in for.
+    """
+    pieces = []
+    offset = 0
+    for sv, shape, size in layout:
+        pieces.append(theta_var[offset : offset + size].reshape(shape).astype(sv.type.dtype))
+        offset += size
+    return pieces
 
 
 def compile_scipy_objective(
@@ -549,11 +568,7 @@ def compile_scipy_objective(
     theta0 = np.concatenate(theta0_pieces) if theta0_pieces else np.zeros(0)
 
     theta_var = pt.vector("_theta", dtype="float64")
-    pieces = []
-    offset = 0
-    for _, shape, size in layout:
-        pieces.append(theta_var[offset : offset + size].reshape(shape))
-        offset += size
+    pieces = _split_theta(theta_var, layout)
 
     loss = -_scalar_from_objective(objective_fn(gp_model, X_var, y_var))
     if include_prior:
@@ -569,7 +584,7 @@ def compile_scipy_objective(
             replace_map[var] = next(piece_iter)
     if frozen_vars is not None:
         for var, value in frozen_vars.items():
-            replace_map[var] = pt.as_tensor_variable(np.asarray(value, dtype=np.float64))
+            replace_map[var] = pt.as_tensor_variable(np.asarray(value, dtype=var.dtype))
 
     loss_replaced = graph_replace(loss_rvs_replaced, replace_map, strict=False)
     flat_grad = pt.grad(loss_replaced, theta_var)
@@ -577,7 +592,7 @@ def compile_scipy_objective(
     fun = pytensor.function(
         [theta_var, X_var, y_var],
         [loss_replaced, flat_grad],
-        **(compile_kwargs or {}),
+        **_with_input_downcast(compile_kwargs),
     )
     from ptgp.inducing_fourier import _maybe_wrap_with_domain_check
 
@@ -585,10 +600,11 @@ def compile_scipy_objective(
 
     def unpack_to_shared(theta):
         """Write ``theta`` into the captured shared vars for prediction."""
-        theta = np.asarray(theta, dtype=np.float64)
+        theta = np.asarray(theta)
         offset = 0
         for sv, shape, size in layout:
-            sv.set_value(theta[offset : offset + size].reshape(shape))
+            piece = theta[offset : offset + size].reshape(shape)
+            sv.set_value(piece.astype(sv.type.dtype))
             offset += size
 
     return fun, theta0, unpack_to_shared, shared_params, shared_extras
@@ -695,11 +711,7 @@ def compile_scipy_diagnostics(
             layout.append((sv, val.shape, val.size))
 
     theta_var = pt.vector("_theta", dtype="float64")
-    pieces = []
-    offset = 0
-    for _, shape, size in layout:
-        pieces.append(theta_var[offset : offset + size].reshape(shape))
-        offset += size
+    pieces = _split_theta(theta_var, layout)
 
     terms = diagnostic_fn(gp_model, X_var, y_var)
     TermsType = type(terms)
@@ -716,14 +728,14 @@ def compile_scipy_diagnostics(
             replace_map[var] = next(piece_iter)
     if frozen_vars is not None:
         for var, value in frozen_vars.items():
-            replace_map[var] = pt.as_tensor_variable(np.asarray(value, dtype=np.float64))
+            replace_map[var] = pt.as_tensor_variable(np.asarray(value, dtype=var.dtype))
 
     terms_replaced = [graph_replace(t, replace_map, strict=False) for t in terms_rvs_replaced]
 
     fn = pytensor.function(
         [theta_var, X_var, y_var],
         terms_replaced,
-        **(compile_kwargs or {}),
+        **_with_input_downcast(compile_kwargs),
     )
 
     def diag_fn(theta, X, y):
@@ -835,8 +847,7 @@ def tracked_minimize(fun, theta0, args, diag_fn=None, print_every=None, **scipy_
         result = scipy.optimize.minimize(fun, theta0, args=args, callback=callback, **scipy_kwargs)
     except KeyboardInterrupt:
         logger.warning(
-            f"[tracked_minimize] interrupted at iter {iteration[0]}; "
-            f"returning last-iterate state."
+            f"[tracked_minimize] interrupted at iter {iteration[0]}; returning last-iterate state."
         )
         f_val, g_val = float("nan"), np.zeros_like(last_theta[0])
         try:
@@ -886,10 +897,12 @@ def _staged_build_theta0(model, shared_params, hyper_state, shared_extras=None, 
     """
     pieces = []
     for vv in model.continuous_value_vars:
-        val = np.asarray(hyper_state.get(vv, shared_params[vv].get_value()), dtype=np.float64)
-        shared_params[vv].set_value(val)
+        sv = shared_params[vv]
+        val = np.asarray(hyper_state.get(vv, sv.get_value()), dtype=sv.type.dtype)
+        sv.set_value(val)
         pieces.append(val.ravel())
     if shared_extras is not None and Z_state is not None:
+        Z_state = np.asarray(Z_state, dtype=shared_extras[0].type.dtype)
         shared_extras[0].set_value(Z_state)
         pieces.append(Z_state.ravel())
     return np.concatenate(pieces) if pieces else np.zeros(0)
@@ -1245,7 +1258,11 @@ def compile_predict(
         shared_extras,
     )
 
-    predict_fn = pytensor.function([X_new_var], [mean_s, var_s], **(compile_kwargs or {}))
+    predict_fn = pytensor.function(
+        [X_new_var],
+        [mean_s, var_s],
+        **_with_input_downcast(compile_kwargs),
+    )
     from ptgp.inducing_fourier import _maybe_wrap_with_domain_check
 
     return _maybe_wrap_with_domain_check(predict_fn, gp_model, input_index=0)
