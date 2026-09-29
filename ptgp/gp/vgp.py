@@ -1,6 +1,7 @@
 import dataclasses
 
 import numpy as np
+import pytensor
 import pytensor.assumptions as pta
 import pytensor.tensor as pt
 
@@ -59,10 +60,11 @@ def init_vgp_params(N, alpha_init=None, lambda_init=None):
     >>> vp = init_vgp_params(N=10)
     >>> vgp = VGP(kernel=..., likelihood=..., variational_params=vp)
     """
+    floatX = pytensor.config.floatX
     if alpha_init is None:
-        alpha_init = np.zeros(N, dtype=np.float64)
+        alpha_init = np.zeros(N, dtype=floatX)
     else:
-        alpha_init = np.asarray(alpha_init, dtype=np.float64)
+        alpha_init = np.asarray(alpha_init, dtype=floatX)
         if alpha_init.shape != (N,):
             raise ValueError(f"alpha_init must have shape ({N},); got {alpha_init.shape}.")
 
@@ -75,11 +77,12 @@ def init_vgp_params(N, alpha_init=None, lambda_init=None):
     if np.any(lambda_init <= 0):
         raise ValueError("lambda_init must be strictly positive (it is a precision diagonal).")
 
-    alpha = pt.vector("alpha", shape=(N,), dtype="float64")
-    lambda_raw = pt.vector("lambda_raw", shape=(N,), dtype="float64")
+    alpha = pt.vector("alpha", shape=(N,), dtype=floatX)
+    lambda_raw = pt.vector("lambda_raw", shape=(N,), dtype=floatX)
     lam = pt.softplus(lambda_raw)
     # Inverse softplus: lambda_raw such that softplus(lambda_raw) == lambda_init.
-    lambda_raw_init = np.log(np.expm1(lambda_init))
+    # Computed in float64, then cast (matches _matrix_to_softplus_flat_init).
+    lambda_raw_init = np.log(np.expm1(lambda_init)).astype(floatX)
     return VGPParams(
         alpha=alpha,
         lam=lam,
@@ -191,7 +194,7 @@ class VGP:
         Linv = pt.linalg.solve_triangular(L, pt.eye(n, dtype=K.dtype), lower=True)
         tr_Ainv = pt.sum(Linv**2)
         quad = self.alpha @ (K @ self.alpha)
-        return 0.5 * (tr_Ainv + quad - n + logdet_A)
+        return 0.5 * (tr_Ainv + quad - n.astype(K.dtype) + logdet_A)
 
     def predict_marginal(self, X_new, X_train, y_train=None, incl_lik=False):
         """Posterior marginal mean and variance at each point in X_new.
