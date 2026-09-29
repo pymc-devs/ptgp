@@ -72,6 +72,24 @@ def test_svgp_elbo_stays_float32(likelihood):
     assert {term.dtype for term in svgp.predict_marginal(X)} == {"float32"}
 
 
+def test_vgp_stays_float32():
+    X_np, y_np = _data()
+    vp = pg.gp.init_vgp_params(X_np.shape[0])
+    with pm.Model():
+        ls = pm.InverseGamma("ls", alpha=2.0, beta=1.0)
+        vgp = pg.gp.VGP(
+            kernel=pg.kernels.Matern52(input_dim=1, ls=ls),
+            likelihood=pg.likelihoods.StudentT(nu=4.0, sigma=0.1),
+            variational_params=vp,
+        )
+        fit = pg.fit(vgp, X_np, y_np, options={"maxiter": 5})
+
+    X = pt.matrix("X", shape=(None, 1))
+    assert pg.objectives.vgp_elbo(vgp, X, pt.vector("y")).elbo.dtype == "float32"
+    assert {term.dtype for term in vgp.predict_marginal(X, X)} == {"float32"}
+    assert _shared_dtypes(fit.shared_params, fit.shared_extras) == {"float32"}
+
+
 def test_gaussian_objectives_stay_float32():
     X_np, _ = _data()
     X = pt.matrix("X", shape=(None, 1))
