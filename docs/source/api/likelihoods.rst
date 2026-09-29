@@ -14,6 +14,7 @@ Families
     Poisson
     NegativeBinomial
     StudentT
+    CompositeLikelihood
 
 Graph types
 -----------

@@ -11,6 +11,7 @@ suitable for the training compilers in :mod:`ptgp.optim`.
 
     marginal_log_likelihood
     elbo
+    vgp_elbo
     collapsed_elbo
     fitc_log_marginal_likelihood
     dpp_regularizer
