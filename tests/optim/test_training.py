@@ -350,3 +350,55 @@ def test_minimize_staged_vfe_interrupts_in_phase1(gp_data):
     assert callable(unpack)
     assert isinstance(sp, dict) and len(sp) > 0
     assert len(se) == 1  # Z's shared var
+
+
+def _dims_only_categorical_svgp():
+    """SVGP whose categorical W / kappa are declared with ``dims`` only, so their type shape is unknown."""
+    rng = np.random.default_rng(0)
+    X = np.column_stack([rng.uniform(0, 10, 60), rng.integers(0, 4, 60)]).astype(np.float64)
+    y = rng.normal(size=60)
+    with pm.Model(coords={"level": list("abcd"), "rank": [0, 1]}) as model:
+        W = pm.Normal("W", dims=("level", "rank"))
+        kappa = pm.LogNormal("kappa", dims="level")
+        pm.Potential("trace_pen", -pt.square(pt.log(pt.trace(W @ W.T + pt.diag(kappa)))))
+        kernel = pg.kernels.ExpQuad(input_dim=2, ls=1.0, active_dims=[0]) * (
+            pg.kernels.LowRankCategorical(
+                input_dim=2, num_levels=4, W=W, kappa=kappa, active_dims=[1]
+            )
+        )
+        svgp = pg.gp.SVGP(
+            kernel=kernel,
+            likelihood=pg.likelihoods.Gaussian(1.0),
+            inducing_variable=pg.inducing.Points(pt.as_tensor_variable(X[:8])),
+            variational_params=pg.gp.init_variational_params(8),
+        )
+    return model, svgp, X, y
+
+
+def _compile_dims_only(compile_kwargs=None):
+    model, svgp, X, y = _dims_only_categorical_svgp()
+    train_step, shared_params, shared_extras = pg.optim.compile_training_step(
+        lambda gp, X_, y_: pg.objectives.elbo(gp, X_, y_, n_data=len(y)),
+        svgp,
+        pt.matrix("X", shape=(None, 2)),
+        pt.vector("y"),
+        model=model,
+        compile_kwargs=compile_kwargs,
+    )
+    return train_step, shared_params, shared_extras, X, y
+
+
+def test_shared_params_have_static_shape():
+    """Shared slots take the init value's shape, even for RVs declared with ``dims`` only."""
+    _, shared_params, shared_extras, _, _ = _compile_dims_only()
+    shapes = {sv.name: sv.type.shape for sv in [*shared_params.values(), *shared_extras]}
+    assert shapes["W"] == (4, 2)
+    assert shapes["kappa_log__"] == (4,)
+    assert all(None not in shape for shape in shapes.values())
+
+
+def test_dims_only_rv_compiles_under_jax():
+    """A trace penalty on a ``dims``-only RV lowers to arange, which JAX needs static."""
+    pytest.importorskip("jax")
+    train_step, _, _, X, y = _compile_dims_only({"mode": "JAX"})
+    assert np.isfinite(train_step(X, y))
