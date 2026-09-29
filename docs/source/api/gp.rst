@@ -14,3 +14,5 @@ GP Models
     init_variational_params
     VGPParams
     init_vgp_params
+    VGPPointDiagnostics
+    get_vgp_point_diagnostics
