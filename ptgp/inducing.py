@@ -474,16 +474,18 @@ class GreedyVarianceDiagnostics:
 
     Attributes
     ----------
-    trace_curve : ndarray, shape (M,)
+    trace_curve : ndarray, shape (M + 1,)
         Remaining unexplained variance after conditioning on each successive
-        inducing point. ``trace_curve[0]`` is the total kernel diagonal sum
-        before any conditioning; ``trace_curve[m]`` is the residual after
-        conditioning on ``m`` points. Divide by ``total_variance`` to get the
-        fraction of variance still unexplained.
+        inducing point, where M is the number of points selected.
+        ``trace_curve[0]`` is the total kernel diagonal sum before any
+        conditioning; ``trace_curve[m]`` is the residual after conditioning on
+        ``m`` points, so ``trace_curve[-1]`` is the residual for the returned
+        set. Divide by ``total_variance`` to get the fraction of variance still
+        unexplained.
     d_final : ndarray, shape (N,)
-        Per-data-point residual conditional variance after all M points are
-        selected. Large values identify data points poorly covered by the
-        current inducing set.
+        Per-data-point residual conditional variance after conditioning on all
+        selected points. Large values identify data points poorly covered by
+        the current inducing set.
     total_variance : float
         Total kernel diagonal sum before conditioning (``trace_curve[0]``).
     kuu_min_eigenvalue : float
@@ -511,7 +513,7 @@ class GreedyVarianceDiagnostics:
     kuu_eig_threshold: float
 
     def __repr__(self):
-        M = len(self.trace_curve)
+        M = len(self.trace_curve) - 1
         pct = 100.0 * (1.0 - self.trace_curve[-1] / self.total_variance)
         lines = [
             f"M                 : {M}",
@@ -565,8 +567,9 @@ def greedy_variance_init(
     kernel : Kernel
         PTGP kernel, compiled internally via ``pytensor.function``.
     threshold : float, optional
-        Stop early if the trace of the residual ``K - Q`` drops below this.
-        Default 0 (run the full ``M`` iterations).
+        Stop early once the trace of the residual ``K - Q`` for the selected
+        points drops below this, returning those points. Default 0 (run the
+        full ``M`` iterations).
     jitter : float, optional
         Small diagonal jitter for numerical stability.
     rng : int or numpy Generator, optional
@@ -611,24 +614,13 @@ def greedy_variance_init(
     total_variance = float(d.sum())
     indices = np.zeros(M, dtype=int)
     indices[0] = int(np.argmax(d))
-
-    if M == 1:
-        Z1 = Xp[indices]
-        Kuu1 = k_cross_fn(Z1, Z1) + jitter * np.eye(1)
-        diag = GreedyVarianceDiagnostics(
-            trace_curve=np.array([total_variance]),
-            d_final=d.copy(),
-            total_variance=total_variance,
-            **_compute_kuu_eig_stats(Kuu1, eig_threshold),
-        )
-        return Points(Z1), diag
-
-    C = np.zeros((M - 1, N))
+    C = np.zeros((M, N))
+    trace_curve = [total_variance]
     final_m = M
-    trace_curve = np.empty(M)
-    trace_curve[0] = total_variance
 
-    for m in range(M - 1):
+    # Condition on every selected point (a partial pivoted Cholesky of Kff), so
+    # trace_curve[-1] and d_final describe the returned set.
+    for m in range(M):
         j = int(indices[m])
         dj = np.sqrt(d[j])
         cj = C[:m, j]
@@ -640,21 +632,24 @@ def greedy_variance_init(
         C[m, :] = e
 
         d = np.maximum(d - e**2, 0.0)
-        trace_curve[m + 1] = float(d.sum())
+        trace_curve.append(float(d.sum()))
 
-        indices[m + 1] = int(np.argmax(d))
-
-        if d.sum() < threshold:
-            final_m = m + 2
+        if m + 1 == M:
             break
+        if d.sum() < threshold:
+            final_m = m + 1
+            break
+        indices[m + 1] = int(np.argmax(d))
 
     Z_selected = Xp[indices[:final_m]]
     Kuu = k_cross_fn(Z_selected, Z_selected) + jitter * np.eye(final_m)
     eig_stats = _compute_kuu_eig_stats(Kuu, eig_threshold)
 
+    d_final = np.empty_like(d)
+    d_final[perm] = d  # back to the row order of X
     diag = GreedyVarianceDiagnostics(
-        trace_curve=trace_curve[:final_m].copy(),
-        d_final=d.copy(),
+        trace_curve=np.array(trace_curve),
+        d_final=d_final,
         total_variance=total_variance,
         **eig_stats,
     )
