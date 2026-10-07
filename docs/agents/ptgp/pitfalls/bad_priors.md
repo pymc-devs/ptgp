@@ -1,9 +1,9 @@
 ---
 name: bad_priors
 severity: high
-applies_to: [VFE]
+applies_to: [all]
 symptoms:
-  - Kuu ill-conditioned at prior-median hyperparameters
+  - Kuu ill-conditioned at prior-median hyperparameters (inducing-point models)
   - non-finite or huge gradient at init
   - lengthscale or eta runs away during training
 related_pitfalls: [kuu_ill_conditioned, lengthscale_runaway, sigma_inflation, non_finite_at_init, large_grad_at_init]
@@ -11,8 +11,8 @@ related_pitfalls: [kuu_ill_conditioned, lengthscale_runaway, sigma_inflation, no
 
 ## Detection
 
-Pre-training: build a numerical kernel from the prior median and
-inspect Kuu at the chosen Z layout.
+Pre-training: build a numerical kernel from the prior median. For
+inducing-point models (VFE, SVGP), inspect Kuu at the chosen Z layout.
 
 ```python
 from ptgp.utils import get_initial_params
@@ -42,9 +42,9 @@ samples are constant or wildly oscillatory, priors are wrong.
 **bad** priors are mis-specified relative to the data scale or
 inducing layout. Common species:
 
-- **Lengthscale prior centred at the wrong scale** — too short ⇒
-  Kff near-diagonal, Q nowhere near it; too long ⇒ Kff near-rank-1,
-  Kuu near-singular.
+- **Lengthscale prior centred at the wrong scale**: too short makes
+  Kff near-diagonal (and, for inducing-point models, Q nowhere near
+  it); too long makes Kff near-rank-1 (and Kuu near-singular).
 - **Improper priors** (`HalfFlat`, `Flat`) on parameters that need
   any constraint at all — the optimiser is free to wander to
   degenerate values.
@@ -71,8 +71,9 @@ space.
    defeat `init="prior_median"`'s ability to give a useful starting
    point (the per-RV fallback uses PyMC's `initial_point`, which is
    1 constrained for `HalfFlat` — often wrong).
-3. **Run the pre-training Kuu check** above. If it fails at the
-   prior median, tighten the priors *before* training, not after.
+3. **Run the pre-training Kuu check** above for inducing-point models.
+   If it fails at the prior median, tighten the priors *before*
+   training, not after.
 4. Use **prior-predictive simulation** to double-check: draw from
    each prior, build the kernel, sample sample functions on a grid.
    They should look like the data could have plausibly come from

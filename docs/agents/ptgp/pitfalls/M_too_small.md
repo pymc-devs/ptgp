@@ -1,7 +1,7 @@
 ---
 name: M_too_small
 severity: medium
-applies_to: [VFE]
+applies_to: [VFE, SVGP]
 symptoms:
   - nystrom_residual stays large at convergence
   - GreedyVarianceDiagnostics.trace_curve has not flattened by chosen M
@@ -16,19 +16,25 @@ run at `M_max > current_M`:
 
 ```python
 nys_large = history[-1].nystrom_residual > 0.05 * history[0].nystrom_residual
-frac_unexpl_at_M = diag_max.trace_curve[current_M - 1] / diag_max.total_variance
+frac_unexpl_at_M = diag_max.trace_curve[current_M] / diag_max.total_variance
 curve_not_flat   = frac_unexpl_at_M > 0.05  # > 5% — knee not reached
 
 m_too_small = nys_large and curve_not_flat
 ```
 
-Visually: `scripts/check_inducing.py` — middle panel
+Visually: in the `scripts/check_inducing.py` PNG, the middle panel
 (fraction-unexplained vs M) is still well above the 1% threshold line
 at your chosen M.
 
+`nystrom_residual` comes from a `VFEDiagnostics` history. For any model,
+including SVGP, `compute_inducing_diagnostics(kernel, X, Z)` returns
+`KernelHealthDiagnostics` with the same residual
+(`nystrom_residual / total_variance`) for a given Z.
+
 ## Diagnosis
 
-`M` is below the rank needed to approximate `Kff` to ELBO-tightness.
+`M` is below the rank needed to approximate `Kff` well enough for a
+tight bound.
 No Z layout, however clever, can compensate. Distinguishing this
 from [inducing_layout_poor](inducing_layout_poor.md) is the whole
 point of running greedy at `M_max`:
@@ -46,8 +52,9 @@ point of running greedy at `M_max`:
    [reference/choosing_M.md](../reference/choosing_M.md).
 2. Re-run greedy at the new `M`, refit the model.
 3. If the trace curve never flattens (even at `M_max = N`), the
-   kernel is wrong for the data — short lengthscale relative to data
-   spread, missing structure. Tier E modelling change.
+   kernel is wrong for the data: short lengthscale relative to data
+   spread, or missing structure. Change the model (kernel, likelihood,
+   priors).
 
 ## See also
 

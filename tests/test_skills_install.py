@@ -19,13 +19,13 @@ def test_install_claude_skills_project(tmp_path):
     rc = module.main(["--project", str(tmp_path)])
     assert rc == 0
 
-    target = tmp_path / ".claude" / "skills" / "ptgp-vfe" / "SKILL.md"
+    target = tmp_path / ".claude" / "skills" / "ptgp" / "SKILL.md"
     assert target.exists(), f"{target} missing"
-    assert target.read_text().startswith("---\nname: ptgp-vfe\n")
+    assert target.read_text().startswith("---\nname: ptgp\n")
 
     skill_link = target.parent
     assert skill_link.is_symlink()
     resolved = skill_link.resolve()
     assert (
-        "ptgp-vfe" in resolved.parts and "agents" in resolved.parts
+        "ptgp" in resolved.parts and "agents" in resolved.parts
     ), f"unexpected resolution: {resolved}"
