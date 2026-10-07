@@ -35,10 +35,12 @@ causes:
 
 1. **Z layout is wrong** and the trace penalty is hard to satisfy
    except by inflating sigma (which weakens its `1/sigma^2`
-   coefficient). Symmetric to `sigma_collapse`: same algebraic
-   loophole, opposite direction. Why this direction rather than the
-   other depends on how the rest of the gradient pulls sigma — often
-   Tier C with weak hyperparameter priors lands here.
+   coefficient). This is the collapsed bound's one cheap escape: a
+   larger sigma always shrinks the penalty, while a smaller sigma only
+   grows it. Training Z jointly (`Points(Z_var, Z_init=Z0)`) with weak
+   hyperparameter priors often lands here.
+   [sigma_collapse](sigma_collapse.md) is not the mirror image of this;
+   it needs dense Z and is an exact-GP overfitting problem.
 2. **Lengthscale runaway** — a lengthscale grew unbounded, making
    the kernel near-constant; the only fit signal left is `sigma`.
    Open [lengthscale_runaway](lengthscale_runaway.md).
@@ -53,16 +55,17 @@ causes:
    `pm.HalfNormal("sigma", sigma=...)` with `sigma` matched to the
    empirical residual std of a baseline mean predictor. Avoid
    `HalfFlat`.
-3. Escalate to Tier D ([staged VFE](../reference/workflow.md#tier-d--staged-vfe))
-   so sigma is frozen during initial Z movement, then released.
-4. If escalation still inflates, M is probably too small or Z layout
-   is wrong — open [M_too_small](M_too_small.md) or
+3. Train with `minimize_staged_vfe` (see
+   [reference/api.md](../reference/api.md)) so sigma is frozen during
+   initial Z movement, then released.
+4. If staged training still inflates, M is probably too small or the Z
+   layout is wrong: open [M_too_small](M_too_small.md) or
    [inducing_layout_poor](inducing_layout_poor.md).
 
 ## See also
 
 - [reference/interpretation.md](../reference/interpretation.md) —
   `sigma`, `excess_fit_per_n` field semantics.
-- [sigma_collapse](sigma_collapse.md) — the mirror failure.
+- [sigma_collapse](sigma_collapse.md): the opposite symptom, with a different cause.
 - [lengthscale_runaway](lengthscale_runaway.md) — common upstream
   cause.

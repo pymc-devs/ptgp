@@ -1,4 +1,4 @@
-"""Shared helpers for ptgp-vfe skill scripts."""
+"""Shared helpers for the ptgp skill scripts."""
 
 import argparse
 import pickle
@@ -17,9 +17,9 @@ def load_history(path):
     """Load a training pickle and normalise to (history, phase_labels).
 
     Accepts three shapes from VFE training:
-    - bare list of VFEDiagnostics  (Tier B/C `tracked_minimize`)
-    - tuple (history, phase_labels)              (Tier D)
-    - tuple (history, phase_labels, *_extras)    (Tier D full return)
+    - bare list of VFEDiagnostics                (`tracked_minimize`)
+    - tuple (history, phase_labels)              (`minimize_staged_vfe`)
+    - tuple (history, phase_labels, *_extras)    (`minimize_staged_vfe` full return)
     """
     with open(path, "rb") as f:
         obj = pickle.load(f)

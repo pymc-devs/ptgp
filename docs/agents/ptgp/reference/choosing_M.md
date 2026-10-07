@@ -1,7 +1,7 @@
 # Choosing M (number of inducing points)
 
-`M` is the only "free" knob in VFE that's not a hyperparameter the
-optimizer can tune. You pick it before training, from a one-shot
+`M` is the one knob in an inducing-point model (VFE, SVGP) that the
+optimizer cannot tune. You pick it before training, from a one-shot
 greedy-variance run.
 
 ## Why M matters
@@ -28,8 +28,9 @@ Use the rule below, not a number lifted from a tutorial.
    _, diag = greedy_variance_init(X, M_max, proxy_kernel)
    ```
 
-3. Plot `diag.trace_curve / diag.total_variance` against `M` (1-indexed
-   from 1 to `M_max`). This is the **fraction-unexplained curve**.
+3. Plot `diag.trace_curve / diag.total_variance` against `M`, where
+   `diag.trace_curve[m]` is the residual after `m` points (so the x-axis
+   runs from 0 to `M_max`). This is the **fraction-unexplained curve**.
 4. Find the **knee** — the M at which the curve crosses ~1% (and look
    at the slope past it). Any M between the knee and the elbow of the
    slope-change is a defensible choice. Below ~5% is usable; below ~1%
@@ -46,14 +47,14 @@ training, if the learned lengthscale shrank substantially relative to
 the prior median, **re-run greedy on the trained kernel**:
 
 ```python
-# After Tier B/C/D fit:
+# After training:
 trained_kernel = ...  # kernel evaluated at trained hyperparameters
 _, diag2 = greedy_variance_init(X, M, trained_kernel)
 ```
 
 If the new trace curve hasn't flattened by the M you chose, increase
-`M` and retrain. This is the "Tier B → re-init Z and retrain" loop in
-[workflow.md](workflow.md).
+`M` and retrain. Re-running greedy on the trained kernel and freezing
+the new Z is also the fix for a poor layout at the right `M`.
 
 ## Floors and ceilings
 
@@ -61,9 +62,9 @@ If the new trace curve hasn't flattened by the M you chose, increase
   about. Rough heuristic: input dimension × number of active basis
   components. For smooth 1-D signals, M of 50–100 is often enough.
   For 10-D modestly-smooth signals, expect 200–1000.
-- **Ceiling.** M ≪ N is the whole point. M ≳ N/4 means VFE is no
-  longer buying you much over a Tier A exact GP — and you're paying
-  the bound's slack for nothing.
+- **Ceiling.** M ≪ N is the whole point. At M ≳ N/4 the sparse model
+  buys little over the exact GP (`pg.gp.Unapproximated`), and you pay
+  the approximation's slack for nothing.
 
 ## When to revisit M
 

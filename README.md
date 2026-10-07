@@ -86,7 +86,7 @@ PTGP tries to distill some of the approaches of existing GP libraries and make t
 PTGP is set up to work nicely with AI coding assistants:
 
 - **[`AGENTS.md`](AGENTS.md)** — project-level instructions for AI coding assistants (architecture, conventions, where things live, how to run tests). Follows the [AGENTS.md](https://agents.md/) cross-tool convention used by Codex, Cursor, Aider, and others.
-- **[`docs/agents/`](docs/agents/)** — backend-agnostic agent-skill docs covering folk wisdom and training-debug recipes. Currently includes [`ptgp-vfe`](docs/agents/ptgp-vfe/) (VFE diagnostic skill: pitfalls, escalation workflow, interpretation of `VFEDiagnostics` and `GreedyVarianceDiagnostics`).
+- **[`docs/agents/`](docs/agents/)** — backend-agnostic agent-skill docs covering folk wisdom and training-debug recipes. Currently includes [`ptgp`](docs/agents/ptgp/) (GP fit diagnosis: one page per problem with its cause and fix, plus interpretation of the diagnostic fields).
 
 ### Claude Code users
 
