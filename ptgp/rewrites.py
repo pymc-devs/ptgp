@@ -4,18 +4,30 @@ from pytensor.assumptions.core import check_assumption
 from pytensor.assumptions.positive_definite import POSITIVE_DEFINITE
 from pytensor.assumptions.triangular import LOWER_TRIANGULAR
 from pytensor.graph.rewriting.basic import copy_stack_trace, node_rewriter
+from pytensor.scalar import Abs, Sqr
 from pytensor.tensor.basic import ExtractDiag
 from pytensor.tensor.blas import Dot22
 from pytensor.tensor.blockwise import Blockwise
-from pytensor.tensor.elemwise import DimShuffle
+from pytensor.tensor.elemwise import DimShuffle, Elemwise
 from pytensor.tensor.linalg.decomposition.cholesky import Cholesky, cholesky
+from pytensor.tensor.linalg.decomposition.lu import LU, LUFactor
+from pytensor.tensor.linalg.decomposition.qr import QR
+from pytensor.tensor.linalg.decomposition.svd import SVD
 from pytensor.tensor.linalg.inverse import MatrixInverse
 from pytensor.tensor.linalg.solvers.psd import cho_solve
 from pytensor.tensor.linalg.solvers.triangular import solve_triangular
-from pytensor.tensor.linalg.summary import Det
-from pytensor.tensor.math import Dot
-from pytensor.tensor.rewriting.basic import register_specialize
+from pytensor.tensor.linalg.summary import Det, det
+from pytensor.tensor.math import Dot, Prod, prod, sign
+from pytensor.tensor.rewriting.basic import (
+    register_canonicalize,
+    register_specialize,
+    register_stabilize,
+)
 from pytensor.tensor.rewriting.blockwise import blockwise_of
+
+# Imported before the override of det_of_matrix_factorized_elsewhere below, so
+# PyTensor's version is registered first and gets replaced rather than the reverse.
+from pytensor.tensor.rewriting.linalg.utils import matrix_diagonal_product
 
 
 def _try_AAT_factor(fgraph, M, lower_only=False):
@@ -84,11 +96,13 @@ def _existing_cholesky(fgraph, A):
 def det_of_LLT_to_diag_product(fgraph, node):
     r"""Lower ``Det(L @ L.T)`` and ``Det(L.T @ L)`` to a diagonal product.
 
-    Requires :math:`L` carrying the ``LOWER_TRIANGULAR`` assumption.
+    Requires :math:`L` carrying the ``LOWER_TRIANGULAR`` assumption. The square
+    goes inside the product so that ``local_log_prod_to_sum_log`` can turn
+    ``log(det)`` into a sum of logs, which does not underflow for large ``N``.
 
     .. math::
 
-        \det(L L^\top) = \det(L^\top L) = \det(L)^2 = \left(\prod_i L_{ii}\right)^2
+        \det(L L^\top) = \det(L^\top L) = \det(L)^2 = \prod_i L_{ii}^2
     """
     [A] = node.inputs
     aat = _try_AAT_factor(fgraph, A, lower_only=True)
@@ -96,9 +110,99 @@ def det_of_LLT_to_diag_product(fgraph, node):
         return None
     L, _ = aat
     diag_L = pt.diagonal(L, axis1=-2, axis2=-1)
-    new_det = (diag_L.prod(axis=-1) ** 2).astype(node.outputs[0].dtype)
+    new_det = pt.sqr(diag_L).prod(axis=-1).astype(node.outputs[0].dtype)
     copy_stack_trace(node.outputs[0], new_det)
     return [new_det]
+
+
+@register_stabilize("shape_unsafe", overwrite_existing=True)
+@register_specialize("shape_unsafe", overwrite_existing=True)
+@node_rewriter([det])
+def det_of_matrix_factorized_elsewhere(fgraph, node):
+    """
+    If we have det(X) or abs(det(X)) and there is already a nice decomposition(X) floating around,
+    use it to compute it more cheaply
+
+    Copy of PyTensor's rewrite of the same name, registered over it. The only
+    change is the Cholesky case, which returns ``prod(diag(L) ** 2)`` instead of
+    ``prod(diag(L)) ** 2`` so that ``local_log_prod_to_sum_log`` can turn
+    ``log(det)`` into a sum of logs. Remove once the change is upstream.
+    """
+    [det] = node.outputs
+    [x] = node.inputs
+
+    sign_not_needed = all(
+        isinstance(client.op, Elemwise) and isinstance(client.op.scalar_op, Abs | Sqr)
+        for client, _ in fgraph.clients[det]
+    )
+
+    new_det = None
+    for client, _ in fgraph.clients[x]:
+        core_op = client.op.core_op if isinstance(client.op, Blockwise) else client.op
+        match core_op:
+            case Cholesky():
+                L = client.outputs[0]
+                new_det = prod(pt.sqr(pt.diagonal(L, axis1=-2, axis2=-1)), axis=-1)
+            case LU():
+                U = client.outputs[-1]
+                new_det = matrix_diagonal_product(U)
+            case LUFactor():
+                LU_packed = client.outputs[0]
+                new_det = matrix_diagonal_product(LU_packed)
+            case _:
+                if not sign_not_needed:
+                    continue
+                match core_op:
+                    case SVD():
+                        lmbda = client.outputs[1] if core_op.compute_uv else client.outputs[0]
+                        new_det = prod(lmbda, axis=-1)
+                    case QR():
+                        R = client.outputs[-1]
+                        # if mode == "economic", R may not be square and this rewrite could hide a shape error
+                        # That's why it's tagged as `shape_unsafe`
+                        new_det = matrix_diagonal_product(R)
+
+        if new_det is not None:
+            # found a match
+            break
+    else:  # no-break (i.e., no-match)
+        return None
+
+    [det] = node.outputs
+    copy_stack_trace(det, new_det)
+    return [new_det]
+
+
+@register_canonicalize
+@register_stabilize
+@register_specialize
+@node_rewriter([sign])
+def local_sign_prod(fgraph, node):
+    r"""Rewrite ``sign(prod(x))`` as ``prod(sign(x))``.
+
+    Looks through one ``DimShuffle`` between the ``sign`` and the ``prod``. The
+    gradient of the ``abs`` in ``slogdet`` is ``sign(det)``. Without this
+    rewrite, a determinant lowered to a diagonal product underflows to 0 for
+    large ``N``, and ``sign(0) = 0`` silently drops the log-determinant term
+    from the gradient.
+
+    .. math::
+
+        \operatorname{sign}\left(\prod_i x_i\right) = \prod_i \operatorname{sign}(x_i)
+    """
+    [arg] = node.inputs
+    dimshuffle = None
+    match arg.owner_op_and_inputs:
+        case (DimShuffle() as dimshuffle, inner):
+            arg = inner
+    match arg.owner_op_and_inputs:
+        case (Prod(axis=axis), x):
+            new = sign(x).prod(axis=axis)
+            if dimshuffle is not None:
+                new = dimshuffle(new)
+            new = new.astype(node.outputs[0].dtype)
+            copy_stack_trace(node.outputs[0], new)
+            return [new]
 
 
 @register_specialize
