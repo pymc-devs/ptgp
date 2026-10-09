@@ -4,18 +4,24 @@ from pytensor.assumptions.core import check_assumption
 from pytensor.assumptions.positive_definite import POSITIVE_DEFINITE
 from pytensor.assumptions.triangular import LOWER_TRIANGULAR
 from pytensor.graph.rewriting.basic import copy_stack_trace, node_rewriter
+from pytensor.scalar import Sqr
 from pytensor.tensor.basic import ExtractDiag
 from pytensor.tensor.blas import Dot22
 from pytensor.tensor.blockwise import Blockwise
-from pytensor.tensor.elemwise import DimShuffle
+from pytensor.tensor.elemwise import DimShuffle, Elemwise
 from pytensor.tensor.linalg.decomposition.cholesky import Cholesky, cholesky
 from pytensor.tensor.linalg.inverse import MatrixInverse
 from pytensor.tensor.linalg.solvers.psd import cho_solve
 from pytensor.tensor.linalg.solvers.triangular import solve_triangular
 from pytensor.tensor.linalg.summary import Det
-from pytensor.tensor.math import Dot
-from pytensor.tensor.rewriting.basic import register_specialize
+from pytensor.tensor.math import Dot, Prod, sign
+from pytensor.tensor.rewriting.basic import (
+    register_canonicalize,
+    register_specialize,
+    register_stabilize,
+)
 from pytensor.tensor.rewriting.blockwise import blockwise_of
+from pytensor.tensor.rewriting.math import local_useless_abs
 
 
 def _try_AAT_factor(fgraph, M, lower_only=False):
@@ -99,6 +105,88 @@ def det_of_LLT_to_diag_product(fgraph, node):
     new_det = (diag_L.prod(axis=-1) ** 2).astype(node.outputs[0].dtype)
     copy_stack_trace(node.outputs[0], new_det)
     return [new_det]
+
+
+# TODO: Workarounds for pymc-devs/pytensor#2468. Remove the stabilize registration of
+# local_useless_abs, local_pow2_to_sqr, local_sign_sqr and local_sign_prod once a pytensor
+# release includes the fix, and bump the pytensor pin to that release.
+#
+# PyTensor lowers ``det(K)`` to ``prod(diag(L)) ** 2`` during stabilize. Its ``log(sqr(x))``
+# rewrite then needs the ``abs`` from ``slogdet`` gone, but ``local_useless_abs`` only runs in
+# canonicalize and specialize. Anything that differentiates the stabilized graph, like
+# pytensor-ml's ``compile_train``, would otherwise see a product that underflows for large N.
+register_stabilize(local_useless_abs)
+
+
+@register_stabilize
+@node_rewriter([pt.pow])
+def local_pow2_to_sqr(fgraph, node):
+    r"""Rewrite ``x ** 2`` as ``sqr(x)`` during stabilize.
+
+    PyTensor does this only in specialize, after stabilize has lowered ``det(K)``
+    to ``prod(diag(L)) ** 2``. PyTensor's ``log(sqr(x))`` rewrite needs the
+    ``sqr`` form to turn ``log(det)`` into a sum of logs before the product
+    underflows.
+    """
+    x, exponent = node.inputs
+    if pt.get_underlying_scalar_constant_value(exponent, raise_not_constant=False) != 2:
+        return None
+    new = pt.sqr(x)
+    if new.type.broadcastable != node.outputs[0].type.broadcastable:
+        return None
+    new = new.astype(node.outputs[0].dtype)
+    copy_stack_trace(node.outputs[0], new)
+    return [new]
+
+
+@register_canonicalize
+@register_stabilize
+@register_specialize
+@node_rewriter([sign])
+def local_sign_sqr(fgraph, node):
+    r"""Rewrite ``sign(sqr(x))`` as ``sqr(sign(x))``.
+
+    .. math::
+
+        \operatorname{sign}(x^2) = \operatorname{sign}(x)^2
+    """
+    match node.inputs[0].owner_op_and_inputs:
+        case (Elemwise(Sqr()), x):
+            new = pt.sqr(sign(x)).astype(node.outputs[0].dtype)
+            copy_stack_trace(node.outputs[0], new)
+            return [new]
+
+
+@register_canonicalize
+@register_stabilize
+@register_specialize
+@node_rewriter([sign])
+def local_sign_prod(fgraph, node):
+    r"""Rewrite ``sign(prod(x))`` as ``prod(sign(x))``.
+
+    Looks through one ``DimShuffle`` between the ``sign`` and the ``prod``. The
+    gradient of the ``abs`` in ``slogdet`` is ``sign(det)``. Without this
+    rewrite, a determinant lowered to a diagonal product underflows to 0 for
+    large ``N``, and ``sign(0) = 0`` silently drops the log-determinant term
+    from the gradient.
+
+    .. math::
+
+        \operatorname{sign}\left(\prod_i x_i\right) = \prod_i \operatorname{sign}(x_i)
+    """
+    [arg] = node.inputs
+    dimshuffle = None
+    match arg.owner_op_and_inputs:
+        case (DimShuffle() as dimshuffle, inner):
+            arg = inner
+    match arg.owner_op_and_inputs:
+        case (Prod(axis=axis), x):
+            new = sign(x).prod(axis=axis)
+            if dimshuffle is not None:
+                new = dimshuffle(new)
+            new = new.astype(node.outputs[0].dtype)
+            copy_stack_trace(node.outputs[0], new)
+            return [new]
 
 
 @register_specialize
