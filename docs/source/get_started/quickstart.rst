@@ -16,6 +16,8 @@ The snippet below trains an SVGP on a small toy dataset.
     import pytensor.tensor as pt
     import ptgp as pg
 
+    from pytensor_ml.optim import adam
+
     X = np.random.randn(200, 1)
     y = np.sin(X.ravel()) + 0.1 * np.random.randn(200)
     Z = np.linspace(-2, 2, 20)[:, None]
@@ -42,7 +44,7 @@ The snippet below trains an SVGP on a small toy dataset.
         model=model,
         extra_vars=vp.extra_vars,
         extra_init=vp.extra_init,
-        learning_rate=1e-2,
+        optimizer=adam(1e-2),
     )
 
     for _ in range(500):

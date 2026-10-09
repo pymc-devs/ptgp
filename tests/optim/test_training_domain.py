@@ -5,6 +5,8 @@ import pymc as pm
 import pytensor.tensor as pt
 import pytest
 
+from pytensor_ml.optim import adam
+
 import ptgp as pg
 
 from ptgp.gp.svgp import init_variational_params
@@ -72,7 +74,7 @@ def test_compile_training_step_preserves_tuple_arity():
         model=model,
         extra_vars=vp.extra_vars,
         extra_init=vp.extra_init,
-        learning_rate=1e-2,
+        optimizer=adam(1e-2),
     )
     assert isinstance(out, tuple) and len(out) == 3
 
@@ -89,7 +91,7 @@ def test_compile_training_step_domain_check_fires():
         model=model,
         extra_vars=vp.extra_vars,
         extra_init=vp.extra_init,
-        learning_rate=1e-2,
+        optimizer=adam(1e-2),
     )
     X_bad = np.array([[5.0], [10.0]])
     y = np.array([0.0, 0.0])
@@ -109,7 +111,7 @@ def test_compile_predict_domain_check():
         model=model,
         extra_vars=vp.extra_vars,
         extra_init=vp.extra_init,
-        learning_rate=1e-2,
+        optimizer=adam(1e-2),
     )
     X_new_var = pt.matrix("X_new")
     pred = compile_predict(
@@ -136,7 +138,7 @@ def test_compile_predict_rejects_matern52_extrapolation_even_when_opted_out():
         model=model,
         extra_vars=vp.extra_vars,
         extra_init=vp.extra_init,
-        learning_rate=1e-2,
+        optimizer=adam(1e-2),
     )
     X_new_var = pt.matrix("X_new")
     pred = compile_predict(

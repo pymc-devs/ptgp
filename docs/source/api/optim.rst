@@ -25,15 +25,6 @@ Training compilers
     compile_predict
     get_trained_params
 
-Optimizers
-----------
-
-.. autosummary::
-    :toctree: generated/
-
-    adam
-    sgd
-
 Staged & tracked minimization
 -----------------------------
 
@@ -44,14 +35,10 @@ Staged & tracked minimization
     tracked_minimize
     phase_sort_key
 
-Schedules
----------
+Optimizers and schedules
+------------------------
 
-.. currentmodule:: ptgp.optim.schedules
-
-.. autosummary::
-    :toctree: generated/
-
-    constant
-    exponential_decay
-    cosine
+Optimizer rules, schedules, gradient clipping, and update transforms come
+from `pytensor-ml <https://pytensor-ml.readthedocs.io>`_. Pass a configured
+transform (e.g. ``pytensor_ml.optim.adam(1e-2)``) as the ``optimizer``
+argument of :func:`ptgp.optim.compile_training_step`.

@@ -24,7 +24,8 @@ dynamic = ["version"]
 dependencies = [
   "numpy",
   "pymc>=6.3,<6.4",
-  "pytensor>=3.3,<3.4"
+  "pytensor>=3.3,<3.4",
+  "pytensor-ml>=0.3.0,<0.4.0"
 ]
 
 [project.optional-dependencies]
