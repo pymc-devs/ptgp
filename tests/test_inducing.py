@@ -216,6 +216,37 @@ class TestGreedyVariance:
         ip, _ = greedy_variance_init(X, 25, kernel, threshold=1e6, rng=0)
         assert ip.Z.shape[0] < 25
 
+    @pytest.mark.parametrize("M", [1, 6])
+    def test_diagnostics_describe_returned_set(self, M):
+        """d_final is the Nystrom residual of the returned Z, and trace_curve ends at its sum."""
+        X = np.random.default_rng(0).standard_normal((30, 2))
+        kernel = ExpQuad(input_dim=2, ls=1.0)
+        jitter = 1e-8
+        ip, diag = greedy_variance_init(X, M, kernel, jitter=jitter, rng=0)
+
+        Xs = pt.matrix("X")
+        Ys = pt.matrix("Y")
+        k = pytensor.function([Xs, Ys], kernel(Xs, Ys))
+        Kxz, Kzz = k(X, ip.Z), k(ip.Z, ip.Z) + jitter * np.eye(M)
+        resid = np.diag(k(X, X)) + jitter - np.sum(Kxz * np.linalg.solve(Kzz, Kxz.T).T, axis=1)
+
+        assert diag.trace_curve.shape == (M + 1,)
+        np.testing.assert_allclose(diag.d_final, np.maximum(resid, 0.0), atol=1e-7)
+        np.testing.assert_allclose(diag.trace_curve[-1], diag.d_final.sum())
+        assert f"M                 : {M}" in repr(diag)
+
+    def test_threshold_keeps_points_that_reach_it(self):
+        """Early stop returns the smallest prefix whose residual trace is below threshold."""
+        X = np.random.default_rng(0).standard_normal((30, 2))
+        kernel = ExpQuad(input_dim=2, ls=1.0)
+        threshold = 0.5
+        ip, diag = greedy_variance_init(X, 25, kernel, threshold=threshold, rng=0)
+        M_out = ip.Z.shape[0]
+
+        assert M_out < 25
+        assert diag.trace_curve.shape == (M_out + 1,)
+        assert diag.trace_curve[-1] < threshold <= diag.trace_curve[-2]
+
     def test_rejects_non_kernel(self):
         X = np.random.default_rng(0).standard_normal((20, 2))
         with pytest.raises(TypeError, match="ptgp Kernel"):

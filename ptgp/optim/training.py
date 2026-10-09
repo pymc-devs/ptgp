@@ -203,12 +203,13 @@ def _make_shared_params(
             init_val = np.asarray(frozen_vars[vv], dtype=vv.dtype)
         else:
             init_val = np.asarray(ip[vv.name], dtype=vv.dtype)
-        shared_params[vv] = pytensor.shared(init_val, name=vv.name)
+        shared_params[vv] = pytensor.shared(init_val, name=vv.name, shape=init_val.shape)
 
     shared_extras = []
     if extra_vars is not None:
         for var, init in zip(extra_vars, extra_init):
-            shared_extras.append(pytensor.shared(np.asarray(init, dtype=var.dtype), name=var.name))
+            init_array = np.asarray(init, dtype=var.dtype)
+            shared_extras.append(pytensor.shared(init_array, name=var.name, shape=init_array.shape))
 
     all_shared = list(shared_params.values()) + shared_extras
     return shared_params, shared_extras, all_shared
@@ -1097,7 +1098,11 @@ def minimize_staged_vfe(
         # Z's shared var: if Z was a phase-1 extra, se1[0] holds it; otherwise
         # we synthesize a one-element list with a fresh shared from Z_init_arr
         # so the caller's compile_predict can wire up Z.
-        z_shared = se1 if not phase1_freeze_Z else [pytensor.shared(Z_init_arr, name=Z_var.name)]
+        z_shared = (
+            se1
+            if not phase1_freeze_Z
+            else [pytensor.shared(Z_init_arr, name=Z_var.name, shape=Z_init_arr.shape)]
+        )
         return result, history, phase_labels, unpack1, sp1, z_shared
     hyper_state = {vv: sp1[vv].get_value().copy() for vv in model.continuous_value_vars}
     Z_state = Z_init_arr.copy() if phase1_freeze_Z else se1[0].get_value().copy()
