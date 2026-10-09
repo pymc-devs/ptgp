@@ -13,7 +13,7 @@ dependencies:
     - libblas=*=*mkl
     - mkl-service
     - pymc>=6.3,<6.4
-    - pytensor>=3.3,<3.4
+    - pytensor>=3.3.3,<3.4
     - matplotlib
     # Docs build deps.
     - ipython
