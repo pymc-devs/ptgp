@@ -15,6 +15,7 @@ import pytensor.tensor as pt
 from pytensor.graph.replace import graph_replace
 from pytensor_ml.optim import Gradients, Steps, adam, compile_train
 
+from ptgp.gp.base import identity_prepare
 from ptgp.objectives import vfe_diagnostics
 
 logger = logging.getLogger(__name__)
@@ -1257,16 +1258,18 @@ def compile_predict(
     shared_params,
     extra_vars=None,
     shared_extras=None,
-    X_train=None,
-    y_train=None,
     incl_lik=False,
     compile_kwargs=None,
+    **data,
 ):
     """Compile a prediction function that reads trained shared parameters.
 
+    The graph comes from ``gp_model.predict_spec``, which declares the compiled
+    inputs and a host-side ``prepare`` step (see :class:`ptgp.gp.PredictSpec`).
+
     Parameters
     ----------
-    gp_model : GP, VFE, or SVGP
+    gp_model : Unapproximated, VFE, or SVGP
         The same PTGP model object used in training.
     X_new_var : TensorVariable
         Symbolic variable for prediction inputs.
@@ -1278,16 +1281,15 @@ def compile_predict(
         Defaults to ``gp_model.extra_vars`` when omitted.
     shared_extras : list, optional
         Shared variables for ``extra_vars`` (from ``compile_training_step``).
-    X_train : ndarray, optional
-        Training inputs (required for GP and VFE).
-    y_train : ndarray, optional
-        Training targets (required for GP and VFE).
     incl_lik : bool
         If True, include likelihood noise in the predictions.
     compile_kwargs : dict, optional
         Forwarded as ``**compile_kwargs`` to ``pytensor.function``. Use this
         to set ``mode`` (e.g. ``"NUMBA"``, ``"JAX"``), etc. Same pattern as
         ``pm.sample``'s ``compile_kwargs``.
+    **data
+        Forwarded to ``gp_model.predict_spec``. ``Unapproximated`` and ``VFE``
+        require ``X_train`` and ``y_train``.
 
     Returns
     -------
@@ -1296,29 +1298,27 @@ def compile_predict(
     """
     if extra_vars is None:
         extra_vars = tuple(getattr(gp_model, "extra_vars", ()) or ())
-    if X_train is not None:
-        mean, var = gp_model.predict_marginal(
-            X_new_var,
-            pt.as_tensor_variable(X_train),
-            pt.as_tensor_variable(y_train),
-            incl_lik=incl_lik,
-        )
-    else:
-        mean, var = gp_model.predict_marginal(X_new_var, incl_lik=incl_lik)
+    spec = gp_model.predict_spec(X_new_var, incl_lik=incl_lik, **data)
 
-    [mean_s, var_s] = _replace_graph(
-        [mean, var],
+    outputs = _replace_graph(
+        list(spec.outputs),
         model,
         shared_params,
         extra_vars,
         shared_extras,
     )
 
-    predict_fn = pytensor.function(
-        [X_new_var],
-        [mean_s, var_s],
+    compiled = pytensor.function(
+        spec.inputs,
+        outputs,
         **_with_input_downcast(compile_kwargs),
     )
-    from ptgp.inducing_fourier import _maybe_wrap_with_domain_check
 
-    return _maybe_wrap_with_domain_check(predict_fn, gp_model, input_index=0)
+    if spec.prepare is identity_prepare:
+        return compiled
+
+    def predict_fn(*args):
+        return compiled(*spec.prepare(*args))
+
+    predict_fn.__wrapped__ = compiled
+    return predict_fn
