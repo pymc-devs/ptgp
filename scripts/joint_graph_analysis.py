@@ -1,6 +1,6 @@
 """Diagnostic: print the compiled-graph op breakdown for each GP model.
 
-For each of ``Unapproximated``, ``VFE``, ``SVGP``, builds the joint graph
+For each of ``Unapproximated``, ``VFE``, ``SVGP``, ``VNNGP``, builds the joint graph
 (loss + all gradients), compiles it under three configurations, and prints
 the op counts side-by-side:
 
@@ -33,17 +33,16 @@ import pytensor.tensor as pt
 
 from pytensor.assumptions.core import ASSUMPTION_INFER_REGISTRY
 from pytensor.graph.traversal import ancestors
-from pytensor.tensor.blockwise import Blockwise
 
 import ptgp.rewrites as R
 
-from ptgp.gp import SVGP, VFE, Unapproximated, init_variational_params
+from ptgp.gp import SVGP, VFE, VNNGP, Unapproximated, init_variational_params
 from ptgp.gp.svgp import _matrix_to_softplus_flat_init
 from ptgp.inducing import Points
 from ptgp.kernels import ExpQuad
 from ptgp.likelihoods import Gaussian
 from ptgp.mean import Zero
-from ptgp.objectives import collapsed_elbo, elbo, marginal_log_likelihood
+from ptgp.objectives import collapsed_elbo, elbo, marginal_log_likelihood, vnngp_elbo
 
 CUBIC_OPS = {"Cholesky", "MatrixInverse", "Solve", "LUFactor", "SLogDet", "Det"}
 TRACKED_OPS = [
@@ -59,7 +58,8 @@ TRACKED_OPS = [
 
 
 def _op_name(op):
-    return type(op.core_op).__name__ if isinstance(op, Blockwise) else type(op).__name__
+    # Blockwise, and the BlockwiseWithCoreShape wrapper the Numba backend uses, expose core_op
+    return type(getattr(op, "core_op", op)).__name__
 
 
 def _count_symbolic(outs):
@@ -119,7 +119,7 @@ def build_unapproximated():
     sigma = pt.dscalar("sigma")
     ls = pt.dscalar("ls")
     gp = Unapproximated(kernel=ExpQuad(input_dim=1, ls=ls), mean=Zero(), sigma=sigma)
-    loss = marginal_log_likelihood(gp, X, y)
+    loss = marginal_log_likelihood(gp, X, y).mll
     g_sigma, g_ls = pt.grad(loss, [sigma, ls])
     return [X, y, sigma, ls], [loss, g_sigma, g_ls]
 
@@ -136,7 +136,7 @@ def build_vfe(M=8):
         sigma=sigma,
         inducing_variable=Points(Z),
     )
-    loss = -collapsed_elbo(vfe, X, y)
+    loss = -collapsed_elbo(vfe, X, y).elbo
     g_sigma, g_ls, g_Z = pt.grad(loss, [sigma, ls, Z])
     return [X, y, sigma, ls, Z], [loss, g_sigma, g_ls, g_Z]
 
@@ -155,12 +155,36 @@ def build_svgp(M=8):
         inducing_variable=Points(Z),
         variational_params=vp,
     )
-    loss = -elbo(svgp, X, y)
+    loss = -elbo(svgp, X, y).elbo
     g_sigma, g_ls, g_Z, g_q_mu, g_q_sqrt = pt.grad(loss, [sigma, ls, Z, vp.q_mu, vp.extra_vars[1]])
     return (
         [X, y, sigma, ls, Z, vp.q_mu, vp.extra_vars[1]],
         [loss, g_sigma, g_ls, g_Z, g_q_mu, g_q_sqrt],
     )
+
+
+_VNNGP_X = np.random.default_rng(1).uniform(size=(40, 2))
+_VNNGP_K = 6
+
+
+def build_vnngp(block_size=4):
+    X = pt.dmatrix("X")
+    y = pt.dvector("y")
+    row_idx = pt.lvector("row_idx")
+    kl_idx = pt.lvector("kl_idx")
+    sigma = pt.dscalar("sigma")
+    ls = pt.dscalar("ls")
+    vnngp = VNNGP(
+        ExpQuad(input_dim=2, ls=ls),
+        _VNNGP_X,
+        Gaussian(sigma),
+        k=_VNNGP_K,
+        block_size=block_size,
+        seed=0,
+    )
+    loss = -vnngp_elbo(vnngp, X, y, row_idx, kl_idx).elbo
+    wrt = [sigma, ls, *vnngp.extra_vars]
+    return [X, y, row_idx, kl_idx, *wrt], [loss, *pt.grad(loss, wrt)]
 
 
 # ---- Per-model analysis ----
@@ -177,6 +201,20 @@ def _sample_inputs(name, N=20, M=8):
             0.5,
             1.2,
             rng.standard_normal((M, 1)),
+        ]
+    if name == "VNNGP":
+        rows = rng.choice(len(_VNNGP_X), 16, replace=False)
+        vnngp = VNNGP(
+            ExpQuad(input_dim=2, ls=1.0), _VNNGP_X, Gaussian(0.5), k=_VNNGP_K, block_size=4, seed=0
+        )
+        return [
+            _VNNGP_X[rows],
+            rng.standard_normal(16),
+            rows,
+            rng.choice(vnngp.num_inducing, 16, replace=False),
+            0.5,
+            0.3,
+            *vnngp.extra_init,
         ]
     # SVGP
     flat_init = _matrix_to_softplus_flat_init(np.eye(M), M)
@@ -242,3 +280,4 @@ if __name__ == "__main__":
     analyze("Unapproximated", build_unapproximated)
     analyze("VFE", build_vfe)
     analyze("SVGP", build_svgp)
+    analyze("VNNGP", build_vnngp)

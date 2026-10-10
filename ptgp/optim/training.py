@@ -304,6 +304,7 @@ def compile_training_step(
     param_groups=None,
     include_prior=True,
     compile_kwargs=None,
+    extra_inputs=(),
 ):
     """Compile a training step function for a PTGP model with PyMC priors.
 
@@ -362,12 +363,16 @@ def compile_training_step(
         function compiler. Use this to set ``mode`` (e.g. ``"NUMBA"``,
         ``"JAX"``), ``allow_input_downcast``, etc. An ``updates`` entry is
         folded into the training step as extra updates.
+    extra_inputs : sequence of TensorVariable, optional
+        Further symbolic inputs, passed to ``objective_fn`` after ``y_var``
+        and to ``train_step`` after ``y_batch`` in the same order. VNNGP uses
+        them for its row and KL-batch indices.
 
     Returns
     -------
     train_step : callable
-        ``(X_batch, y_batch) -> loss_value``. Updates shared parameters
-        in place.
+        ``(X_batch, y_batch, *extra) -> loss_value``. Updates shared
+        parameters in place.
     shared_params : dict
         ``{value_var: shared_var}``, the shared variables holding the
         unconstrained parameter values. Needed by ``compile_predict``.
@@ -428,7 +433,7 @@ def compile_training_step(
         frozen_vars=frozen_vars,
     )
 
-    loss = -_scalar_from_objective(objective_fn(gp_model, X_var, y_var))
+    loss = -_scalar_from_objective(objective_fn(gp_model, X_var, y_var, *extra_inputs))
     if include_prior:
         loss = loss - model.logp(jacobian=True, sum=True)
     [loss_replaced] = _replace_graph(
@@ -456,7 +461,7 @@ def compile_training_step(
         loss_replaced,
         rule,
         parameters=all_shared,
-        inputs=[X_var, y_var],
+        inputs=[X_var, y_var, *extra_inputs],
         compile_kwargs=_with_input_downcast(compile_kwargs),
     )
     from ptgp.inducing_fourier import _maybe_wrap_with_domain_check
@@ -1322,3 +1327,76 @@ def compile_predict(
 
     predict_fn.__wrapped__ = compiled
     return predict_fn
+
+
+def compile_diagnostics(
+    diag_fn,
+    gp_model,
+    inputs,
+    model,
+    shared_params,
+    extra_vars=None,
+    shared_extras=None,
+    include_prior=True,
+    compile_kwargs=None,
+):
+    """Compile a diagnostics function that reads trained shared parameters.
+
+    The counterpart of :func:`compile_scipy_diagnostics` for the gradient
+    path: parameters come from ``shared_params`` / ``shared_extras``, as in
+    :func:`compile_predict`, so calling it every few optimizer steps on a
+    fixed evaluation batch gives a noise-free training history.
+
+    Parameters
+    ----------
+    diag_fn : callable
+        ``(gp_model, *inputs) -> namedtuple`` of symbolic scalars, e.g.
+        :func:`ptgp.objectives.vnngp_diagnostics`.
+    gp_model : model
+        The same PTGP model object used in training.
+    inputs : sequence of TensorVariable
+        Symbolic inputs of ``diag_fn`` after ``gp_model``.
+    model : pm.Model
+    shared_params : dict
+        ``{value_var: shared_var}`` from :func:`compile_training_step`.
+    extra_vars : list of TensorVariable, optional
+        Defaults to ``gp_model.extra_vars``.
+    shared_extras : list, optional
+        Shared variables for ``extra_vars``.
+    include_prior : bool
+        Whether the loss behind ``grad_norm`` includes the PyMC log-prior, as
+        in :func:`compile_training_step`.
+    compile_kwargs : dict, optional
+        Forwarded to ``pytensor.function``.
+
+    Returns
+    -------
+    callable
+        ``(*numeric_inputs) -> namedtuple`` of floats, matching ``diag_fn``'s
+        return type. If the namedtuple has a ``grad_norm`` field, it holds the
+        global norm of the gradient of the training loss (the negated first
+        field, plus the log-prior when ``include_prior``) with respect to every
+        trainable shared variable.
+    """
+    if extra_vars is None:
+        extra_vars = tuple(getattr(gp_model, "extra_vars", ()) or ())
+    terms = diag_fn(gp_model, *inputs)
+    fields = list(terms)
+    if "grad_norm" in terms._fields:
+        loss = -fields[0]
+        if include_prior:
+            loss = loss - model.logp(jacobian=True, sum=True)
+        fields[terms._fields.index("grad_norm")] = loss
+    outputs = _replace_graph(fields, model, shared_params, extra_vars, shared_extras)
+    if "grad_norm" in terms._fields:
+        i = terms._fields.index("grad_norm")
+        params = [*shared_params.values(), *(shared_extras or ())]
+        grads = pytensor.grad(outputs[i], params, disconnected_inputs="ignore")
+        outputs[i] = pt.sqrt(sum(pt.sum(g**2) for g in grads))
+    fn = pytensor.function(list(inputs), outputs, **_with_input_downcast(compile_kwargs))
+    cls = type(terms)
+
+    def diagnostics(*args):
+        return cls(*(float(v) for v in fn(*args)))
+
+    return diagnostics

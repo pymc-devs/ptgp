@@ -6,6 +6,7 @@ import pytensor.tensor as pt
 
 MLLTerms = namedtuple("MLLTerms", ["mll", "fit", "logdet"])
 ELBOTerms = namedtuple("ELBOTerms", ["elbo", "var_exp", "kl"])
+VNNGPELBOTerms = namedtuple("VNNGPELBOTerms", ["elbo", "var_exp", "kl"])
 CollapsedELBOTerms = namedtuple(
     "CollapsedELBOTerms", ["elbo", "fit", "trace_penalty", "nystrom_residual"]
 )
@@ -478,4 +479,114 @@ def unapproximated_diagnostics(gp, X, y):
         frac_signal=budget.frac_signal,
         frac_noise=budget.frac_noise,
         var_ratio=budget.var_ratio,
+    )
+
+
+def _rows_match(X, row_idx, value):
+    """Return ``value``, asserting at run time that ``X`` and ``row_idx`` have equal length."""
+    from pytensor.raise_op import Assert
+
+    check = Assert("X and row_idx must have the same number of rows.")
+    return check(value, pt.eq(X.shape[0], row_idx.shape[0]))
+
+
+def vnngp_elbo(vnngp, X, y, row_idx, kl_idx):
+    """VNNGP evidence lower bound from a data minibatch and a separate KL minibatch.
+
+    ELBO ~ (N / b_d) sum_i E_q[log p(y_i | f_i)] - (M / b_k) sum_j KL_j
+
+    (Wu, Pleiss & Cunningham 2022, arXiv:2202.01694, Eq 19.) ``X`` and ``y``
+    are the data batch; ``row_idx`` gives their rows in the training set, so
+    ``X = X_train[row_idx]``. ``X`` reaches input-dependent likelihood
+    parameters such as heteroskedastic ``sigma``. ``kl_idx`` indexes inducing
+    points. Pass the indices through ``compile_training_step(...,
+    extra_inputs=[row_idx, kl_idx])``.
+
+    Returns
+    -------
+    VNNGPELBOTerms
+    """
+    fmean, fvar = vnngp.data_marginals(row_idx)
+    fmean = _rows_match(X, row_idx, fmean)
+    b_data = row_idx.shape[0].astype(fmean.dtype)
+    b_kl = kl_idx.shape[0].astype(fmean.dtype)
+    var_exp = (vnngp.n_data / b_data) * pt.sum(
+        vnngp.likelihood.variational_expectation(y, fmean, fvar)
+    )
+    kl = (vnngp.num_inducing / b_kl) * pt.sum(vnngp.prior_kl_terms(kl_idx).kl)
+    return VNNGPELBOTerms(elbo=var_exp - kl, var_exp=var_exp, kl=kl)
+
+
+VNNGPDiagnostics = namedtuple(
+    "VNNGPDiagnostics",
+    [
+        "elbo",
+        "var_exp",
+        "kl",
+        "kl_logdet",
+        "kl_trace",
+        "kl_mahal",
+        "screening_ratio",
+        "min_log_F",
+        "q_sd_ratio",
+        "sigma",
+        "grad_norm",
+    ],
+)
+
+
+def vnngp_diagnostics(vnngp, X, y, row_idx, kl_idx):
+    """ELBO terms and nearest-neighbor health metrics on a fixed evaluation batch.
+
+    Returns a ``VNNGPDiagnostics`` namedtuple of symbolic TensorVariables, for
+    use with :func:`ptgp.optim.compile_diagnostics`.
+
+    Fields
+    ------
+    elbo, var_exp, kl
+        From :func:`vnngp_elbo` on this batch.
+    kl_logdet, kl_trace, kl_mahal
+        Batch means of the per-point KL parts (``kl_logdet + kl_trace +
+        kl_mahal`` is the mean per-point KL).
+    screening_ratio
+        Median of ``F_j / k_jj``, the fraction of prior variance the neighbors
+        leave unexplained. Near 1, the neighbors carry little information
+        (lengthscale below the point spacing, or ``k`` too small). Near
+        ``jitter / k_jj``, points are nearly duplicated.
+    min_log_F
+        Smallest log conditional variance in the batch.
+    q_sd_ratio
+        Median of q's marginal standard deviation over the prior standard
+        deviation. Near 0, q is overconfident.
+    sigma
+        Mean likelihood ``sigma`` on this batch, NaN for likelihoods without one.
+    grad_norm
+        Global norm of the training-loss gradient on this batch. Filled in by
+        :func:`ptgp.optim.compile_diagnostics`; NaN when evaluated directly.
+    """
+    from ptgp.likelihoods import op_of
+
+    terms = vnngp_elbo(vnngp, X, y, row_idx, kl_idx)
+    kl_parts = vnngp.prior_kl_terms(kl_idx)
+    _, F = vnngp.prior_conditional(kl_idx)
+    Zk = pt.as_tensor_variable(vnngp.Z)[kl_idx]
+    k_jj = vnngp.kernel.diag(Zk)
+    _, S = vnngp.variational_params.local_moments(kl_idx[:, None])
+    lik = vnngp.likelihood
+    if "sigma" in op_of(lik).param_names:
+        sigma = pt.mean(lik.at(X).sigma * pt.ones_like(y))
+    else:
+        sigma = pt.constant(np.nan, dtype=F.dtype)
+    return VNNGPDiagnostics(
+        elbo=terms.elbo,
+        var_exp=terms.var_exp,
+        kl=terms.kl,
+        kl_logdet=pt.mean(kl_parts.logdet),
+        kl_trace=pt.mean(kl_parts.trace),
+        kl_mahal=pt.mean(kl_parts.mahal),
+        screening_ratio=pt.median(F / k_jj),
+        min_log_F=pt.min(pt.log(F)),
+        q_sd_ratio=pt.median(pt.sqrt(S[:, 0, 0] / k_jj)),
+        sigma=sigma,
+        grad_norm=pt.constant(np.nan, dtype=F.dtype),
     )

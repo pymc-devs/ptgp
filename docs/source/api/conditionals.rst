@@ -10,4 +10,5 @@ Symbolic predictive conditionals used by the variational GP models.
 
     conditional_whitened
     conditional_unwhitened
+    nn_conditional
     base_conditional
