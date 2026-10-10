@@ -62,7 +62,7 @@ class Unapproximated:
         var : tensor, shape (N*,)
         """
         Knn = self.kernel(X_train)
-        sigma = self.likelihood.sigma
+        sigma = self.likelihood.at(X_train).sigma
         sigma2_train = sigma**2 * pt.ones(X_train.shape[0])  # (N,); scalar broadcasts
         Knn_noisy = Knn + pt.diag(sigma2_train)
         Kns = self.kernel(X_train, X_new)  # (N, N*)
