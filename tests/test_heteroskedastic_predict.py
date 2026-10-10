@@ -208,7 +208,7 @@ def test_compile_predict_heteroskedastic(which):
     X_train, y_train, X_new = _data()
     X = pt.matrix("X", shape=(None, 1))
     sigma = _hetero_sigma(X)
-    Z = Points(pt.as_tensor_variable(X_train[:6]))
+    Z = Points(pt.as_tensor_variable(np.linspace(-1.5, 1.5, 6)[:, None]))  # cond(Kuu) ~ 2e3
     with pm.Model() as model:
         kernel = ExpQuad(input_dim=1, ls=1.0)
         gp = {
