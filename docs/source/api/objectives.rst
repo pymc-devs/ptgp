@@ -15,3 +15,5 @@ suitable for the training compilers in :mod:`ptgp.optim`.
     fitc_log_marginal_likelihood
     dpp_regularizer
     vfe_diagnostics
+    vnngp_elbo
+    vnngp_diagnostics
