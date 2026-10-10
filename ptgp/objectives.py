@@ -10,6 +10,7 @@ CollapsedELBOTerms = namedtuple(
     "CollapsedELBOTerms", ["elbo", "fit", "trace_penalty", "nystrom_residual"]
 )
 FITCTerms = namedtuple("FITCTerms", ["fitc", "fit", "logdet"])
+VGPTerms = namedtuple("VGPTerms", ["elbo", "var_exp", "kl"])
 
 
 # Diagonal jitter added to Kuu before Cholesky / inversion, to keep it PSD
@@ -80,6 +81,37 @@ def elbo(svgp, X, y, n_data=None):
     var_exp = scale * pt.sum(svgp.likelihood.variational_expectation(y, fmean, fvar))
     kl = svgp.prior_kl()
     return ELBOTerms(elbo=var_exp - kl, var_exp=var_exp, kl=kl)
+
+
+def vgp_elbo(vgp, X, y, n_data=None):
+    """Opper-Archambeau variational GP evidence lower bound.
+
+    ELBO = E_{q(f)}[log p(y|f)] - KL[q(f) || p(f)]
+
+    The variational posterior q(f) = N(m + K alpha, S) is placed directly over
+    the latent function at the N training inputs (no inducing points), with
+    S = (K^{-1} + diag(lambda))^{-1}. The marginals and the KL are computed by
+    ``vgp`` through the well-conditioned factor A = I + G K G.
+
+    Parameters
+    ----------
+    vgp : VGP
+        Full variational GP model.
+    X : tensor, shape (N, D)
+    y : tensor, shape (N,)
+    n_data : int, optional
+        Accepted for signature parity with :func:`elbo`. VGP is full-batch, so
+        this is a no-op (minibatching is not meaningful when q is over all N
+        latent values).
+
+    Returns
+    -------
+    VGPTerms
+    """
+    fmean, fvar = vgp._train_marginals(X)
+    var_exp = pt.sum(vgp.likelihood.variational_expectation(y, fmean, fvar))
+    kl = vgp.prior_kl(X)
+    return VGPTerms(elbo=var_exp - kl, var_exp=var_exp, kl=kl)
 
 
 def collapsed_elbo(vfe, X, y):

@@ -8,7 +8,7 @@ GP Models
    data, and how to set them up. Cross-link to the corresponding objective
    in :mod:`ptgp.objectives`.
 
-ptgp ships three user-facing GP models:
+ptgp ships four user-facing GP models:
 
 .. list-table::
    :header-rows: 1
@@ -26,6 +26,9 @@ ptgp ships three user-facing GP models:
    * - :class:`~ptgp.gp.SVGP`
      - ``N`` up to ``~500,000``
      - Large data, non-Gaussian likelihoods, minibatch training.
+   * - :class:`~ptgp.gp.VGP`
+     - ``N < ~2,000``
+     - Non-Gaussian likelihoods without inducing points.
 
 A fourth model, :class:`~ptgp.inducing_fourier.FourierFeatures1D`, supplies a
 structured ``K_uu`` for 1-D Matérn kernels via a Fourier basis and removes

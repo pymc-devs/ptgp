@@ -12,3 +12,4 @@ Likelihoods
     Poisson
     NegativeBinomial
     StudentT
+    CompositeLikelihood

@@ -23,6 +23,7 @@ Researchers benefit from the underlying design: PTGP is built on PyTensor's symb
 | `gp.Unapproximated` | N < ~2,000 | Exact inference, model comparison |
 | `gp.VFE` | N < ~50,000 | Medium-scale data with inducing points |
 | `gp.SVGP` | N up to ~500,000 | Large data, non-Gaussian likelihoods, minibatch training |
+| `gp.VGP` | N < ~2,000 | Non-Gaussian likelihoods without inducing points |
 | `FourierFeatures1D` | 1D Matern kernels | Structured Kuu via Fourier basis; no inducing point placement |
 
 ## Quick start
@@ -54,7 +55,7 @@ with pm.Model() as model:
 mean, var = pg.predict(svgp, np.linspace(-3, 3, 100)[:, None], fit)
 ```
 
-`pg.fit` picks a default objective from the gp type (`Unapproximated` → `marginal_log_likelihood`, `VFE` → `collapsed_elbo`, `SVGP` → `elbo`) and returns a `FitResult` that `pg.predict` consumes. For stochastic mini-batch training, staged VFE, or per-group learning rates, drop down to `pg.optim.compile_training_step` / `pg.optim.compile_scipy_objective` — see [`notebooks/introduction/introduction.ipynb`](notebooks/introduction/introduction.ipynb):
+`pg.fit` picks a default objective from the gp type (`Unapproximated` → `marginal_log_likelihood`, `VFE` → `collapsed_elbo`, `SVGP` → `elbo`, `VGP` → `vgp_elbo`) and returns a `FitResult` that `pg.predict` consumes. For stochastic mini-batch training, staged VFE, or per-group learning rates, drop down to `pg.optim.compile_training_step` / `pg.optim.compile_scipy_objective` — see [`notebooks/introduction/introduction.ipynb`](notebooks/introduction/introduction.ipynb):
 
 ```python
 from pytensor_ml.optim import adam
