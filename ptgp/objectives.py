@@ -530,6 +530,7 @@ VNNGPDiagnostics = namedtuple(
         "min_log_F",
         "q_sd_ratio",
         "sigma",
+        "grad_norm",
     ],
 )
 
@@ -559,6 +560,9 @@ def vnngp_diagnostics(vnngp, X, y, row_idx, kl_idx):
         deviation. Near 0, q is overconfident.
     sigma
         Mean likelihood ``sigma`` on this batch, NaN for likelihoods without one.
+    grad_norm
+        Global norm of the training-loss gradient on this batch. Filled in by
+        :func:`ptgp.optim.compile_diagnostics`; NaN when evaluated directly.
     """
     from ptgp.likelihoods import op_of
 
@@ -584,4 +588,5 @@ def vnngp_diagnostics(vnngp, X, y, row_idx, kl_idx):
         min_log_F=pt.min(pt.log(F)),
         q_sd_ratio=pt.median(pt.sqrt(S[:, 0, 0] / k_jj)),
         sigma=sigma,
+        grad_norm=pt.constant(np.nan, dtype=F.dtype),
     )
