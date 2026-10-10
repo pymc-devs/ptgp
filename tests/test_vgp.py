@@ -219,3 +219,61 @@ class TestVGPGradient:
 
         err = scipy.optimize.check_grad(f, g, theta0, epsilon=1e-6)
         assert err < 1e-3, f"gradient mismatch {err:.2e}"
+
+
+class TestVGPPointDiagnostics:
+    """``get_vgp_point_diagnostics`` against Opper & Archambeau (2009), Eqs. 11-14."""
+
+    N = 30
+    X = np.linspace(0, 20, N)[:, None]  # well separated relative to ls, so K is well conditioned
+    kernel = pg.kernels.Matern52(input_dim=1, ls=0.3)
+
+    def _diagnostics(self, likelihood, y, vp, **options):
+        with pm.Model():
+            vgp = pg.gp.VGP(kernel=self.kernel, likelihood=likelihood, variational_params=vp)
+            fit = pg.fit(vgp, self.X, y, options=options)
+        return pg.gp.get_vgp_point_diagnostics(vgp, fit, self.X, y)
+
+    def test_gradients_match_eqs_11_12(self):
+        """At unconverged parameters, g_nu = K(alpha - score) and g_lambda = 0.5 (S o S)(lam - info)."""
+        rng = np.random.default_rng(5)
+        y = rng.poisson(np.exp(np.sin(self.X[:, 0])))
+        vp = pg.gp.init_vgp_params(
+            self.N,
+            alpha_init=0.3 * rng.standard_normal(self.N),
+            lambda_init=rng.uniform(0.5, 2.0, self.N),
+        )
+        d = self._diagnostics(pg.likelihoods.Poisson(), y, vp, maxiter=0)
+
+        assert np.abs(d.g_nu).max() > 1e-2 and np.abs(d.g_lambda).max() > 1e-2  # not stationary
+        K = _eval_kernel(self.kernel, self.X)
+        S = np.linalg.inv(np.linalg.inv(K) + np.diag(d.lam))
+        np.testing.assert_allclose(d.fvar, np.diag(S), rtol=1e-6)
+        np.testing.assert_allclose(d.g_nu, K @ (d.alpha - d.score), atol=1e-8)
+        np.testing.assert_allclose(d.g_lambda, 0.5 * (S * S) @ (d.lam - d.info), atol=1e-8)
+
+    def test_poisson_fixed_point(self):
+        """At convergence, lam is the expected Poisson rate and alpha is y minus it."""
+        rng = np.random.default_rng(6)
+        y = rng.poisson(np.exp(np.sin(self.X[:, 0])))
+        vp = pg.gp.init_vgp_params(self.N)
+        d = self._diagnostics(pg.likelihoods.Poisson(), y, vp, maxiter=5000, gtol=1e-10)
+
+        rate = np.exp(d.fmean + d.fvar / 2)
+        assert np.abs(d.g_nu).max() < 1e-4
+        np.testing.assert_allclose(d.lam, rate, rtol=2e-3)  # lam converges slowly (KMM 2012)
+        np.testing.assert_allclose(d.score, y - rate, atol=1e-8)
+
+    def test_student_t_outlier_pins_lambda(self):
+        """An outlier under Student-t has negative info, so softplus pins lam near zero."""
+        rng = np.random.default_rng(7)
+        y = np.sin(self.X[:, 0]) + 0.3 * rng.standard_normal(self.N)
+        y[15] += 5.0
+        vp = pg.gp.init_vgp_params(self.N)
+        d = self._diagnostics(
+            pg.likelihoods.StudentT(nu=4.0, sigma=0.3), y, vp, maxiter=5000, gtol=1e-10
+        )
+
+        assert d.info[15] < 0
+        assert d.lam[15] < 0.05
+        assert np.delete(d.lam, 15).min() > 1.0

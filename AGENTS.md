@@ -187,11 +187,12 @@ shims beyond what the task requires.
 
 ## Skill docs (`docs/agents/`)
 
-The repo ships a backend-agnostic agent-skill doc at
-`docs/agents/ptgp-vfe/` covering VFE training diagnosis (pitfalls,
-escalation workflow, interpretation of `VFEDiagnostics` /
-`GreedyVarianceDiagnostics`). `scripts/install_claude_skills.py` is a
-Claude-specific convenience that symlinks it into a Claude Code skill
+The repo ships backend-agnostic agent-skill docs: `docs/agents/ptgp-vfe/`
+covering VFE training diagnosis (pitfalls, escalation workflow,
+interpretation of `VFEDiagnostics` / `GreedyVarianceDiagnostics`), and
+`docs/agents/ptgp-vgp/` covering VGP fit diagnosis (`VGPPointDiagnostics`).
+`scripts/install_claude_skills.py` is a Claude-specific convenience that
+symlinks them into a Claude Code skill
 directory (`~/.claude/skills/` or a project-local `.claude/skills/`);
 other AI tools can read `docs/agents/` directly.
 
@@ -204,6 +205,7 @@ updating:**
 | `ptgp/optim/training.py` | `reference/api.md`, `pitfalls/lbfgsb_abnormal.md`, `pitfalls/slow_convergence.md` |
 | `ptgp/inducing.py`    | `reference/interpretation.md`, `pitfalls/inducing_*.md`        |
 | `ptgp/utils.py`       | `pitfalls/non_finite_at_init.md`, `pitfalls/large_grad_at_init.md` |
+| `ptgp/gp/vgp.py`      | `ptgp-vgp/SKILL.md`, `ptgp-vgp/reference/interpretation.md`    |
 
 The skill's pitfall pages reference fields on `VFEDiagnostics`,
 `CollapsedELBOTerms`, and `GreedyVarianceDiagnostics` by name — any

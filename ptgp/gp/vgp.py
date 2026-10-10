@@ -1,5 +1,7 @@
 import dataclasses
 
+from collections import namedtuple
+
 import numpy as np
 import pytensor
 import pytensor.assumptions as pta
@@ -7,6 +9,12 @@ import pytensor.tensor as pt
 
 from ptgp.mean import Zero
 from ptgp.objectives import vgp_elbo
+from ptgp.optim.training import _replace_graph
+
+VGPPointDiagnostics = namedtuple(
+    "VGPPointDiagnostics",
+    ["alpha", "lam", "fmean", "fvar", "score", "info", "g_nu", "g_lambda", "converged"],
+)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -226,3 +234,68 @@ class VGP:
         if incl_lik:
             return self.likelihood.predict_mean_and_var(fmean, fvar)
         return fmean, fvar
+
+
+def get_vgp_point_diagnostics(vgp, fit, X_train, y_train):
+    """Per-point variational quantities of a fitted VGP, with convergence gradients.
+
+    Notation follows Opper & Archambeau (2009), where ``nu`` is ptgp's ``alpha``.
+    ``score`` and ``info`` are the stationary targets of ``alpha`` and ``lam``
+    (``nu_bar`` and ``lambda_bar``, Eqs. 13-14). They depend only on the marginals
+    of q(f), so they are well defined at every point and are the quantities to
+    read for per-point influence and precision. They are computed from the
+    gradient of the variational expectation with respect to the marginal mean
+    and variance, so they work for any likelihood, including
+    :class:`~ptgp.likelihoods.CompositeLikelihood`.
+
+    ``alpha`` and ``lam`` equal ``score`` and ``info`` only at the optimum, and
+    the raw differences are weakly identified when ``K`` is ill-conditioned.
+    Check convergence with ``g_nu`` and ``g_lambda`` instead (Eqs. 11-12).
+
+    ``lam`` is softplus-constrained. For non-log-concave likelihoods (Student-t,
+    or the default probit :class:`~ptgp.likelihoods.Bernoulli` with its label-flip
+    floor), ``info`` can be negative on outliers or badly misclassified points,
+    and ``lam`` is then pinned near zero rather than reaching ``info``.
+
+    Parameters
+    ----------
+    vgp : VGP
+        The model passed to :func:`ptgp.optim.fit`.
+    fit : FitResult
+        Output of :func:`ptgp.optim.fit` for ``vgp``.
+    X_train : ndarray, shape (N,) or (N, D)
+    y_train : ndarray, shape (N,)
+
+    Returns
+    -------
+    VGPPointDiagnostics
+        Each array field has shape ``(N,)`` and is aligned to the training rows.
+
+        - ``alpha``, ``lam``: trained variational parameters.
+        - ``fmean``, ``fvar``: marginal mean and variance of q(f); ``fvar`` is ``diag(S)``.
+        - ``score``: ``E_q[d log p(y_i|f_i) / df_i]``.
+        - ``info``: ``E_q[-d^2 log p(y_i|f_i) / df_i^2]``.
+        - ``g_nu``: gradient of the negative ELBO with respect to ``alpha``,
+          equal to ``K (alpha - score)``.
+        - ``g_lambda``: gradient of the negative ELBO with respect to ``lam``,
+          equal to ``0.5 (S o S)(lam - info)``.
+        - ``converged``: ``fit.result.success``.
+    """
+    floatX = pytensor.config.floatX
+    X = np.asarray(X_train, dtype=floatX)
+    if X.ndim == 1:
+        X = X[:, None]
+    X = pt.as_tensor_variable(X)
+    y = pt.as_tensor_variable(np.asarray(y_train, dtype=floatX))
+
+    fmean, fvar = vgp._train_marginals(X)
+    var_exp = pt.sum(vgp.likelihood.variational_expectation(y, fmean, fvar))
+    score, dvar = pytensor.grad(var_exp, [fmean, fvar])
+    neg_elbo = -vgp_elbo(vgp, X, y).elbo
+    g_nu, g_lambda = pytensor.grad(neg_elbo, [vgp.alpha, vgp.lam])
+    outputs = [vgp.alpha, vgp.lam, fmean, fvar, score, -2.0 * dvar, g_nu, g_lambda]
+    replaced = _replace_graph(
+        outputs, fit.model, fit.shared_params, vgp.extra_vars, fit.shared_extras
+    )
+    values = pytensor.function([], replaced)()
+    return VGPPointDiagnostics(*values, converged=bool(fit.result.success))
