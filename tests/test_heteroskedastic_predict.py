@@ -4,9 +4,10 @@ import pytensor
 import pytensor.tensor as pt
 import pytest
 
-from ptgp.gp import VFE, Unapproximated
+from ptgp.gp import SVGP, VFE, Unapproximated, init_variational_params
 from ptgp.inducing import Points
 from ptgp.kernels import ExpQuad
+from ptgp.likelihoods import Gaussian
 from ptgp.mean import Zero
 from ptgp.objectives import collapsed_elbo
 
@@ -33,7 +34,7 @@ class TestUnapproximatedHeteroskedastic:
         X_train, y_train, X_new = _data()
         X = pt.matrix("X", shape=(None, 1))
         gp = Unapproximated(
-            kernel=ExpQuad(input_dim=1, ls=1.0), mean=Zero(), sigma=_hetero_sigma(X)
+            kernel=ExpQuad(input_dim=1, ls=1.0), mean=Zero(), sigma=_hetero_sigma(X), x=X
         )
         X_new_t = pt.matrix("X_new", shape=(None, 1))
         y_t = pt.vector("y", shape=(None,))
@@ -47,18 +48,6 @@ class TestUnapproximatedHeteroskedastic:
         expected_sigma_new = 0.1 + 0.05 * X_new[:, 0] ** 2
         np.testing.assert_allclose(yv, v + expected_sigma_new**2, atol=1e-10)
 
-    def test_wrong_X_raises(self):
-        """sigma built against X_a, predict called with X_b — ancestor check fires."""
-        X_a = pt.matrix("X_a", shape=(None, 1))
-        X_b = pt.matrix("X_b", shape=(None, 1))
-        gp = Unapproximated(
-            kernel=ExpQuad(input_dim=1, ls=1.0), mean=Zero(), sigma=_hetero_sigma(X_a)
-        )
-        X_new_t = pt.matrix("X_new", shape=(None, 1))
-        y_t = pt.vector("y", shape=(None,))
-        with pytest.raises(ValueError, match=r"Some replacements were not used"):
-            gp.predict_marginal(X_new_t, X_b, y_t, incl_lik=True)
-
 
 class TestVFEHeteroskedastic:
     def _build(self, X):
@@ -67,6 +56,7 @@ class TestVFEHeteroskedastic:
             kernel=ExpQuad(input_dim=1, ls=1.0),
             mean=Zero(),
             sigma=_hetero_sigma(X),
+            x=X,
             inducing_variable=Points(pt.as_tensor_variable(Z)),
         )
 
@@ -86,14 +76,30 @@ class TestVFEHeteroskedastic:
         expected_sigma_new = 0.1 + 0.05 * X_new[:, 0] ** 2
         np.testing.assert_allclose(yv, v + expected_sigma_new**2, atol=1e-10)
 
-    def test_wrong_X_raises(self):
-        X_a = pt.matrix("X_a", shape=(None, 1))
-        X_b = pt.matrix("X_b", shape=(None, 1))
-        vfe = self._build(X_a)
+
+class TestSVGPHeteroskedastic:
+    def test_incl_lik_adds_pointwise_noise(self):
+        X_train, y_train, X_new = _data()
+        M = 6
+        Z = np.linspace(-1.5, 1.5, M)[:, None].astype(np.float64)
+        vp = init_variational_params(M)
+        X = pt.matrix("X", shape=(None, 1))
+        svgp = SVGP(
+            kernel=ExpQuad(input_dim=1, ls=1.0),
+            mean=Zero(),
+            likelihood=Gaussian(_hetero_sigma(X), x=X),
+            inducing_variable=Points(pt.as_tensor_variable(Z)),
+            variational_params=vp,
+        )
         X_new_t = pt.matrix("X_new", shape=(None, 1))
-        y_t = pt.vector("y", shape=(None,))
-        with pytest.raises(ValueError, match=r"Some replacements were not used"):
-            vfe.predict_marginal(X_new_t, X_b, y_t, incl_lik=True)
+
+        _, fvar = svgp.predict_marginal(X_new_t)
+        _, yvar = svgp.predict_marginal(X_new_t, incl_lik=True)
+        fn = pytensor.function([X_new_t, *vp.extra_vars], [fvar, yvar], on_unused_input="ignore")
+        v, yv = fn(X_new, *vp.extra_init)
+
+        expected_sigma_new = 0.1 + 0.05 * X_new[:, 0] ** 2
+        np.testing.assert_allclose(yv - v, expected_sigma_new**2, atol=1e-10)
 
 
 class TestScalarSigmaUnaffected:
@@ -145,10 +151,11 @@ class TestScalarSigmaUnaffected:
 
 
 def test_pm_data_sigma_is_detected_as_data_dependent():
-    """sigma built against a pm.Data SharedVariable must still be treated
-    as data-dependent. The heuristic filters by type (TensorType), not by
-    class (SharedVariable) — without this, pm.Data is silently invisible
-    to sigma_at and predictions use the wrong noise.
+    """sigma built against a pm.Data SharedVariable must still be re-rooted.
+
+    The design matrix handle is keyed by identity (the ``x=`` argument), so a
+    pm.Data SharedVariable works exactly like a symbolic placeholder — passing
+    it as ``x=`` lets at swap it for the test inputs.
     """
     X_train_arr = np.linspace(-1.5, 1.5, 10)[:, None].astype(np.float64)
     X_new_arr = np.linspace(-2.0, 2.0, 5)[:, None].astype(np.float64)
@@ -159,6 +166,7 @@ def test_pm_data_sigma_is_detected_as_data_dependent():
             kernel=ExpQuad(input_dim=1, ls=1.0),
             mean=Zero(),
             sigma=_hetero_sigma(X),
+            x=X,
         )
     X_new_t = pt.matrix("X_new", shape=(None, 1))
     y_t = pt.vector("y", shape=(None,))
@@ -183,8 +191,47 @@ def test_collapsed_elbo_with_heteroskedastic_sigma():
         kernel=ExpQuad(input_dim=1, ls=1.0),
         mean=Zero(),
         sigma=_hetero_sigma(X),
+        x=X,
         inducing_variable=Points(pt.as_tensor_variable(Z)),
     )
     elbo = collapsed_elbo(vfe, X, y).elbo
     val = pytensor.function([X, y], elbo)(X_train, y_train)
     assert np.isfinite(val)
+
+
+@pytest.mark.parametrize("which", ["gp", "vfe", "svgp"])
+def test_compile_predict_heteroskedastic(which):
+    """compile_predict with numeric training data evaluates sigma at X_new for
+    incl_lik, and at X_train for the noise in the training covariance."""
+    from ptgp.optim import compile_predict
+
+    X_train, y_train, X_new = _data()
+    X = pt.matrix("X", shape=(None, 1))
+    sigma = _hetero_sigma(X)
+    Z = Points(pt.as_tensor_variable(X_train[:6]))
+    with pm.Model() as model:
+        kernel = ExpQuad(input_dim=1, ls=1.0)
+        gp = {
+            "gp": lambda: Unapproximated(kernel=kernel, sigma=sigma, x=X),
+            "vfe": lambda: VFE(kernel=kernel, sigma=sigma, inducing_variable=Z, x=X),
+            "svgp": lambda: SVGP(
+                kernel=kernel,
+                likelihood=Gaussian(sigma, x=X),
+                inducing_variable=Z,
+                variational_params=init_variational_params(6),
+            ),
+        }[which]()
+    data = {} if which == "svgp" else {"X_train": X_train, "y_train": y_train}
+    extras = [pytensor.shared(v) for v in getattr(gp, "extra_init", ())]
+    X_new_t = pt.matrix("X_new", shape=(None, 1))
+    kw = dict(extra_vars=gp.extra_vars, shared_extras=extras, **data)
+    m, v = compile_predict(gp, X_new_t, model, {}, **kw)(X_new)
+    ym, yv = compile_predict(gp, X_new_t, model, {}, incl_lik=True, **kw)(X_new)
+    np.testing.assert_allclose(ym, m, atol=1e-12)
+    np.testing.assert_allclose(yv, v + _hetero_sigma(X_new) ** 2, atol=1e-10)
+
+    if which != "svgp":
+        y_t = pt.vector("y", shape=(None,))
+        m_sym, _ = gp.predict_marginal(X_new_t, X, y_t)
+        m_ref = pytensor.function([X, X_new_t, y_t], m_sym)(X_train, X_new, y_train)
+        np.testing.assert_allclose(m, m_ref, atol=1e-10)

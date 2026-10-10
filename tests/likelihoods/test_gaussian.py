@@ -4,7 +4,7 @@ import numpy as np
 import pytensor
 import pytensor.tensor as pt
 
-from ptgp.likelihoods import Gaussian
+from ptgp.likelihoods import Gaussian, op_of, param
 
 ATOL = 1e-12
 
@@ -41,7 +41,10 @@ class TestGaussian:
                 pt.as_tensor_variable(np.zeros(2)),
             )
         )
-        lp = _eval(lik._log_prob(pt.as_tensor_variable(mu), pt.as_tensor_variable(y)))
+        log_prob = op_of(lik)._log_prob(
+            pt.as_tensor_variable(mu), pt.as_tensor_variable(y), param(lik, "sigma")
+        )
+        lp = _eval(log_prob)
         np.testing.assert_allclose(ve, lp, atol=1e-12)
 
     def test_predict_mean_and_var(self):
