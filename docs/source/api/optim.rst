@@ -23,6 +23,7 @@ Training compilers
     compile_scipy_objective
     compile_scipy_diagnostics
     compile_predict
+    compile_diagnostics
     get_trained_params
 
 Staged & tracked minimization

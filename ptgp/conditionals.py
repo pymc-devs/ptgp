@@ -70,3 +70,51 @@ def base_conditional(Kmn, Kmm, Knn, f, q_sqrt=None, white=False, full_cov=False)
         return conditional_whitened(A_white, Knn, f, q_sqrt, full_cov=full_cov)
     A = pt.linalg.inv(Kmm) @ Kmn
     return conditional_unwhitened(A, Kmn, Knn, f, q_sqrt, full_cov=full_cov)
+
+
+def nn_conditional(kernel, X, Z_nbr, mask, jitter=_DEFAULT_JITTER):
+    """Weights and residual variance of each point given its masked neighbors.
+
+    For one point ``x`` with neighbor locations ``Z_n``, returns
+    ``b = K_nn^{-1} k_nx`` and ``F = k_xx - k_nx^T b``, the Vecchia
+    conditional ``u_x | u_n ~ N(b^T u_n, F)`` (Datta et al. 2016,
+    arXiv:1406.7343, Sec 2; Wu, Pleiss & Cunningham 2022, arXiv:2202.01694,
+    Eq 17-18). Padded neighbor slots (``mask == 0``) get identity rows and
+    columns in ``K_nn`` and zero cross-covariance, so their weights are
+    exactly 0. The graph is written for one point and lifted over the batch
+    with ``vectorize_graph``, so the ``K x K`` solves become a batched Cholesky.
+
+    Parameters
+    ----------
+    kernel : Kernel
+    X : tensor, shape (B, D)
+        Points to condition.
+    Z_nbr : tensor, shape (B, K, D)
+        Neighbor locations of each point.
+    mask : tensor, shape (B, K)
+        1 for real neighbors, 0 for padding.
+    jitter : float
+        Added to the diagonal of ``K_nn`` and to ``F``.
+
+    Returns
+    -------
+    b : tensor, shape (B, K)
+    F : tensor, shape (B,)
+    """
+    from pytensor.graph.replace import vectorize_graph
+
+    K = Z_nbr.type.shape[-2]
+    D = Z_nbr.type.shape[-1]
+    x = pt.vector("_x", shape=(D,), dtype=X.dtype)
+    zn = pt.matrix("_zn", shape=(K, D), dtype=Z_nbr.dtype)
+    m = pt.vector("_m", shape=(K,), dtype=X.dtype)
+
+    eye = pt.eye(K, dtype=X.dtype)
+    Knn = kernel(zn) * pt.outer(m, m) + eye * (1.0 - m)[None, :] + jitter * eye
+    Knn = pta.assume(Knn, symmetric=True, positive_definite=True)
+    knx = kernel(zn, x[None, :])[:, 0] * m
+    b = pt.linalg.solve(Knn, knx)
+    F = kernel.diag(x[None, :])[0] - knx @ b + jitter
+
+    b_batch, F_batch = vectorize_graph([b, F], {x: X, zn: Z_nbr, m: pt.cast(mask, X.dtype)})
+    return b_batch, F_batch
