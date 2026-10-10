@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 import numpy as np
 import pytensor
 import pytensor.tensor as pt
@@ -97,8 +99,8 @@ class LikelihoodOp(Op):
     """
 
     __props__ = ("param_names", "n_points", "invlink", "has_data")
-    param_names = ()
-    default_invlink = None
+    param_names: tuple[str, ...] = ()
+    default_invlink: Callable | None = None
 
     def __init__(self, n_points=20, invlink=None, has_data=False):
         self.param_names = type(self).param_names
