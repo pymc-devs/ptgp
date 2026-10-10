@@ -6,6 +6,8 @@ import pytensor.assumptions as pta
 import pytensor.tensor as pt
 
 from ptgp.conditionals import conditional_unwhitened, conditional_whitened
+from ptgp.gp.base import PredictSpec
+from ptgp.inducing_fourier import domain_check_prepare
 from ptgp.kl import gauss_kl, gauss_kl_structured
 from ptgp.mean import Zero
 from ptgp.objectives import elbo
@@ -161,7 +163,6 @@ class SVGP:
     """
 
     default_objective = staticmethod(elbo)
-    predict_needs_data = False
 
     def __init__(
         self,
@@ -200,6 +201,17 @@ class SVGP:
             *self.variational_params.extra_init,
             *self.inducing_variable.extra_init,
         )
+
+    def predict_spec(self, X_new, incl_lik=False, X_train=None, y_train=None):
+        """Prediction spec for :func:`ptgp.optim.compile_predict`.
+
+        The posterior lives in ``q(u)``, so ``X_train`` and ``y_train`` are not
+        used. Inputs are checked against the inducing variable's domain when it
+        defines one (``FourierFeatures1D``).
+        """
+        mean, var = self.predict_marginal(X_new, incl_lik=incl_lik)
+        prepare = domain_check_prepare(self.inducing_variable, self.kernel)
+        return PredictSpec([X_new], (mean, var), prepare)
 
     def predict_marginal(self, X, incl_lik=False):
         """Posterior marginal mean and variance at each point in X.
