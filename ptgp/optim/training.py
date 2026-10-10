@@ -1337,6 +1337,7 @@ def compile_diagnostics(
     shared_params,
     extra_vars=None,
     shared_extras=None,
+    include_prior=True,
     compile_kwargs=None,
 ):
     """Compile a diagnostics function that reads trained shared parameters.
@@ -1362,6 +1363,9 @@ def compile_diagnostics(
         Defaults to ``gp_model.extra_vars``.
     shared_extras : list, optional
         Shared variables for ``extra_vars``.
+    include_prior : bool
+        Whether the loss behind ``grad_norm`` includes the PyMC log-prior, as
+        in :func:`compile_training_step`.
     compile_kwargs : dict, optional
         Forwarded to ``pytensor.function``.
 
@@ -1369,12 +1373,26 @@ def compile_diagnostics(
     -------
     callable
         ``(*numeric_inputs) -> namedtuple`` of floats, matching ``diag_fn``'s
-        return type.
+        return type. If the namedtuple has a ``grad_norm`` field, it holds the
+        global norm of the gradient of the training loss (the negated first
+        field, plus the log-prior when ``include_prior``) with respect to every
+        trainable shared variable.
     """
     if extra_vars is None:
         extra_vars = tuple(getattr(gp_model, "extra_vars", ()) or ())
     terms = diag_fn(gp_model, *inputs)
-    outputs = _replace_graph(list(terms), model, shared_params, extra_vars, shared_extras)
+    fields = list(terms)
+    if "grad_norm" in terms._fields:
+        loss = -fields[0]
+        if include_prior:
+            loss = loss - model.logp(jacobian=True, sum=True)
+        fields[terms._fields.index("grad_norm")] = loss
+    outputs = _replace_graph(fields, model, shared_params, extra_vars, shared_extras)
+    if "grad_norm" in terms._fields:
+        i = terms._fields.index("grad_norm")
+        params = [*shared_params.values(), *(shared_extras or ())]
+        grads = pytensor.grad(outputs[i], params, disconnected_inputs="ignore")
+        outputs[i] = pt.sqrt(sum(pt.sum(g**2) for g in grads))
     fn = pytensor.function(list(inputs), outputs, **_with_input_downcast(compile_kwargs))
     cls = type(terms)
 
