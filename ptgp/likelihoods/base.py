@@ -204,7 +204,7 @@ class GPData(Op):
     def perform(self, node, inputs, outputs):
         outputs[0][0] = inputs[0]
 
-    def infer_shape(self, fgraph, node, input_shapes):
+    def infer_shape(self, node, input_shapes):
         return input_shapes
 
     def pullback(self, inputs, outputs, cotangents):

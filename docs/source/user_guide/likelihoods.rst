@@ -9,8 +9,8 @@ Likelihoods
 
 ptgp supports both Gaussian and non-Gaussian observation models:
 
-- :class:`~ptgp.likelihoods.Gaussian`
-- :class:`~ptgp.likelihoods.Bernoulli`
-- :class:`~ptgp.likelihoods.Poisson`
-- :class:`~ptgp.likelihoods.NegativeBinomial`
-- :class:`~ptgp.likelihoods.StudentT`
+- :func:`~ptgp.likelihoods.Gaussian`
+- :func:`~ptgp.likelihoods.Bernoulli`
+- :func:`~ptgp.likelihoods.Poisson`
+- :func:`~ptgp.likelihoods.NegativeBinomial`
+- :func:`~ptgp.likelihoods.StudentT`

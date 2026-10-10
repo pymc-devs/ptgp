@@ -79,7 +79,7 @@ class VFE:
         var : tensor, shape (N*,)
         """
         Z = self.inducing_variable.Z
-        sigma = self.likelihood.sigma
+        sigma = self.likelihood.at(X_train).sigma
         sigma2_vec = sigma**2 * pt.ones(X_train.shape[0])  # (N,); scalar broadcasts
 
         Kuu = self.kernel(Z)  # (M, M)

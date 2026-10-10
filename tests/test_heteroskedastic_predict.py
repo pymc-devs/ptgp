@@ -2,6 +2,7 @@ import numpy as np
 import pymc as pm
 import pytensor
 import pytensor.tensor as pt
+import pytest
 
 from ptgp.gp import SVGP, VFE, Unapproximated, init_variational_params
 from ptgp.inducing import Points
@@ -196,3 +197,41 @@ def test_collapsed_elbo_with_heteroskedastic_sigma():
     elbo = collapsed_elbo(vfe, X, y).elbo
     val = pytensor.function([X, y], elbo)(X_train, y_train)
     assert np.isfinite(val)
+
+
+@pytest.mark.parametrize("which", ["gp", "vfe", "svgp"])
+def test_compile_predict_heteroskedastic(which):
+    """compile_predict with numeric training data evaluates sigma at X_new for
+    incl_lik, and at X_train for the noise in the training covariance."""
+    from ptgp.optim import compile_predict
+
+    X_train, y_train, X_new = _data()
+    X = pt.matrix("X", shape=(None, 1))
+    sigma = _hetero_sigma(X)
+    Z = Points(pt.as_tensor_variable(X_train[:6]))
+    with pm.Model() as model:
+        kernel = ExpQuad(input_dim=1, ls=1.0)
+        gp = {
+            "gp": lambda: Unapproximated(kernel=kernel, sigma=sigma, x=X),
+            "vfe": lambda: VFE(kernel=kernel, sigma=sigma, inducing_variable=Z, x=X),
+            "svgp": lambda: SVGP(
+                kernel=kernel,
+                likelihood=Gaussian(sigma, x=X),
+                inducing_variable=Z,
+                variational_params=init_variational_params(6),
+            ),
+        }[which]()
+    data = {} if which == "svgp" else {"X_train": X_train, "y_train": y_train}
+    extras = [pytensor.shared(v) for v in getattr(gp, "extra_init", ())]
+    X_new_t = pt.matrix("X_new", shape=(None, 1))
+    kw = dict(extra_vars=gp.extra_vars, shared_extras=extras, **data)
+    m, v = compile_predict(gp, X_new_t, model, {}, **kw)(X_new)
+    ym, yv = compile_predict(gp, X_new_t, model, {}, incl_lik=True, **kw)(X_new)
+    np.testing.assert_allclose(ym, m, atol=1e-12)
+    np.testing.assert_allclose(yv, v + _hetero_sigma(X_new) ** 2, atol=1e-10)
+
+    if which != "svgp":
+        y_t = pt.vector("y", shape=(None,))
+        m_sym, _ = gp.predict_marginal(X_new_t, X, y_t)
+        m_ref = pytensor.function([X, X_new_t, y_t], m_sym)(X_train, X_new, y_train)
+        np.testing.assert_allclose(m, m_ref, atol=1e-10)
