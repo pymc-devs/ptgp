@@ -420,12 +420,17 @@ def compile_training_step(
                 f"They cannot be both trainable and frozen."
             )
 
-    shared_params, shared_extras, all_shared = _make_shared_params(
+    shared_params, shared_extras, _ = _make_shared_params(
         model,
         extra_vars,
         extra_init,
         frozen_vars=frozen_vars,
     )
+
+    # A frozen PyMC value var keeps its shared slot (so it holds the freeze value) but is replaced
+    # by a constant in the loss, so it has no gradient and must not be passed to the optimizer.
+    frozen = frozen_vars or {}
+    trainable = [sv for vv, sv in shared_params.items() if vv not in frozen] + shared_extras
 
     loss = -_scalar_from_objective(objective_fn(gp_model, X_var, y_var))
     if include_prior:
@@ -454,7 +459,7 @@ def compile_training_step(
     train_step = compile_train(
         loss_replaced,
         rule,
-        parameters=all_shared,
+        parameters=trainable,
         inputs=[X_var, y_var],
         compile_kwargs=_with_input_downcast(compile_kwargs),
     )

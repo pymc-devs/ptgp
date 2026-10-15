@@ -107,6 +107,34 @@ class TestFrozenVars:
         Z_final = extras_2[2].get_value()
         assert np.linalg.norm(Z_final - Z0) > 0, "Z should move in phase 2"
 
+    def test_frozen_pymc_var_in_training_step(self):
+        """A frozen PyMC value var stays at its freeze value while the rest train."""
+        rng = np.random.default_rng(0)
+        X = rng.uniform(-2, 2, (40, 1))
+        y = np.sin(X[:, 0])
+        Z0 = np.linspace(-2, 2, 6)[:, None]
+        model, svgp, vp = _make_svgp(pt.as_tensor_variable(Z0), 6)
+        ls_vv = model.rvs_to_values[model["ls"]]
+        eta_vv = model.rvs_to_values[model["eta"]]
+
+        train_step, shared, _ = pg.optim.compile_training_step(
+            pg.objectives.elbo,
+            svgp,
+            pt.matrix("X"),
+            pt.vector("y"),
+            model=model,
+            optimizer=adam(1e-2),
+            extra_vars=vp.extra_vars,
+            extra_init=vp.extra_init,
+            frozen_vars={ls_vv: 0.5},
+        )
+        eta0 = shared[eta_vv].get_value().copy()
+        for _ in range(20):
+            train_step(X, y)
+
+        np.testing.assert_allclose(shared[ls_vv].get_value(), 0.5)
+        assert not np.allclose(shared[eta_vv].get_value(), eta0)
+
     def test_frozen_pymc_var_initial_value_in_scipy_objective(self):
         """A PyMC value var listed in frozen_vars must have its shared slot
         (and thus its theta0 slice and unpack target) initialized to the
