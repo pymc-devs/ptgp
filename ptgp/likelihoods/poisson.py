@@ -1,25 +1,13 @@
 import pytensor.tensor as pt
 
-from ptgp.likelihoods.base import Likelihood
+from ptgp.likelihoods.base import LikelihoodOp, build
 
 
-class Poisson(Likelihood):
-    """Poisson likelihood: p(y|f) = Poisson(y; invlink(f)).
+class PoissonOp(LikelihoodOp):
+    """Poisson likelihood Op. Closed-form variational expectation for log link."""
 
-    Default link is log (invlink=exp). Has a closed-form variational
-    expectation with the log link; falls back to quadrature for other links.
-
-    Parameters
-    ----------
-    invlink : callable, optional
-        Inverse link function (default: exp).
-    n_points : int
-        Number of Gauss-Hermite quadrature points (default 20).
-    """
-
-    def __init__(self, invlink=None, n_points=20):
-        self.invlink = invlink or pt.exp
-        self.n_points = n_points
+    param_names = ()
+    default_invlink = staticmethod(pt.exp)
 
     def _log_prob(self, f, y):
         lam = self.invlink(f)
@@ -31,11 +19,16 @@ class Poisson(Likelihood):
     def _conditional_variance(self, f):
         return self.invlink(f)
 
-    def variational_expectation(self, y, mu, var):
-        """Closed-form for log link: E_q[y*f - exp(f) - log(y!)].
-
-        Falls back to quadrature for other link functions.
-        """
+    def variational_expectation(self, params, y, mu, var):
         if self.invlink is pt.exp:
             return y * mu - pt.exp(mu + var / 2.0) - pt.gammaln(y + 1.0)
-        return super().variational_expectation(y, mu, var)
+        return super().variational_expectation(params, y, mu, var)
+
+
+def Poisson(invlink=None, n_points=20):
+    """Build a Poisson likelihood with rate invlink(f).
+
+    Returns a :class:`~ptgp.likelihoods.base.LikelihoodVariable`. Default link is
+    log (closed-form variational expectation); other links fall back to quadrature.
+    """
+    return build(PoissonOp, [], n_points=n_points, invlink=invlink)

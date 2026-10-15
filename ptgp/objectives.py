@@ -35,7 +35,7 @@ def marginal_log_likelihood(gp, X, y):
         Log marginal likelihood.
     """
     mu = gp.mean(X)
-    K = gp.kernel(X) + gp.likelihood.sigma**2 * pt.eye(X.shape[0])
+    K = gp.kernel(X) + gp.likelihood.at(X).sigma ** 2 * pt.eye(X.shape[0])
     K = pta.assume(K, positive_definite=True, symmetric=True)
 
     diff = y - mu
@@ -77,7 +77,7 @@ def elbo(svgp, X, y, n_data=None):
     else:
         scale = 1.0
 
-    var_exp = scale * pt.sum(svgp.likelihood.variational_expectation(y, fmean, fvar))
+    var_exp = scale * pt.sum(svgp.likelihood.at(X).variational_expectation(y, fmean, fvar))
     kl = svgp.prior_kl()
     return ELBOTerms(elbo=var_exp - kl, var_exp=var_exp, kl=kl)
 
@@ -124,7 +124,7 @@ def collapsed_elbo(vfe, X, y):
     A = pt.linalg.solve_triangular(Lu, Kuf, lower=True)  # M × N
     Q_diag = pt.sum(A * A, axis=0)  # N
 
-    sigma_vec = vfe.likelihood.sigma * pt.ones(N, dtype=Kuu.dtype)
+    sigma_vec = vfe.likelihood.at(X).sigma * pt.ones(N, dtype=Kuu.dtype)
     sigma2_vec = sigma_vec**2
 
     diff = y - mu
@@ -189,7 +189,7 @@ def fitc_log_marginal_likelihood(vfe, X, y):
         ``fit``: quadratic term: ``-0.5 * (y^T K_fitc^{-1} y + N log 2π)``.
         ``logdet``: log-determinant term: ``-0.5 log|K_fitc|``.
     """
-    sigma2 = vfe.likelihood.sigma**2
+    sigma2 = vfe.likelihood.at(X).sigma ** 2
     N = X.shape[0]
     Z = vfe.inducing_variable.Z
     M = Z.shape[0]
@@ -331,7 +331,7 @@ def variance_budget(gp, X, y):
     signal_var = pt.mean(gp.kernel.diag(X))
     # sigma may be a scalar or a length-N heteroskedastic vector; the broadcast
     # against ones(N) handles both, and mean(sigma**2) is the noise contribution.
-    sigma_vec = gp.likelihood.sigma * pt.ones(N)
+    sigma_vec = gp.likelihood.at(X).sigma * pt.ones(N)
     noise_var = pt.mean(sigma_vec**2)
     total_var = mean_var + signal_var + noise_var
     return VarianceBudget(
@@ -395,7 +395,7 @@ def vfe_diagnostics(vfe, X, y):
     budget = variance_budget(vfe, X, y)
     N = X.shape[0]
     N_float = N.astype(X.dtype)
-    sigma_vec = vfe.likelihood.sigma * pt.ones(N)
+    sigma_vec = vfe.likelihood.at(X).sigma * pt.ones(N)
     sigma_mean = pt.mean(sigma_vec)
     fit_per_n = terms.fit / N_float
     resid_var = pt.var(y - vfe.mean(X))
@@ -462,7 +462,7 @@ def unapproximated_diagnostics(gp, X, y):
     budget = variance_budget(gp, X, y)
     N = X.shape[0]
     N_float = N.astype(X.dtype)
-    sigma_vec = gp.likelihood.sigma * pt.ones(N)
+    sigma_vec = gp.likelihood.at(X).sigma * pt.ones(N)
     sigma_mean = pt.mean(sigma_vec)
     resid_var = pt.var(y - gp.mean(X))
     excess_fit_per_n = terms.mll / N_float + 0.5 * pt.log(2.0 * np.pi * resid_var) + 0.5

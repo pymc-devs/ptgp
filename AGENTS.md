@@ -98,8 +98,12 @@ The reference usage example for all three models is
   combination (`SumKernel`, `ProductKernel`, via `+` / `*`). `active_dims`
   selects input columns.
 - **Likelihoods** — `ptgp/likelihoods/`. `Gaussian`, `Bernoulli`,
-  `Poisson`, `NegativeBinomial`, `StudentT`. Non-Gaussian variants
-  implement `variational_expectation` for SVGP.
+  `Poisson`, `NegativeBinomial`, `StudentT` are builder functions returning
+  a `LikelihoodVariable`: the output of a `LikelihoodOp` node whose inputs
+  are the parameters, so likelihoods live in the PyTensor graph. Parameters
+  that depend on inputs (heteroskedastic `sigma`) are built against a design
+  matrix passed as `x=`; `lik.at(X_new)` re-roots them onto new inputs.
+  Non-Gaussian variants compute `variational_expectation` by quadrature.
 - **Inducing variables** — `ptgp/inducing.py` (`Points`,
   `random_subsample_init`, `kmeans_init`, `greedy_variance_init`),
   `ptgp/inducing_fourier.py` (`FourierFeatures1D` — 1D Matern VFF with

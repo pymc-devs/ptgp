@@ -23,11 +23,15 @@ class VFE:
         Observation noise standard deviation.
     inducing_variable : InducingVariables
         Inducing point locations.
+    x : tensor, optional
+        The design matrix ``sigma`` was built against, for heteroskedastic
+        noise. Pass it so sigma can be re-rooted onto the test inputs at predict
+        time.
     """
 
     default_objective = staticmethod(collapsed_elbo)
 
-    def __init__(self, kernel, mean=None, sigma=None, inducing_variable=None):
+    def __init__(self, kernel, mean=None, sigma=None, inducing_variable=None, x=None):
         """Store the kernel, mean, and inducing variable; build a Gaussian likelihood from sigma."""
         if not hasattr(inducing_variable, "Z"):
             raise TypeError(
@@ -37,7 +41,7 @@ class VFE:
             )
         self.kernel = kernel
         self.mean = mean if mean is not None else Zero()
-        self.likelihood = Gaussian(sigma)
+        self.likelihood = Gaussian(sigma, x=x)
         self.inducing_variable = inducing_variable
 
     @property
@@ -75,7 +79,7 @@ class VFE:
         var : tensor, shape (N*,)
         """
         Z = self.inducing_variable.Z
-        sigma = self.likelihood.sigma
+        sigma = self.likelihood.at(X_train).sigma
         sigma2_vec = sigma**2 * pt.ones(X_train.shape[0])  # (N,); scalar broadcasts
 
         Kuu = self.kernel(Z)  # (M, M)
@@ -94,6 +98,5 @@ class VFE:
         fvar = Kss_diag - pt.sum(Kus * ((Kuu_inv - Sigma_inv) @ Kus), axis=0)
 
         if incl_lik:
-            sigma_new = self.likelihood.sigma_at(X_train, X_new)
-            return fmean, fvar + sigma_new**2
+            return self.likelihood.at(X_new).predict_mean_and_var(fmean, fvar)
         return fmean, fvar
