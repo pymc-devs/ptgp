@@ -37,6 +37,24 @@ def _maybe_wrap_with_domain_check(step_fn, gp_model, *, input_index):
     return wrapped
 
 
+def domain_check_prepare(inducing_variable, kernel):
+    """``PredictSpec.prepare`` that validates ``X`` against the inducing variable's domain.
+
+    Returns :func:`ptgp.gp.base.identity_prepare` when the inducing variable
+    does not expose ``_domain_check``.
+    """
+    from ptgp.gp.base import identity_prepare
+
+    if not hasattr(inducing_variable, "_domain_check"):
+        return identity_prepare
+
+    def prepare(X, *rest):
+        inducing_variable._domain_check(X, kernel)
+        return (X, *rest)
+
+    return prepare
+
+
 class FourierFeatures1D(InducingVariables):
     """1D Variational Fourier Features for Matern-1/2, 3/2, 5/2.
 

@@ -9,5 +9,9 @@ GP Models
     Unapproximated
     VFE
     SVGP
+    VGP
+    PredictSpec
     VariationalParams
     init_variational_params
+    VGPParams
+    init_vgp_params
