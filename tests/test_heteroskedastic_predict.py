@@ -235,3 +235,32 @@ def test_compile_predict_heteroskedastic(which):
         m_sym, _ = gp.predict_marginal(X_new_t, X, y_t)
         m_ref = pytensor.function([X, X_new_t, y_t], m_sym)(X_train, X_new, y_train)
         np.testing.assert_allclose(m, m_ref, atol=1e-10)
+
+
+@pytest.mark.parametrize("which", ["gp", "vfe", "svgp"])
+def test_fit_and_predict_heteroskedastic(which):
+    """pg.fit builds its own symbolic X; the objectives re-root sigma onto it."""
+    import ptgp as pg
+
+    X_train, y_train, X_new = _data()
+    X = pt.matrix("X", shape=(None, 1))
+    sigma = _hetero_sigma(X)
+    Z = Points(pt.as_tensor_variable(np.linspace(-1.5, 1.5, 6)[:, None]))
+    with pm.Model():
+        ls = pm.InverseGamma("ls", alpha=2.0, beta=1.0)
+        kernel = ExpQuad(input_dim=1, ls=ls)
+        gp = {
+            "gp": lambda: Unapproximated(kernel=kernel, sigma=sigma, x=X),
+            "vfe": lambda: VFE(kernel=kernel, sigma=sigma, inducing_variable=Z, x=X),
+            "svgp": lambda: SVGP(
+                kernel=kernel,
+                likelihood=Gaussian(sigma, x=X),
+                inducing_variable=Z,
+                variational_params=init_variational_params(6),
+            ),
+        }[which]()
+        fit = pg.fit(gp, X_train, y_train, options={"maxiter": 5})
+    data = {} if which == "svgp" else {"X_train": X_train, "y_train": y_train}
+    _, v = pg.predict(gp, X_new, fit, **data)
+    _, yv = pg.predict(gp, X_new, fit, incl_lik=True, **data)
+    np.testing.assert_allclose(yv - v, _hetero_sigma(X_new) ** 2, atol=1e-10)
