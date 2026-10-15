@@ -1,3 +1,4 @@
+import pytensor.assumptions as pta
 import pytensor.tensor as pt
 
 from ptgp.likelihoods import Gaussian
@@ -53,7 +54,7 @@ class Unapproximated:
         Knn = self.kernel(X_train)
         sigma = self.likelihood.sigma
         sigma2_train = sigma**2 * pt.ones(X_train.shape[0])  # (N,); scalar broadcasts
-        Knn_noisy = Knn + pt.diag(sigma2_train)
+        Knn_noisy = pta.assume(Knn + pt.diag(sigma2_train), positive_definite=True, symmetric=True)
         Kns = self.kernel(X_train, X_new)  # (N, N*)
         Kss_diag = self.kernel.diag(X_new)
 
