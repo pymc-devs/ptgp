@@ -511,7 +511,7 @@ def vnngp_elbo(vnngp, X, y, row_idx, kl_idx):
     b_data = row_idx.shape[0].astype(fmean.dtype)
     b_kl = kl_idx.shape[0].astype(fmean.dtype)
     var_exp = (vnngp.n_data / b_data) * pt.sum(
-        vnngp.likelihood.variational_expectation(y, fmean, fvar)
+        vnngp.likelihood.at(X).variational_expectation(y, fmean, fvar)
     )
     kl = (vnngp.num_inducing / b_kl) * pt.sum(vnngp.prior_kl_terms(kl_idx).kl)
     return VNNGPELBOTerms(elbo=var_exp - kl, var_exp=var_exp, kl=kl)
