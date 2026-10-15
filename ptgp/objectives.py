@@ -109,7 +109,7 @@ def vgp_elbo(vgp, X, y, n_data=None):
     VGPTerms
     """
     fmean, fvar = vgp._train_marginals(X)
-    var_exp = pt.sum(vgp.likelihood.variational_expectation(y, fmean, fvar))
+    var_exp = pt.sum(vgp.likelihood.at(X).variational_expectation(y, fmean, fvar))
     kl = vgp.prior_kl(X)
     return VGPTerms(elbo=var_exp - kl, var_exp=var_exp, kl=kl)
 

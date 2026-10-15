@@ -12,6 +12,8 @@ import pytensor
 import pytensor.tensor as pt
 import scipy.optimize
 
+from pytensor_ml.optim import adam
+
 import ptgp as pg
 
 from ptgp.mean import Constant, Zero
@@ -169,7 +171,7 @@ class TestVGPNonGaussianSmoke:
             model=model,
             extra_vars=vp.extra_vars,
             extra_init=vp.extra_init,
-            learning_rate=lr,
+            optimizer=adam(lr),
         )
         losses = [float(train_step(X, y)) for _ in range(n_steps)]
         assert losses[-1] < losses[0], "VGP loss should decrease"

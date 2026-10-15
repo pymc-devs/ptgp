@@ -5,6 +5,7 @@ import pytensor
 import pytensor.assumptions as pta
 import pytensor.tensor as pt
 
+from ptgp.gp.base import PredictSpec, identity_prepare
 from ptgp.mean import Zero
 from ptgp.objectives import vgp_elbo
 
@@ -110,7 +111,7 @@ class VGP:
         Covariance function.
     mean : callable, optional
         Mean function (default: ``Zero()``).
-    likelihood : Likelihood
+    likelihood : LikelihoodVariable
         Observation likelihood (Gaussian or any non-Gaussian likelihood).
     variational_params : VGPParams
         Symbolic variational parameters sized to N. Construct via
@@ -119,7 +120,6 @@ class VGP:
     """
 
     default_objective = staticmethod(vgp_elbo)
-    predict_needs_data = True
 
     def __init__(self, kernel, mean=None, likelihood=None, variational_params=None):
         """Store the kernel, mean, likelihood, and variational parameters."""
@@ -196,6 +196,20 @@ class VGP:
         quad = self.alpha @ (K @ self.alpha)
         return 0.5 * (tr_Ainv + quad - n.astype(K.dtype) + logdet_A)
 
+    def predict_spec(self, X_new, incl_lik=False, X_train=None, y_train=None):
+        """Prediction spec for :func:`ptgp.optim.compile_predict`.
+
+        ``X_train`` is required and embedded as a constant, since q(f) lives at
+        the training inputs. ``y_train`` is not used.
+        """
+        if X_train is None:
+            raise ValueError(
+                "VGP prediction requires X_train. "
+                "The variational posterior is defined at the training inputs."
+            )
+        mean, var = self.predict_marginal(X_new, pt.as_tensor_variable(X_train), incl_lik=incl_lik)
+        return PredictSpec([X_new], (mean, var), identity_prepare)
+
     def predict_marginal(self, X_new, X_train, y_train=None, incl_lik=False):
         """Posterior marginal mean and variance at each point in X_new.
 
@@ -224,5 +238,5 @@ class VGP:
         C = pt.linalg.solve_triangular(L, g[:, None] * Kfnew, lower=True)
         fvar = self.kernel.diag(X_new) - pt.sum(C**2, axis=0)
         if incl_lik:
-            return self.likelihood.predict_mean_and_var(fmean, fvar)
+            return self.likelihood.at(X_new).predict_mean_and_var(fmean, fvar)
         return fmean, fvar
