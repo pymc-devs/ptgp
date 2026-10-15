@@ -149,3 +149,42 @@ def test_train_recompute_predict_heteroskedastic():
     predict = pg.optim.compile_predict(vnngp, X_new_var, model, shared_params, **kw)
     with pytest.raises(ValueError, match="recompute_neighbors"):
         predict(X_new)
+
+
+def test_grad_norm_excludes_frozen_vars():
+    from ptgp.optim.training import _make_shared_params, _replace_graph
+
+    rng = np.random.default_rng(0)
+    N = 40
+    X = rng.uniform(size=(N, D))
+    y = np.sin(4 * X[:, 0])
+    X_var = pt.matrix("X", shape=(None, D))
+    y_var = pt.vector("y")
+    row_idx = pt.lvector("row_idx")
+    kl_idx = pt.lvector("kl_idx")
+    with pm.Model() as model:
+        ls = pm.LogNormal("ls", 0.0, 0.5)
+        sigma = pm.HalfNormal("sigma", 1.0)
+        vnngp = VNNGP(ExpQuad(input_dim=D, ls=ls), X, Gaussian(sigma), k=5, seed=0)
+    ls_value = model.rvs_to_values[ls]
+    frozen = {ls_value: np.log(0.3)}
+    inputs = [X_var, y_var, row_idx, kl_idx]
+    shared_params, shared_extras, _ = _make_shared_params(
+        model, vnngp.extra_vars, vnngp.extra_init, frozen_vars=frozen
+    )
+    diag = pg.optim.compile_diagnostics(
+        vnngp_diagnostics,
+        vnngp,
+        inputs,
+        model,
+        shared_params,
+        shared_extras=shared_extras,
+        frozen_vars=frozen,
+    )
+    args = (X, y, np.arange(N), np.arange(vnngp.num_inducing))
+
+    loss = -vnngp_elbo(vnngp, *inputs).elbo - model.logp(jacobian=True, sum=True)
+    [loss] = _replace_graph([loss], model, shared_params, vnngp.extra_vars, shared_extras, frozen)
+    params = [shared_params[model.rvs_to_values[sigma]], *shared_extras]
+    norm = pt.sqrt(sum(pt.sum(g**2) for g in pytensor.grad(loss, params)))
+    np.testing.assert_allclose(diag(*args).grad_norm, pytensor.function(inputs, norm)(*args))

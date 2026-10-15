@@ -1337,6 +1337,7 @@ def compile_diagnostics(
     shared_params,
     extra_vars=None,
     shared_extras=None,
+    frozen_vars=None,
     include_prior=True,
     compile_kwargs=None,
 ):
@@ -1363,6 +1364,9 @@ def compile_diagnostics(
         Defaults to ``gp_model.extra_vars``.
     shared_extras : list, optional
         Shared variables for ``extra_vars``.
+    frozen_vars : dict[TensorVariable, ndarray], optional
+        Variables held fixed in training, as in :func:`compile_training_step`.
+        They are pinned to these values and left out of ``grad_norm``.
     include_prior : bool
         Whether the loss behind ``grad_norm`` includes the PyMC log-prior, as
         in :func:`compile_training_step`.
@@ -1387,10 +1391,16 @@ def compile_diagnostics(
         if include_prior:
             loss = loss - model.logp(jacobian=True, sum=True)
         fields[terms._fields.index("grad_norm")] = loss
-    outputs = _replace_graph(fields, model, shared_params, extra_vars, shared_extras)
+    outputs = _replace_graph(
+        fields, model, shared_params, extra_vars, shared_extras, frozen_vars=frozen_vars
+    )
     if "grad_norm" in terms._fields:
         i = terms._fields.index("grad_norm")
-        params = [*shared_params.values(), *(shared_extras or ())]
+        frozen = frozen_vars or {}
+        params = [
+            *(sv for vv, sv in shared_params.items() if vv not in frozen),
+            *(shared_extras or ()),
+        ]
         grads = pytensor.grad(outputs[i], params, disconnected_inputs="ignore")
         outputs[i] = pt.sqrt(sum(pt.sum(g**2) for g in grads))
     fn = pytensor.function(list(inputs), outputs, **_with_input_downcast(compile_kwargs))

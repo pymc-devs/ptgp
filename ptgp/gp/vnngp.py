@@ -22,7 +22,6 @@ from ptgp.neighbors import (
     partition_blocks,
     query_neighbors,
 )
-from ptgp.objectives import vnngp_elbo
 
 NeighborUpdate = namedtuple("NeighborUpdate", ["frac_changed", "block_coverage"])
 
@@ -133,8 +132,6 @@ class VNNGP:
     seed : int, optional
         Seed for the random ordering.
     """
-
-    default_objective = staticmethod(vnngp_elbo)
 
     def __init__(
         self,
@@ -353,14 +350,19 @@ class VNNGP:
             ``frac_changed``: fraction of points whose neighbor set changed.
             ``block_coverage``: fraction of neighbor pairs sharing a q block.
         """
-        from ptgp.optim.training import _replace_graph
+        from ptgp.optim.training import _replace_graph, _with_input_downcast
 
         if extra_vars is None:
             extra_vars = self.extra_vars
 
         def evaluate(outputs, inputs=()):
             replaced = _replace_graph(outputs, model, shared_params, extra_vars, shared_extras)
-            fn = pytensor.function(list(inputs), replaced, on_unused_input="ignore")
+            fn = pytensor.function(
+                list(inputs),
+                replaced,
+                on_unused_input="ignore",
+                **_with_input_downcast(None),
+            )
             shared = {
                 v
                 for v in ancestors(replaced)
