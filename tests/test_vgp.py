@@ -279,3 +279,15 @@ class TestVGPPointDiagnostics:
         assert d.info[15] < 0
         assert d.lam[15] < 0.05
         assert np.delete(d.lam, 15).min() > 1.0
+
+    def test_heteroskedastic_sigma_uses_training_inputs(self):
+        """With sigma built on a symbolic X, the diagnostics evaluate it at the
+        numeric training inputs: score = (y - fmean) / sigma(X)^2."""
+        rng = np.random.default_rng(7)
+        y = np.sin(self.X[:, 0]) + 0.1 * rng.standard_normal(self.N)
+        X_var = pt.matrix("X", shape=(None, 1))
+        likelihood = pg.likelihoods.Gaussian(0.2 + 0.01 * X_var[:, 0], x=X_var)
+        d = self._diagnostics(likelihood, y, pg.gp.init_vgp_params(self.N), maxiter=20)
+        s2 = (0.2 + 0.01 * self.X[:, 0]) ** 2
+        np.testing.assert_allclose(d.score, (y - d.fmean) / s2, atol=1e-8)
+        np.testing.assert_allclose(d.info, 1.0 / s2, atol=1e-8)

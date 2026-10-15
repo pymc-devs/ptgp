@@ -303,9 +303,9 @@ def get_vgp_point_diagnostics(vgp, fit, X_train, y_train):
     y = pt.as_tensor_variable(np.asarray(y_train, dtype=floatX))
 
     fmean, fvar = vgp._train_marginals(X)
-    var_exp = pt.sum(vgp.likelihood.variational_expectation(y, fmean, fvar))
+    var_exp = pt.sum(vgp.likelihood.at(X).variational_expectation(y, fmean, fvar))
     score, dvar = pytensor.grad(var_exp, [fmean, fvar])
-    neg_elbo = -vgp_elbo(vgp, X, y).elbo
+    neg_elbo = vgp.prior_kl(X) - var_exp
     g_nu, g_lambda = pytensor.grad(neg_elbo, [vgp.alpha, vgp.lam])
     outputs = [vgp.alpha, vgp.lam, fmean, fvar, score, -2.0 * dvar, g_nu, g_lambda]
     replaced = _replace_graph(
