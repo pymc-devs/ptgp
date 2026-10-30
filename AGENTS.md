@@ -23,7 +23,8 @@ based on declared matrix structure**. Three pieces hold this up:
 3. **Cubic-op floor.** `tests/test_cubic_floor.py` asserts each model's
    joint (loss + all grads) graph compiles to the *minimum* count of
    O(N³) factorizations: 1 for `Unapproximated`, 2 for `VFE`, 1 for
-   `SVGP`. This test is the canary for the whole rewrite story — run it
+   `SVGP`, and one batched Cholesky on `(batch, k, k)` for `VNNGP`.
+   This test is the canary for the whole rewrite story — run it
    after any change to `ptgp/rewrites.py`, `ptgp/objectives.py`, or kernel
    evaluation. When it fails, `scripts/joint_graph_analysis.py` prints the
    full per-model op breakdown for diagnosis.
@@ -77,7 +78,7 @@ The reference usage example for all three models is
 
 ## Where things live
 
-- **Models** — `ptgp/gp/`. `Unapproximated`, `VFE`, `SVGP`. Each exposes
+- **Models** — `ptgp/gp/`. `Unapproximated`, `VFE`, `SVGP`, `VNNGP`. Each exposes
   `predict_marginal` / `predict_joint`; `SVGP` adds `predict_f_samples`
   and `prior_kl`. Each also implements `predict_spec`, returning a
   `PredictSpec` (compiled inputs, outputs, host-side `prepare`) that
@@ -104,6 +105,11 @@ The reference usage example for all three models is
   that depend on inputs (heteroskedastic `sigma`) are built against a design
   matrix passed as `x=`; `lik.at(X_new)` re-roots them onto new inputs.
   Non-Gaussian variants compute `variational_expectation` by quadrature.
+- **VNNGP** — `ptgp/gp/vnngp.py`, with host-side ordering and neighbor
+  search in `ptgp/neighbors.py`. Inducing points are the unique rows of `X`;
+  neighbor indices live in int shared variables that `recompute_neighbors`
+  overwrites between steps. `vnngp_elbo(vnngp, X, y, row_idx, kl_idx)` takes
+  its indices through `compile_training_step(..., extra_inputs=[...])`.
 - **Inducing variables** — `ptgp/inducing.py` (`Points`,
   `random_subsample_init`, `kmeans_init`, `greedy_variance_init`),
   `ptgp/inducing_fourier.py` (`FourierFeatures1D` — 1D Matern VFF with

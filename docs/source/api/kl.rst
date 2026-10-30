@@ -8,3 +8,4 @@ KL Divergences
 
     gauss_kl
     gauss_kl_structured
+    nn_kl_terms

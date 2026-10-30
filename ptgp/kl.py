@@ -1,4 +1,8 @@
+from collections import namedtuple
+
 import pytensor.tensor as pt
+
+NNKLTerms = namedtuple("NNKLTerms", ["kl", "logdet", "trace", "mahal"])
 
 
 def gauss_kl(q_mu, q_sqrt, K=None):
@@ -57,3 +61,48 @@ def gauss_kl_structured(q_mu, q_sqrt, K_solve, K_logdet):
     mahal = q_mu @ Kinv_qmu
     _, logdet_q = pt.linalg.slogdet(q_sqrt @ q_sqrt.T)
     return 0.5 * (trace + mahal - M - logdet_q + K_logdet)
+
+
+def nn_kl_terms(b, F, mean_local, cov_local, prior_mean_local, log_sd_cond):
+    """Per-point KL terms of a Gaussian q against a nearest-neighbor (Vecchia) prior.
+
+    The prior factorizes as ``prod_j N(u_j | mu_j + b_j^T (u_n - mu_n), F_j)``.
+    With ``a_j = [1, -b_j]`` and ``r_j = a_j^T (u_local - mu_local)``,
+
+        KL_j = -1/2 - log_sd_cond_j + 1/2 log F_j + E_q[r_j^2] / (2 F_j)
+        E_q[r_j^2] = (a_j^T (m_local - mu_local))^2 + a_j^T S_local a_j
+
+    Summed over all points this is the exact KL of q against the prior, so a
+    uniform minibatch of terms scaled by ``M / batch_size`` is unbiased. For
+    a mean-field q this is Eq 28 of Wu, Pleiss & Cunningham (2022,
+    arXiv:2202.01694) and GPyTorch's ``NNVariationalStrategy._stochastic_kl_helper``.
+
+    Parameters
+    ----------
+    b : tensor, shape (B, K)
+        Neighbor weights, zero on padded slots.
+    F : tensor, shape (B,)
+        Conditional variances.
+    mean_local : tensor, shape (B, K + 1)
+        q means of ``[u_j, u_n(j)]``.
+    cov_local : tensor, shape (B, K + 1, K + 1)
+        q covariance of ``[u_j, u_n(j)]``.
+    prior_mean_local : tensor, shape (B, K + 1)
+        Prior means of ``[u_j, u_n(j)]``.
+    log_sd_cond : tensor, shape (B,)
+        Log of the diagonal entry of q's Cholesky factor at ``j``, so that the
+        terms sum to the entropy of q.
+
+    Returns
+    -------
+    NNKLTerms
+        ``kl`` (B,) and its parts ``logdet``, ``trace``, ``mahal`` (B,), with
+        ``kl = logdet + trace + mahal``.
+    """
+    a = pt.concatenate([pt.ones_like(F)[:, None], -b], axis=1)
+    resid = pt.sum(a * (mean_local - prior_mean_local), axis=1)
+    quad = pt.sum(a * pt.sum(cov_local * a[:, None, :], axis=2), axis=1)
+    logdet = 0.5 * pt.log(F) - log_sd_cond
+    trace = 0.5 * quad / F - 0.5
+    mahal = 0.5 * resid**2 / F
+    return NNKLTerms(kl=logdet + trace + mahal, logdet=logdet, trace=trace, mahal=mahal)

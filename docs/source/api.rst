@@ -13,6 +13,7 @@ API Reference
     api/mean
     api/inducing
     api/inducing_fourier
+    api/neighbors
     api/objectives
     api/conditionals
     api/kl

@@ -8,6 +8,7 @@ from ptgp import (
     kernels,
     likelihoods,
     mean,
+    neighbors,
     objectives,
     optim,
     rewrites,  # noqa: F401  (registers PyTensor rewrites at import)
@@ -49,6 +50,7 @@ __all__ = [
     "kernels",
     "likelihoods",
     "mean",
+    "neighbors",
     "objectives",
     "optim",
     "predict",
