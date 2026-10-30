@@ -16,6 +16,7 @@ from pytensor.graph.replace import graph_replace
 from pytensor_ml.optim import Gradients, Steps, adam, compile_train
 
 from ptgp.gp.base import identity_prepare
+from ptgp.inducing_fourier import _maybe_wrap_with_domain_check
 from ptgp.objectives import vfe_diagnostics
 
 logger = logging.getLogger(__name__)
@@ -459,8 +460,6 @@ def compile_training_step(
         inputs=[X_var, y_var],
         compile_kwargs=_with_input_downcast(compile_kwargs),
     )
-    from ptgp.inducing_fourier import _maybe_wrap_with_domain_check
-
     train_step = _maybe_wrap_with_domain_check(train_step, gp_model, input_index=0)
     return train_step, shared_params, shared_extras
 
@@ -647,8 +646,6 @@ def compile_scipy_objective(
         [loss_replaced, flat_grad],
         **_with_input_downcast(compile_kwargs),
     )
-    from ptgp.inducing_fourier import _maybe_wrap_with_domain_check
-
     fun = _maybe_wrap_with_domain_check(fun, gp_model, input_index=1)
 
     def unpack_to_shared(theta):
@@ -1317,8 +1314,8 @@ def compile_predict(
     if spec.prepare is identity_prepare:
         return compiled
 
-    def predict_fn(*args):
-        return compiled(*spec.prepare(*args))
+    def predict_fn(*args, **kwargs):
+        return compiled(*spec.prepare(*args), **kwargs)
 
     predict_fn.__wrapped__ = compiled
     return predict_fn
