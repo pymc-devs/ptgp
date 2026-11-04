@@ -45,6 +45,7 @@ version-file = "ptgp/_version.py"
 exclude = [
   '/.github',
   '/notebooks',
+  '/pixi.lock',
 ]
 
 [tool.hatch.build.targets.wheel]
