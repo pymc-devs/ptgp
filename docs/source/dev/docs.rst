@@ -79,6 +79,8 @@ The custom Sphinx extensions live at ``docs/sphinxext/``:
   reference list on the same page, so numbering and anchors never collide
   across pages.
 
+.. _adding-a-gallery-kernel:
+
 Adding a new kernel to the covariance gallery
 ---------------------------------------------
 
