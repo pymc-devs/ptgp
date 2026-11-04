@@ -8,18 +8,19 @@ a citation.
 Building locally
 ----------------
 
-The docs build from ``docs/`` using the ``ptgp-docs`` conda environment:
+The docs build from ``docs/`` inside the pixi environment (``pixi install``
+at the repo root):
 
 .. code-block:: bash
 
-    conda env update -f conda_envs/environment-docs.yaml
-    cd docs
-    make show         # build + open the rendered HTML in the default browser
-    make livehtml     # auto-rebuild + auto-refresh on every save (sphinx-autobuild)
-    make clean        # wipe build/ and all generated source (gallery, thumbnails, autosummary stubs)
+    pixi run docs                 # sphinx-build -M html
+    pixi run docs-live            # auto-rebuild + auto-refresh on every save (sphinx-autobuild)
+    pixi run -e docs make -C docs show    # build + open the rendered HTML in the default browser
+    pixi run -e docs make -C docs clean   # wipe build/ and all generated source
 
-Read the Docs builds the same way; ``.readthedocs.yaml`` points at the same
-conda env and ``docs/source/conf.py``.
+Read the Docs builds from ``conda_envs/environment-docs.yaml`` and
+``docs/source/conf.py`` (see ``.readthedocs.yaml``); keep that env file's
+pins in sync with the pixi ``docs`` feature in ``pyproject.toml``.
 
 Layout
 ------

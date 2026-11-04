@@ -28,11 +28,9 @@ based on declared matrix structure**. Three pieces hold this up:
    evaluation. When it fails, `scripts/joint_graph_analysis.py` prints the
    full per-model op breakdown for diagnosis.
 
-`ptgp/rewrites.py` and `ptgp/linalg/rewrites.py` register assumption rules
-and structural rewrites into PyTensor's global registries at import time
-(both are imported for side-effects in `ptgp/__init__.py` —
-**don't remove those imports**). `ptgp/rewrites.py` also monkey-patches
-`pta.assume` to accept `positive=True` for scalar positivity.
+`ptgp/rewrites.py` registers structural rewrites into PyTensor's global
+registries at import time (it's imported for side-effects in
+`ptgp/__init__.py` — **don't remove that import**).
 
 **PyMC is a prior container only.** `pm.Model()` holds priors on
 hyperparameters; `model.logp()` is added to the objective for MAP
@@ -42,30 +40,44 @@ inference layer.
 
 ## Running things
 
-All commands assume the project's `ptgp` conda env is active (Python
-3.14, PyTensor installed from `pymc-devs/pytensor@main`). The env path
-varies by machine — if no `ptgp` env is found, ask the user where their
-env lives rather than guessing.
+The development environment is managed by [pixi](https://pixi.sh) and
+defined under `[tool.pixi.*]` in `pyproject.toml` (locked in `pixi.lock`).
+`pixi install` builds `.pixi/envs/default`; prefix commands with
+`pixi run` (or run `pixi shell` once) — don't look for a conda env. If
+`pixi` isn't on PATH, ask the user rather than guessing at another env.
+`conda_envs/environment.yaml` is the equivalent conda dev env for people
+who prefer conda; `environment-test.yaml` (CI) and `environment-docs.yaml`
+(Read the Docs) are the slimmer variants. Keep all three in sync with the
+pixi manifest.
 
 ```bash
 # tests (pyproject sets -v and --doctest-modules, so docstrings run too)
-python -m pytest tests/
-python -m pytest tests/test_vfe.py                          # single file
-python -m pytest tests/test_vfe.py::test_name               # single test
-python -m pytest -k vfe                                     # by keyword
-python -m pytest tests/test_cubic_floor.py                  # the rewrite-floor canary
+pixi run test                                               # == pixi run python -m pytest tests/
+pixi run python -m pytest tests/test_vfe.py                 # single file
+pixi run python -m pytest tests/test_vfe.py::test_name      # single test
+pixi run python -m pytest -k vfe                            # by keyword
+pixi run cubic-floor                                        # the rewrite-floor canary
 
 # lint / format (also enforced by pre-commit; line-length 100)
-ruff check ptgp/ tests/
-ruff format ptgp/ tests/
+pixi run lint                                               # ruff check ptgp/ tests/
+pixi run format                                             # ruff format ptgp/ tests/
+pixi run mypy                                               # scripts/run_mypy.py --verbose
+pixi run hooks                                              # all pre-commit hooks on all files
+
+# docs (sphinx; `docs-live` serves with autobuild)
+pixi run docs
 
 # diagnostic scripts — not in the test suite, run by hand when needed
-python scripts/joint_graph_analysis.py        # op-count tables per model, with/without ptgp rewrites
-python scripts/inplace_audit.py               # which linalg ops are inplace and why others aren't
+pixi run python scripts/joint_graph_analysis.py   # op-count tables per model, with/without ptgp rewrites
+pixi run python scripts/inplace_audit.py          # which linalg ops are inplace and why others aren't
 
 # execute the introduction notebook in place
-python -m jupyter nbconvert --to notebook --execute --inplace \
-    notebooks/introduction/introduction.ipynb --ExecutePreprocessor.kernel_name=ptgp
+pixi run jupyter nbconvert --to notebook --execute --inplace \
+    notebooks/introduction/introduction.ipynb
+
+# register the env as a Jupyter kernel named "ptgp" (for notebooks opened
+# from an external Jupyter / VS Code)
+pixi run kernel
 
 # install the bundled agent-skill docs into a Claude Code skill dir (optional)
 python scripts/install_claude_skills.py --project .   # ./.claude/skills/
@@ -119,21 +131,23 @@ The reference usage example for all three models is
     (no model reconstruction).
 - **Conditionals / KL** — `ptgp/conditionals.py`, `ptgp/kl.py`. Whitened
   vs unwhitened SVGP posterior pieces; `gauss_kl` / `gauss_kl_structured`.
-- **Linalg** — `ptgp/linalg/`. `LinearOperator` abstraction (matvec /
-  solve / logdet ops) + structural rewrites. Powers the Fourier-features
-  path.
+- **Linalg** — `ptgp/linalg/`. Comment-only placeholders for a future
+  lazy `LinearOperator` type (CG solves, Lanczos log-det). Nothing
+  imports it yet.
 - **Utils** — `ptgp/utils.py`. `check_init` (NaN/inf + grad-norm sanity
   check at initialisation — call this before training), `get_initial_params`
   (prior-median / prior-draw / unconstrained-zero), `save_fit` / `load_fit`.
-- **Rewrites** — `ptgp/rewrites.py` + `ptgp/linalg/rewrites.py`. The
-  cubic-floor enablers; see the mental-model section.
+- **Rewrites** — `ptgp/rewrites.py`. The cubic-floor enablers; see the
+  mental-model section.
+- **High-level API** — `ptgp/optim/api.py` (`fit`, `predict`,
+  `FitResult`, re-exported at top level) wraps the compile helpers for
+  the common case; `ptgp/idata.py` (`to_idata`) packages a fit as an
+  ArviZ `InferenceData`.
 
-`comparison_libraries/` is **gitignored** — it's a local-only directory
-where some users keep checked-out reference repos (GPJax, GPflow,
-GPyTorch, CoLA, linear_operator, PyTensor, PyMC). GPJax is the primary
-reference for correctness; GPflow has the cleanest VFE/SVGP architecture.
-If `comparison_libraries/` isn't present on this machine, fetch from the
-upstream repos when reference code is needed.
+`comparison_libraries/` is **gitignored** — a local-only directory where
+some users keep checked-out reference repos (GPflow, GPJax, PyTensor,
+PyMC). Tests don't depend on any of them; GPflow has the cleanest
+VFE/SVGP architecture when reference code is needed.
 
 ## Conventions
 
@@ -174,8 +188,8 @@ Things that aren't self-evident from reading the code:
   second names the reason or fix. Example: `"Variables appear in both
   extra_vars and frozen_vars: [...]. They cannot be both trainable and
   frozen."`
-- **Tests use float64; GPJax uses float32.** For cross-library
-  correctness comparisons, use `atol=1e-5`.
+- **Tests use float64** except `tests/test_float32.py` and
+  `tests/test_mlx.py` (MLX runs float32 only on the GPU).
 - **Notebooks** are stored as `.ipynb` and edited directly — no Jupytext
   pairing or markdown mirror.
 
