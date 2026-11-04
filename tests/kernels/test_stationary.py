@@ -101,10 +101,8 @@ class TestExpQuad:
         from pytensor.assumptions.specify import SpecifyAssumptions
 
         assert isinstance(K.owner.op, SpecifyAssumptions)
-        # Keys were plain strings in earlier pytensor 3.3.x releases; AssumptionKey objects now.
-        assumed = {getattr(key, "name", key): state for key, state in K.owner.op.assumptions}
-        assert assumed["symmetric"] is FactState.TRUE
-        assert assumed["positive_definite"] is FactState.TRUE
+        assert ("symmetric", FactState.TRUE) in K.owner.op.assumptions
+        assert ("positive_definite", FactState.TRUE) in K.owner.op.assumptions
 
     def test_cross_no_annotation(self, X_1d, X_1d_other):
         X_pt = pt.as_tensor_variable(X_1d)
