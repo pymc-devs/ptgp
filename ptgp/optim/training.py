@@ -193,9 +193,15 @@ def _make_shared_params(
         ``{value_var: shared_var}`` for PyMC value vars.
     shared_extras : list
         Shared variables for extra (non-PyMC) parameters.
-    all_shared : list
-        All shared variables in order: value vars then extras.
     """
+    if frozen_vars:
+        rv_keys = [k for k in frozen_vars if k in model.rvs_to_values]
+        if rv_keys:
+            names = [k.name or repr(k) for k in rv_keys]
+            raise ValueError(
+                f"frozen_vars keys {names} are PyMC random variables, not value variables. "
+                f"Freeze model.rvs_to_values[rv] instead, with a value in its unconstrained space."
+            )
     ip = _make_initial_point(model, init=init, rng=init_rng)
     shared_params = {}
     for vv in model.continuous_value_vars:
@@ -211,8 +217,7 @@ def _make_shared_params(
             init_array = np.asarray(init, dtype=var.dtype)
             shared_extras.append(pytensor.shared(init_array, name=var.name, shape=init_array.shape))
 
-    all_shared = list(shared_params.values()) + shared_extras
-    return shared_params, shared_extras, all_shared
+    return shared_params, shared_extras
 
 
 def _replace_graph(
@@ -250,7 +255,9 @@ def _with_input_downcast(compile_kwargs):
     return {"allow_input_downcast": True, **(compile_kwargs or {})}
 
 
-def _grouped_updates(optimizers, param_groups, shared_params, extra_vars, shared_extras, loss):
+def _grouped_updates(
+    optimizers, param_groups, shared_params, extra_vars, shared_extras, loss, frozen_vars=None
+):
     """Apply each group's transform to its shared variables and merge the updates.
 
     Coverage of every trainable parameter is enforced downstream by
@@ -266,6 +273,11 @@ def _grouped_updates(optimizers, param_groups, shared_params, extra_vars, shared
     for name, group in param_groups.items():
         resolved = []
         for var in group:
+            if frozen_vars is not None and var in frozen_vars:
+                raise ValueError(
+                    f"param_groups[{name!r}] contains frozen variable {var.name or repr(var)}. "
+                    f"Frozen variables are not optimized, so leave them out of every group."
+                )
             if var not in sym_to_shared:
                 raise ValueError(
                     f"param_groups[{name!r}] contains unknown variable {var.name or repr(var)}. "
@@ -420,12 +432,17 @@ def compile_training_step(
                 f"They cannot be both trainable and frozen."
             )
 
-    shared_params, shared_extras, all_shared = _make_shared_params(
+    shared_params, shared_extras = _make_shared_params(
         model,
         extra_vars,
         extra_init,
         frozen_vars=frozen_vars,
     )
+
+    # A frozen PyMC value var keeps its shared slot (so it holds the freeze value) but is replaced
+    # by a constant in the loss, so it has no gradient and must not be passed to the optimizer.
+    frozen = frozen_vars or {}
+    trainable = [sv for vv, sv in shared_params.items() if vv not in frozen] + shared_extras
 
     loss = -_scalar_from_objective(objective_fn(gp_model, X_var, y_var))
     if include_prior:
@@ -447,6 +464,7 @@ def compile_training_step(
             extra_vars,
             shared_extras,
             loss_replaced,
+            frozen_vars=frozen_vars,
         )
     else:
         rule = optimizer
@@ -454,7 +472,7 @@ def compile_training_step(
     train_step = compile_train(
         loss_replaced,
         rule,
-        parameters=all_shared,
+        parameters=trainable,
         inputs=[X_var, y_var],
         compile_kwargs=_with_input_downcast(compile_kwargs),
     )
@@ -595,7 +613,7 @@ def compile_scipy_objective(
     model = pm.modelcontext(model)
     extra_vars, extra_init = _resolve_extras(gp_model, extra_vars, extra_init)
 
-    shared_params, shared_extras, _ = _make_shared_params(
+    shared_params, shared_extras = _make_shared_params(
         model,
         extra_vars,
         extra_init,
@@ -742,7 +760,7 @@ def compile_scipy_diagnostics(
     model = pm.modelcontext(model)
     extra_vars, extra_init = _resolve_extras(gp_model, extra_vars, extra_init)
 
-    shared_params, shared_extras, _ = _make_shared_params(
+    shared_params, shared_extras = _make_shared_params(
         model,
         extra_vars,
         extra_init,
