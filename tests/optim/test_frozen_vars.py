@@ -26,6 +26,16 @@ def _make_svgp(Z_placeholder, M):
     return model, svgp, vp
 
 
+def _pymc_frozen_setup():
+    """Data and an SVGP with fixed Z, for freezing a PyMC hyperparameter."""
+    rng = np.random.default_rng(0)
+    X = rng.uniform(-2, 2, (40, 1))
+    y = np.sin(X[:, 0])
+    Z0 = np.linspace(-2, 2, 6)[:, None]
+    model, svgp, vp = _make_svgp(pt.as_tensor_variable(Z0), 6)
+    return X, y, model, svgp, vp
+
+
 class TestFrozenVars:
     def test_frozen_z_does_not_move(self):
         """Z in frozen_vars stays fixed; the loss still decreases."""
@@ -108,12 +118,36 @@ class TestFrozenVars:
         assert np.linalg.norm(Z_final - Z0) > 0, "Z should move in phase 2"
 
     def test_frozen_pymc_var_in_training_step(self):
-        """A frozen PyMC value var stays at its freeze value while the rest train."""
-        rng = np.random.default_rng(0)
-        X = rng.uniform(-2, 2, (40, 1))
-        y = np.sin(X[:, 0])
-        Z0 = np.linspace(-2, 2, 6)[:, None]
-        model, svgp, vp = _make_svgp(pt.as_tensor_variable(Z0), 6)
+        """A frozen PyMC value var enters the loss at its freeze value while the rest train."""
+        X, y, model, svgp, vp = _pymc_frozen_setup()
+        ls_vv = model.rvs_to_values[model["ls"]]
+        eta_vv = model.rvs_to_values[model["eta"]]
+
+        def compile_frozen(ls_value):
+            return pg.optim.compile_training_step(
+                pg.objectives.elbo,
+                svgp,
+                pt.matrix("X"),
+                pt.vector("y"),
+                model=model,
+                optimizer=adam(1e-2),
+                extra_vars=vp.extra_vars,
+                extra_init=vp.extra_init,
+                frozen_vars={ls_vv: ls_value},
+            )
+
+        train_step, shared, _ = compile_frozen(0.5)
+        eta0 = shared[eta_vv].get_value().copy()
+        losses = [float(train_step(X, y)) for _ in range(20)]
+        assert losses[-1] < losses[0]
+        assert not np.allclose(shared[eta_vv].get_value(), eta0)
+
+        other_step, _, _ = compile_frozen(-1.0)
+        assert not np.isclose(float(other_step(X, y)), losses[0])
+
+    def test_frozen_pymc_var_with_param_groups(self):
+        """A frozen value var left out of every param group compiles and trains."""
+        X, y, model, svgp, vp = _pymc_frozen_setup()
         ls_vv = model.rvs_to_values[model["ls"]]
         eta_vv = model.rvs_to_values[model["eta"]]
 
@@ -123,17 +157,51 @@ class TestFrozenVars:
             pt.matrix("X"),
             pt.vector("y"),
             model=model,
-            optimizer=adam(1e-2),
+            optimizer={"hyper": adam(1e-2), "variational": adam(1e-2, namespace="variational")},
+            param_groups={"hyper": [eta_vv], "variational": vp.extra_vars},
             extra_vars=vp.extra_vars,
             extra_init=vp.extra_init,
             frozen_vars={ls_vv: 0.5},
         )
         eta0 = shared[eta_vv].get_value().copy()
-        for _ in range(20):
-            train_step(X, y)
-
-        np.testing.assert_allclose(shared[ls_vv].get_value(), 0.5)
+        losses = [float(train_step(X, y)) for _ in range(20)]
+        assert losses[-1] < losses[0]
         assert not np.allclose(shared[eta_vv].get_value(), eta0)
+
+    def test_frozen_var_in_param_group_raises(self):
+        X, y, model, svgp, vp = _pymc_frozen_setup()
+        ls_vv = model.rvs_to_values[model["ls"]]
+        eta_vv = model.rvs_to_values[model["eta"]]
+
+        with pytest.raises(ValueError, match="contains frozen variable"):
+            pg.optim.compile_training_step(
+                pg.objectives.elbo,
+                svgp,
+                pt.matrix("X"),
+                pt.vector("y"),
+                model=model,
+                optimizer={"hyper": adam(1e-2), "variational": adam(1e-2, namespace="variational")},
+                param_groups={"hyper": [ls_vv, eta_vv], "variational": vp.extra_vars},
+                extra_vars=vp.extra_vars,
+                extra_init=vp.extra_init,
+                frozen_vars={ls_vv: 0.5},
+            )
+
+    def test_frozen_rv_key_raises(self):
+        """Freezing the RV instead of its value var raises rather than silently training it."""
+        X, y, model, svgp, vp = _pymc_frozen_setup()
+
+        with pytest.raises(ValueError, match="are PyMC random variables"):
+            pg.optim.compile_training_step(
+                pg.objectives.elbo,
+                svgp,
+                pt.matrix("X"),
+                pt.vector("y"),
+                model=model,
+                extra_vars=vp.extra_vars,
+                extra_init=vp.extra_init,
+                frozen_vars={model["ls"]: 0.5},
+            )
 
     def test_frozen_pymc_var_initial_value_in_scipy_objective(self):
         """A PyMC value var listed in frozen_vars must have its shared slot

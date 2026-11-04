@@ -33,7 +33,9 @@ compile_training_step(objective_fn, gp_model, X_var, y_var, model=...,
 `optimizer` defaults to `adam(1e-2)`. With a dict, keys must match
 `param_groups` keys exactly, groups must partition the trainable variables
 (PyMC value vars plus `extra_vars` entries), and each group's transform must
-contain a rule. To freeze a variable use `frozen_vars=`, not an omitted group.
+contain a rule. To freeze a variable use `frozen_vars=`, not an omitted group,
+and leave it out of every group. Freeze a PyMC hyperparameter through its value
+var, `model.rvs_to_values[rv]`, with an unconstrained value; an RV key raises.
 
 ## Rules
 
