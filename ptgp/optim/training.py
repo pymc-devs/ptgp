@@ -13,9 +13,9 @@ import pytensor
 import pytensor.tensor as pt
 
 from pytensor.graph.replace import graph_replace
+from pytensor_ml.optim import Gradients, Steps, adam, compile_train
 
 from ptgp.objectives import vfe_diagnostics
-from ptgp.optim.optimizers import adam
 
 logger = logging.getLogger(__name__)
 
@@ -250,20 +250,59 @@ def _with_input_downcast(compile_kwargs):
     return {"allow_input_downcast": True, **(compile_kwargs or {})}
 
 
+def _grouped_updates(optimizers, param_groups, shared_params, extra_vars, shared_extras, loss):
+    """Apply each group's transform to its shared variables and merge the updates.
+
+    Coverage of every trainable parameter is enforced downstream by
+    ``compile_train``, which raises when a parameter receives no update.
+    """
+    sym_to_shared = dict(shared_params)
+    if extra_vars is not None:
+        for var, sv in zip(extra_vars, shared_extras):
+            sym_to_shared[var] = sv
+
+    group_of = {}
+    merged = {}
+    for name, group in param_groups.items():
+        resolved = []
+        for var in group:
+            if var not in sym_to_shared:
+                raise ValueError(
+                    f"param_groups[{name!r}] contains unknown variable {var.name or repr(var)}. "
+                    f"Groups may only contain PyMC value vars or entries of extra_vars."
+                )
+            if var in group_of:
+                raise ValueError(
+                    f"Variable {var.name or repr(var)} appears in multiple groups "
+                    f"({group_of[var]!r} and {name!r}). Each parameter can belong to one group only."
+                )
+            group_of[var] = name
+            resolved.append(sym_to_shared[var])
+
+        updates = optimizers[name](loss, resolved)
+        if isinstance(updates, Gradients):
+            raise ValueError(
+                f"The transform for group {name!r} returned gradients rather than steps. "
+                f"Put a rule such as adam(1e-3) in the group's chain."
+            )
+        merged.update(updates)
+
+    return Steps(merged)
+
+
 def compile_training_step(
     objective_fn,
     gp_model,
     X_var,
     y_var,
     model=None,
-    optimizer_fn=None,
+    optimizer=None,
     extra_vars=None,
     extra_init=None,
     frozen_vars=None,
     param_groups=None,
     include_prior=True,
     compile_kwargs=None,
-    **optimizer_kwargs,
 ):
     """Compile a training step function for a PTGP model with PyMC priors.
 
@@ -283,9 +322,13 @@ def compile_training_step(
         None. Every continuous free RV in the model is automatically
         made into a trainable shared variable, so you do not need to list
         them.
-    optimizer_fn : callable, optional
-        Optimizer function (default: ``adam``). Must have signature
-        ``(loss, params, **kwargs) -> updates_dict``.
+    optimizer : Transform or dict[str, Transform], optional
+        A configured ``pytensor_ml.optim`` transform, e.g. ``adam(1e-3)``
+        or ``chain(clip_by_global_norm(1.0), adam(1e-3))``. Pass a dict
+        mapping group name to transform (together with ``param_groups``)
+        for per-group optimizers or learning rates. Two same-kind rules
+        in one dict need distinct ``namespace`` arguments so their state
+        does not collide. Default ``adam(1e-2)``.
     include_prior : bool
         If True (default), add the PyMC joint log-prior (with the
         transform log-det-jacobian) to the objective, yielding MAP in
@@ -309,16 +352,15 @@ def compile_training_step(
         Keys must not also appear in ``extra_vars``.
     param_groups : dict[str, list[TensorVariable]], optional
         Maps a group name to a list of symbolic variables (PyMC value vars
-        or entries of ``extra_vars``). Resolved to shared variables and
-        forwarded to the optimizer. Required when ``learning_rate`` is a
-        dict. The union of groups must cover every optimized parameter.
+        or entries of ``extra_vars``). Resolved to shared variables; each
+        group is optimized by the same-named entry of ``optimizer``.
+        Required when ``optimizer`` is a dict. The union of groups must
+        cover every optimized parameter.
     compile_kwargs : dict, optional
-        Forwarded as ``**compile_kwargs`` to ``pytensor.function``. Use this
-        to set ``mode`` (e.g. ``"NUMBA"``, ``"JAX"``), ``allow_input_downcast``,
-        etc. Same pattern as ``pm.sample``'s ``compile_kwargs``.
-    **optimizer_kwargs
-        Passed to the optimizer (e.g. ``learning_rate=1e-2`` or a dict
-        of per-group rates).
+        Forwarded through :func:`pytensor_ml.optim.compile_train` to the
+        function compiler. Use this to set ``mode`` (e.g. ``"NUMBA"``,
+        ``"JAX"``), ``allow_input_downcast``, etc. An ``updates`` entry is
+        folded into the training step as extra updates.
 
     Returns
     -------
@@ -347,8 +389,25 @@ def compile_training_step(
             )
     """
     model = pm.modelcontext(model)
-    if optimizer_fn is None:
-        optimizer_fn = adam
+    if optimizer is None:
+        optimizer = adam(1e-2)
+
+    if isinstance(optimizer, dict):
+        if param_groups is None:
+            raise ValueError(
+                "optimizer is a dict but param_groups was not given. "
+                "Each optimizer key must name a group of variables in param_groups."
+            )
+        if set(optimizer) != set(param_groups):
+            raise ValueError(
+                f"optimizer keys {sorted(optimizer)} do not match "
+                f"param_groups keys {sorted(param_groups)}. Each group needs exactly one transform."
+            )
+    elif param_groups is not None:
+        raise ValueError(
+            "param_groups was given but optimizer is a single transform. "
+            "Pass a dict mapping each group name to its own transform."
+        )
 
     extra_vars, extra_init = _resolve_extras(gp_model, extra_vars, extra_init)
 
@@ -368,23 +427,6 @@ def compile_training_step(
         frozen_vars=frozen_vars,
     )
 
-    if param_groups is not None:
-        sym_to_shared = dict(shared_params)
-        if extra_vars is not None:
-            for var, sv in zip(extra_vars, shared_extras):
-                sym_to_shared[var] = sv
-        resolved_groups = {}
-        for name, group in param_groups.items():
-            resolved = []
-            for var in group:
-                if var not in sym_to_shared:
-                    raise ValueError(
-                        f"param_groups[{name!r}] contains unknown variable {var.name or repr(var)}"
-                    )
-                resolved.append(sym_to_shared[var])
-            resolved_groups[name] = resolved
-        optimizer_kwargs = {**optimizer_kwargs, "param_groups": resolved_groups}
-
     loss = -_scalar_from_objective(objective_fn(gp_model, X_var, y_var))
     if include_prior:
         loss = loss - model.logp(jacobian=True, sum=True)
@@ -397,15 +439,24 @@ def compile_training_step(
         frozen_vars=frozen_vars,
     )
 
-    updates = optimizer_fn(loss_replaced, all_shared, **optimizer_kwargs)
+    if isinstance(optimizer, dict):
+        rule = _grouped_updates(
+            optimizer,
+            param_groups,
+            shared_params,
+            extra_vars,
+            shared_extras,
+            loss_replaced,
+        )
+    else:
+        rule = optimizer
 
-    compile_kwargs = dict(compile_kwargs) if compile_kwargs else {}
-    extra_updates = compile_kwargs.pop("updates", {})
-    train_step = pytensor.function(
-        [X_var, y_var],
+    train_step = compile_train(
         loss_replaced,
-        updates={**updates, **extra_updates},
-        **_with_input_downcast(compile_kwargs),
+        rule,
+        parameters=all_shared,
+        inputs=[X_var, y_var],
+        compile_kwargs=_with_input_downcast(compile_kwargs),
     )
     from ptgp.inducing_fourier import _maybe_wrap_with_domain_check
 

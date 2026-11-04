@@ -5,6 +5,8 @@ import pymc as pm
 import pytensor.tensor as pt
 import pytest
 
+from pytensor_ml.optim import adam
+
 import ptgp as pg
 
 
@@ -47,7 +49,7 @@ class TestFrozenVars:
             extra_vars=vp.extra_vars,
             extra_init=vp.extra_init,
             frozen_vars={Z_var: Z0},
-            learning_rate=1e-2,
+            optimizer=adam(1e-2),
         )
 
         losses = [float(train_step(X, y)) for _ in range(50)]
@@ -77,7 +79,7 @@ class TestFrozenVars:
             extra_vars=vp.extra_vars,
             extra_init=vp.extra_init,
             frozen_vars={Z_var: Z0},
-            learning_rate=1e-2,
+            optimizer=adam(1e-2),
         )
         for _ in range(30):
             train_step_1(X, y)
@@ -91,7 +93,7 @@ class TestFrozenVars:
             model=model,
             extra_vars=[*vp.extra_vars, Z_var],
             extra_init=[*vp.extra_init, Z0],
-            learning_rate=1e-2,
+            optimizer=adam(1e-2),
         )
         # Carry phase 1 state over.
         for vv, sh1 in shared_1.items():
@@ -169,5 +171,5 @@ class TestFrozenVars:
                 extra_vars=[*vp.extra_vars, Z_var],
                 extra_init=[*vp.extra_init, Z0],
                 frozen_vars={Z_var: Z0},
-                learning_rate=1e-2,
+                optimizer=adam(1e-2),
             )

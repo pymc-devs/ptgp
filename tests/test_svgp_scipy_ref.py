@@ -12,6 +12,7 @@ import pymc as pm
 import pytensor
 import pytensor.tensor as pt
 
+from pytensor_ml.optim import adam
 from scipy.special import gammaln
 
 import ptgp as pg
@@ -89,7 +90,7 @@ class TestSVGPStudentTSmoke:
             model=model,
             extra_vars=vp.extra_vars,
             extra_init=vp.extra_init,
-            learning_rate=5e-2,
+            optimizer=adam(5e-2),
         )
 
         losses = [float(train_step(X, y)) for _ in range(400)]
@@ -228,7 +229,7 @@ class TestSVGPNegBinomSmoke:
             model=model,
             extra_vars=vp.extra_vars,
             extra_init=vp.extra_init,
-            learning_rate=5e-2,
+            optimizer=adam(5e-2),
         )
 
         losses = [float(train_step(X, y)) for _ in range(400)]

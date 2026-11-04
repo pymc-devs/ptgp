@@ -5,6 +5,8 @@ import pymc as pm
 import pytensor.tensor as pt
 import pytest
 
+from pytensor_ml.optim import adam
+
 import ptgp as pg
 
 
@@ -25,7 +27,7 @@ def svgp_data():
 
 
 def test_compile_training_step_gp(gp_data):
-    """GP trains and loss decreases."""
+    """GP trains under the default optimizer and loss decreases."""
     X, y = gp_data
 
     with pm.Model() as model:
@@ -45,7 +47,6 @@ def test_compile_training_step_gp(gp_data):
         X_var,
         y_var,
         model=model,
-        learning_rate=1e-2,
     )
 
     losses = []
@@ -77,7 +78,7 @@ def test_compile_predict_gp(gp_data):
         X_var,
         y_var,
         model=model,
-        learning_rate=1e-2,
+        optimizer=adam(1e-2),
     )
 
     for _ in range(200):
@@ -137,7 +138,7 @@ def test_compile_training_step_svgp(svgp_data):
         model=model,
         extra_vars=vp.extra_vars,
         extra_init=vp.extra_init,
-        learning_rate=1e-2,
+        optimizer=adam(1e-2),
     )
 
     losses = []
@@ -175,7 +176,7 @@ def test_prior_shifts_optimum(gp_data):
             X_var,
             y_var,
             model=model,
-            learning_rate=1e-2,
+            optimizer=adam(1e-2),
             include_prior=include_prior,
         )
         for _ in range(500):
@@ -189,39 +190,6 @@ def test_prior_shifts_optimum(gp_data):
     assert abs(map_["ls"] - 5.0) < 0.1
     # The MLE is free to wander far from the prior mean.
     assert abs(mle["ls"] - 5.0) > 0.5
-
-
-def test_sgd_optimizer(gp_data):
-    """SGD optimizer works as alternative to adam."""
-    X, y = gp_data
-
-    with pm.Model() as model:
-        ls = pm.InverseGamma("ls", alpha=2.0, beta=1.0)
-        eta = pm.Exponential("eta", lam=1.0)
-        sigma = pm.Exponential("sigma", lam=1.0)
-
-        kernel = eta**2 * pg.kernels.Matern52(input_dim=1, ls=ls)
-        gp = pg.gp.Unapproximated(kernel=kernel, sigma=sigma)
-
-    X_var = pt.matrix("X")
-    y_var = pt.vector("y")
-
-    train_step, shared_params, shared_extras = pg.optim.compile_training_step(
-        lambda gp, X, y: pg.objectives.marginal_log_likelihood(gp, X, y).mll,
-        gp,
-        X_var,
-        y_var,
-        model=model,
-        optimizer_fn=pg.optim.sgd,
-        learning_rate=1e-3,
-    )
-
-    losses = []
-    for i in range(50):
-        loss = train_step(X, y)
-        losses.append(float(loss))
-
-    assert losses[-1] < losses[0], "SGD should also reduce loss"
 
 
 def test_tracked_minimize_interrupts_gracefully():
