@@ -107,16 +107,31 @@ python scripts/install_claude_skills.py --user        # ~/.claude/skills/
 
 ## Install
 
-```bash
-pip install git+https://github.com/pymc-devs/ptgp.git
-```
-
-To hack on PTGP itself, clone and install in editable mode:
+**pixi** (recommended for development): builds a locked environment with PyTensor,
+PyMC, Jupyter, the test and docs tooling, and ptgp in editable mode.
 
 ```bash
 git clone https://github.com/pymc-devs/ptgp.git
 cd ptgp
-pip install -e .
+pixi install
+pixi run test       # also: lint, mypy, docs, cubic-floor
+pixi run kernel     # registers a "Python (ptgp)" Jupyter kernel
+```
+
+**conda**: the same dev environment as a conda env file.
+
+```bash
+conda env create -f conda_envs/environment.yaml
+conda activate ptgp
+```
+
+**pip**: ptgp and all of its dependencies ship wheels on PyPI. PyTensor's C
+backend needs a C++ compiler on your PATH (Xcode command line tools on macOS,
+`g++` on Linux); on Windows, prefer pixi or conda.
+
+```bash
+pip install ptgp                                        # latest release
+pip install git+https://github.com/pymc-devs/ptgp.git  # current main
 ```
 
 ## Contributing

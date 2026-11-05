@@ -197,3 +197,6 @@ housing.csv
 
 # California boundary cached at runtime by the SVGP notebook
 california.geojson
+
+# pixi environments
+.pixi/

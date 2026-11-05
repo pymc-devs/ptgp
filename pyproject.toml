@@ -45,6 +45,7 @@ version-file = "ptgp/_version.py"
 exclude = [
   '/.github',
   '/notebooks',
+  '/pixi.lock',
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -117,3 +118,93 @@ warn_unused_ignores = true
 warn_return_any = true
 warn_unreachable = true
 files = ["ptgp"]
+
+# -- pixi --------------------------------------------------------------------
+# `pixi install` builds the full dev env (runtime + tests + notebooks + docs);
+# `pixi run test` / `pixi run lint` / `pixi run docs` etc. run the tasks below.
+# conda_envs/*.yaml are the conda equivalents (dev / CI / Read the Docs); keep the
+# pins here in sync with them.
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+# mlx (PyTensor's MLX backend, Apple silicon only) needs macOS >= 14.5.
+platforms = [
+  { name = "apple-silicon", platform = "osx-arm64", macos = "14.5" },
+  "linux-64",
+  "win-64",
+]
+
+# Runtime stack from conda-forge: the [project] dependencies above plus
+# PyTensor's optional JIT backends (numba, jax; mlx on Apple silicon).
+[tool.pixi.dependencies]
+python = ">=3.12"
+numpy = "*"
+pymc = ">=6.3,<6.4"
+pytensor = ">=3.3,<3.4"
+pytensor-ml = ">=0.3.0,<0.4.0"
+numba = "*"
+
+[tool.pixi.target.osx-arm64.dependencies]
+mlx = "*"
+
+[tool.pixi.pypi-dependencies]
+ptgp = { path = ".", editable = true }
+
+# Everything the CI style / test / mypy jobs need.
+[tool.pixi.feature.test.dependencies]
+pytest = "*"
+mypy = "*"
+polars = "*"
+pre-commit = "*"
+
+# ruff comes from PyPI: the conda-forge build of 0.5.5 pins python<3.13.
+[tool.pixi.feature.test.pypi-dependencies]
+ruff = "==0.5.5"  # keep in sync with .pre-commit-config.yaml
+
+# Interactive work: Jupyter plus what the notebooks import, and jax for
+# PyTensor's JAX backend. conda-forge has no jaxlib for win-64, so this feature
+# (and the default env) is mac/linux only; `test` and `docs` still solve on Windows.
+[tool.pixi.feature.notebook]
+platforms = ["apple-silicon", "linux-64"]
+
+[tool.pixi.feature.notebook.dependencies]
+jupyterlab = "*"
+matplotlib = "*"
+pandas = "*"
+scikit-learn = "*"
+jax = "*"
+jaxlib = "*"
+
+# Sphinx build, kept in sync with conda_envs/environment-docs.yaml.
+[tool.pixi.feature.docs.dependencies]
+matplotlib = "*"  # docs/sphinxext/generate_kernel_gallery.py
+sphinx = ">=7"
+pydata-sphinx-theme = "*"
+myst-nb = "*"
+numpydoc = "*"
+sphinx-copybutton = "*"
+sphinx-design = "*"
+sphinx-codeautolink = "*"
+sphinx-sitemap = "*"
+sphinx-notfound-page = "*"
+sphinx-autobuild = "*"
+jupyter-sphinx = "*"
+pybtex = "*"
+
+[tool.pixi.environments]
+default = { features = ["test", "notebook", "docs"], solve-group = "default" }
+test = { features = ["test"], solve-group = "default" }
+docs = { features = ["docs"], solve-group = "default" }
+
+[tool.pixi.tasks]
+test = "python -m pytest tests/"
+cubic-floor = "python -m pytest tests/test_cubic_floor.py"
+lint = "ruff check ptgp/ tests/"
+format = "ruff format ptgp/ tests/"
+mypy = "python scripts/run_mypy.py --verbose"
+hooks = "pre-commit run --all-files"
+docs = { cmd = "make html", cwd = "docs" }
+docs-live = { cmd = "make livehtml", cwd = "docs" }
+# Register this env as a Jupyter kernel named "ptgp" so notebooks opened from
+# any Jupyter / VS Code can use it.
+kernel = 'python -m ipykernel install --user --name ptgp --display-name "Python (ptgp)"'
