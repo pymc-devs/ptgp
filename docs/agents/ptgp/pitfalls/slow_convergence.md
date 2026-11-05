@@ -28,8 +28,8 @@ L-BFGS-B's line search is taking many tiny steps. Distinguish by:
 
 - **Per-step improvement**: divide
   `(history[-1].elbo - history[-50].elbo)` (or the objective field your
-  history records) by the step count. If it's
-  > 1e-3 in absolute terms, real progress; bump maxiter. If it's
+  history records) by the step count and by `N`, since the objective is
+  a sum over the data. If it's > 1e-3, real progress; bump maxiter. If it's
   < 1e-6, the gradient is effectively dead.
 - **Gradient norm at the last theta**: large + monotone progress is
   fine; large + stalled is a conditioning problem.

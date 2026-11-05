@@ -192,8 +192,9 @@ shims beyond what the task requires.
 
 The repo ships backend-agnostic agent-skill docs: `docs/agents/ptgp/`
 covers GP fit diagnosis, one page per problem with its cause and fix
-(pages tagged by `applies_to`). Skill pages describe problems and fixes,
-not workflows, and stay general to all GP methods.
+(pages tagged by `applies_to`), and `docs/agents/ptgp-pytensor-ml/` covers
+pytensor-ml optimizers in `compile_training_step`. Skill pages describe
+problems and fixes, not workflows, and stay general to all GP methods.
 `scripts/install_claude_skills.py` is a Claude-specific convenience that
 symlinks them into a Claude Code skill directory (`~/.claude/skills/` or a
 project-local `.claude/skills/`); other AI tools can read `docs/agents/`

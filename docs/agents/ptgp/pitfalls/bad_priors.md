@@ -62,9 +62,10 @@ space.
 
 1. **Audit each prior**. For lengthscale, prefer
    `InverseGamma` matched to the data's characteristic scale (zero
-   density at both 0 and infinity). For amplitude `eta`, use
-   `Exponential` or `HalfNormal`. For noise, use `HalfNormal`
-   matched to the empirical residual std of a baseline mean
+   density at both 0 and infinity). For amplitude `eta`, use a prior
+   whose density vanishes at 0, scaled to the data (`Gamma` or
+   `LogNormal`; see [eta_collapse](eta_collapse.md)). For noise, use
+   `HalfNormal` matched to the empirical residual std of a baseline mean
    predictor.
 2. **Avoid `HalfFlat` / `Flat`** in production. They're useful only
    when you can't write down anything sensible at all, and they

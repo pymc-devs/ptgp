@@ -72,6 +72,6 @@ the new Z is also the fix for a poor layout at the right `M`.
   stays large at convergence **and** the trace curve hasn't flattened
   by your chosen M.
 - Open [inducing_layout_poor](../pitfalls/inducing_layout_poor.md) if
-  the trace curve **has** flattened but `d_final` has hot spots — the
-  problem is layout, not count, and re-running greedy with the
-  trained kernel is the fix.
+  the trace curve **has** flattened but some `d_final` values exceed
+  `sigma**2` — the problem is layout, not count, and re-running greedy
+  with the trained kernel is the fix.

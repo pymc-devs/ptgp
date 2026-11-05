@@ -13,16 +13,16 @@ related_pitfalls: [sigma_inflation, lengthscale_runaway, bad_priors]
 
 ```python
 sigma_traj = np.array([d.sigma for d in history])
-nys_traj   = np.array([d.nystrom_residual for d in history])
 exc_traj   = np.array([d.excess_fit_per_n for d in history])
 resid_std  = float(np.std(y - y.mean()))  # or the residual std of a baseline mean model
 
 collapsing = (
     sigma_traj[-1] < 0.1 * sigma_traj[0]
     and sigma_traj[-1] < 0.05 * resid_std
-    and nys_traj[-1] < 0.01 * sigma_traj[-1] ** 2  # trace penalty no longer resists
     and exc_traj[-1] > exc_traj[0]
 )
+if hasattr(history[-1], "nystrom_residual"):  # VFE: the trace penalty no longer resists
+    collapsing = collapsing and history[-1].nystrom_residual < 0.01 * sigma_traj[-1] ** 2
 ```
 
 Confirm with held-out data: a collapsing fit interpolates the training

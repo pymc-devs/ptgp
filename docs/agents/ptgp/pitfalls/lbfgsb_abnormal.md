@@ -47,10 +47,10 @@ roughly in priority order:
    `unapproximated_diagnostics` for the exact GP), then call
    `diag_fn(result.x, X, y)` and `fun(result.x, X, y)` to look for
    non-finite values or huge gradients. Localises the cause.
-2. **Loosen scipy tolerances**:
+2. **Loosen scipy's `ftol`**:
 
    ```python
-   options={"ftol": 1e-7, "gtol": 1e-5}  # pg.fit / tracked_minimize kwargs
+   options={"ftol": 1e-7}  # pg.fit / tracked_minimize kwargs
    ```
 
    Tighter than scipy's defaults for L-BFGS-B is rarely useful in

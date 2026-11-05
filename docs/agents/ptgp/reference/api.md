@@ -43,7 +43,7 @@ diagnostic helpers below take a `jitter=` argument.
 
 ## Optim — `ptgp/optim/training.py`
 
-- **`compile_scipy_objective(objective_fn, gp, X_var, y_var, model=None,
+- **`compile_scipy_objective(objective_fn, gp_model, X_var, y_var, model=None,
   extra_vars=None, extra_init=None, frozen_vars=None, include_prior=True,
   compile_kwargs=None, init="prior_median", init_rng=None) -> (fun,
   theta0, unpack, sp, se)`**: scipy-compatible loss + grad. `objective_fn`
@@ -54,7 +54,7 @@ diagnostic helpers below take a `jitter=` argument.
   was built as `Points(Z_var, Z_init=Z0)`, nothing otherwise). Pass empty
   tuples to exclude all extras. `init` defaults to `"prior_median"`
   (improper priors fall back per RV; see the function docstring).
-- **`compile_scipy_diagnostics(diagnostic_fn, gp, X_var, y_var,
+- **`compile_scipy_diagnostics(diagnostic_fn, gp_model, X_var, y_var,
   model=None, extra_vars=None, extra_init=None, frozen_vars=None,
   compile_kwargs=None, init="prior_median", init_rng=None) -> diag_fn`**:
   companion that compiles a forward-only pass returning every namedtuple
@@ -88,17 +88,23 @@ diagnostic helpers below take a `jitter=` argument.
   last iterate, and returns immediately. The returned
   `result.status == 99`; `unpack`/`sp`/`se` correspond to the
   *interrupted* phase, so `compile_predict` wires up to the
-  partially-trained state.
-- **`compile_training_step(objective_fn, gp, X_var, y_var, model=None,
-  optimizer_fn=None, extra_vars=None, extra_init=None, frozen_vars=None,
-  param_groups=None, include_prior=True, compile_kwargs=None,
-  **optimizer_kwargs) -> (train_step, sp, se)`**: Adam / SGD step for
-  minibatch training. Mostly SVGP; listed for completeness.
-- **`compile_predict(gp, X_new_var, model, shared_params,
-  extra_vars=None, shared_extras=None, X_train=None, y_train=None,
-  incl_lik=False, compile_kwargs=None) -> predict_fn`**: prediction
-  function reading the trained shared variables. VFE needs `X_train` /
-  `y_train`.
+  partially-trained state. The returned `phase_labels` (`phase1`,
+  `phase2a_cN` / `phase2b_cN`, `phase3`) localise failures: a healthy run
+  shows the ELBO improving through `phase1`, oscillating slightly across
+  the `phase2*` cycles, then settling in `phase3`.
+- **`compile_training_step(objective_fn, gp_model, X_var, y_var,
+  model=None, optimizer=None, extra_vars=None, extra_init=None,
+  frozen_vars=None, param_groups=None, include_prior=True,
+  compile_kwargs=None) -> (train_step, sp, se)`**: gradient step for
+  minibatch training, mostly SVGP. `optimizer` is a `pytensor_ml.optim`
+  transform, default `adam(1e-2)`. See the `ptgp-pytensor-ml` skill for
+  optimizer transforms, schedules, and `param_groups`.
+- **`compile_predict(gp_model, X_new_var, model, shared_params,
+  extra_vars=None, shared_extras=None, incl_lik=False,
+  compile_kwargs=None, **data) -> predict_fn`**: prediction function
+  reading the trained shared variables. `**data` goes to
+  `gp_model.predict_spec`; `Unapproximated` and `VFE` need `X_train=` /
+  `y_train=`.
 - **`get_trained_params(model, shared_params) -> dict`**: trained values
   of every free RV in constrained space, `{rv_name: value}`.
 - **`phase_sort_key(label)`**: sort key for `minimize_staged_vfe` phase
@@ -196,7 +202,7 @@ history=None, phase_labels=None, model=None)` packages a run, including a
 Also available at the top level as `pg.fit`, `pg.predict`, and
 `pg.FitResult`.
 
-- **`fit(gp, X, y, *, model=None, objective=None, method="L-BFGS-B",
+- **`fit(gp_model, X, y, *, model=None, objective=None, method="L-BFGS-B",
   init="prior_median", init_rng=None, compile_kwargs=None,
   **scipy_kwargs) -> FitResult`**: one-shot training. Uses
   `gp.default_objective` (`marginal_log_likelihood` / `collapsed_elbo` /
@@ -206,7 +212,7 @@ Also available at the top level as `pg.fit`, `pg.predict`, and
   `options={"maxiter": 2000}`. Wraps `compile_scipy_objective` +
   `scipy.optimize.minimize`; drop down for per-iteration diagnostics,
   frozen variables, or staged training.
-- **`predict(gp, X_new, fit_result, *, X_train=None, y_train=None,
+- **`predict(gp_model, X_new, fit_result, *, X_train=None, y_train=None,
   incl_lik=False, compile_kwargs=None) -> (mean, var)`**: compile
   + evaluate. `X_train` / `y_train` required for `Unapproximated`
   and `VFE`; ignored for `SVGP`.

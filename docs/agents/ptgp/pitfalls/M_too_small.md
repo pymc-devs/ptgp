@@ -5,7 +5,7 @@ applies_to: [VFE, SVGP]
 symptoms:
   - nystrom_residual stays large at convergence
   - GreedyVarianceDiagnostics.trace_curve has not flattened by chosen M
-  - d_final is uniformly elevated (not just hot spots)
+  - d_final is uniformly elevated (not just a few points)
 related_pitfalls: [inducing_layout_poor, sigma_inflation, excess_fit_per_n_negative]
 ---
 
@@ -23,13 +23,13 @@ m_too_small = nys_large and curve_not_flat
 ```
 
 Visually: in the `scripts/check_inducing.py` PNG, the middle panel
-(fraction-unexplained vs M) is still well above the 1% threshold line
-at your chosen M.
+(fraction-unexplained vs M) is still above 5% at your chosen M.
 
-`nystrom_residual` comes from a `VFEDiagnostics` history. For any model,
-including SVGP, `compute_inducing_diagnostics(kernel, X, Z)` returns
-`KernelHealthDiagnostics` with the same residual
-(`nystrom_residual / total_variance`) for a given Z.
+`VFEDiagnostics.nystrom_residual` is per point, while
+`KernelHealthDiagnostics.nystrom_residual` is the unnormalized sum. SVGP
+has no such history, so for SVGP check
+`kh.nystrom_residual / kh.total_variance > 0.05`, where
+`kh = compute_inducing_diagnostics(kernel, X, Z)`.
 
 ## Diagnosis
 
@@ -42,8 +42,8 @@ point of running greedy at `M_max`:
 | Signal | M_too_small | inducing_layout_poor |
 |---|---|---|
 | `history[-1].nystrom_residual` | large | large |
-| `trace_curve / total_variance` at chosen M | still > ~5% | < ~1% |
-| `d_final` distribution | uniformly elevated | a few hot spots |
+| `trace_curve / total_variance` at chosen M | > 5% | < 5% |
+| `d_final` distribution | uniformly elevated | a few points above `sigma**2` |
 | Fix | increase M | re-run greedy with the trained kernel |
 
 ## Fix
