@@ -1,24 +1,26 @@
 from collections.abc import Callable
+from typing import cast
 
 import numpy as np
 import pytensor
 import pytensor.tensor as pt
 
-from pytensor.graph.basic import Apply, Variable
+from pytensor.graph.basic import Apply, Constant, Variable
 from pytensor.graph.op import Op
 from pytensor.graph.replace import graph_replace
 from pytensor.graph.rewriting.basic import node_rewriter
+from pytensor.graph.traversal import graph_inputs
 from pytensor.graph.type import Type
 from pytensor.tensor.rewriting.basic import register_specialize
+from pytensor.tensor.variable import TensorVariable
 
 
 class LikelihoodVariable(Variable):
     """A likelihood that lives in the PyTensor graph *and* carries the accessor API.
 
     It is the output of a :class:`LikelihoodOp` node, so ``owner.op`` recovers
-    the family (with behaviour) and ``clone`` / ``graph_replace`` carry it. It
-    also exposes the methods we used to put on a holder, each dispatched through
-    ``owner.op`` (the free functions below):
+    the family (with behavior) and ``clone`` / ``graph_replace`` carry it. Its
+    methods dispatch through ``owner.op`` (the free functions below):
 
     - parameter access — ``lik.sigma`` / ``lik.nu`` / ... (the node's inputs),
     - :meth:`at` — re-root the parameters onto new design inputs,
@@ -26,7 +28,7 @@ class LikelihoodVariable(Variable):
       :meth:`predict_log_density`.
     """
 
-    def at(self, X):
+    def at(self, X) -> "LikelihoodVariable":
         """Re-root onto design matrix ``X`` (no-op without a design matrix)."""
         return at(self, X)
 
@@ -53,8 +55,7 @@ class LikelihoodVariable(Variable):
             raise AttributeError(name)
         op = owner.op
         if name in op.param_names:
-            off = 1 if op.has_data else 0
-            return owner.inputs[off + op.param_names.index(name)]
+            return _params_of(owner)[op.param_names.index(name)]
         if name in ("n_points", "invlink", "param_names", "has_data"):
             return getattr(op, name)
         raise AttributeError(name)
@@ -88,14 +89,17 @@ class LikelihoodOp(Op):
     handle (a :class:`LikelihoodVariable`) as output. It computes nothing — it is
     a real graph node purely so ``graph_replace`` / ``fgraph.clone`` / PyMC
     conditioning carry the likelihood (and re-root its parameters). The Op *type*
-    (the subclass) encodes the family; behaviour is recoverable via ``owner.op``.
+    (the subclass) encodes the family; behavior is recoverable via ``owner.op``.
 
     Because the parameters are *inputs* and the handle output is never consumed
     by the loss, the node is never on the differentiation path nor in a compiled
     loss graph — no gradient, view, shape, or strip machinery is needed.
 
     Subclasses set the class attributes ``param_names`` and (optionally)
-    ``default_invlink`` and implement the behaviour methods.
+    ``default_invlink`` and implement the behavior methods. Build nodes with
+    :func:`build`, which inserts the :class:`GPData` barrier when the
+    parameters depend on a design matrix; calling the Op directly with
+    ``has_data=True`` skips it.
     """
 
     __props__ = ("param_names", "n_points", "invlink", "has_data")
@@ -115,8 +119,6 @@ class LikelihoodOp(Op):
     def perform(self, node, inputs, outputs):
         outputs[0][0] = None
 
-    # --- symbolic behaviour: subclasses implement these three ---
-
     def _log_prob(self, f, y, *params):
         """Symbolic log p(y|f). Subclasses must implement."""
         raise NotImplementedError
@@ -129,14 +131,14 @@ class LikelihoodOp(Op):
         """Var[y|f]. Subclasses must implement."""
         raise NotImplementedError
 
-    # --- expectations (defaults via quadrature; subclasses may override) ---
-
     def variational_expectation(self, params, y, mu, var):
         """E_{q(f)}[log p(y|f)] where q(f) = N(mu, var). Default: quadrature."""
+        params = _per_point(params)
         return self._gauss_hermite(lambda f, yy: self._log_prob(f, yy, *params), y, mu, var)
 
     def predict_mean_and_var(self, params, mu, var):
         """Predictive mean and variance. Default: Gauss-Hermite quadrature."""
+        params = _per_point(params)
         E_mean = self._gauss_hermite(
             lambda f, _: self._conditional_mean(f, *params), pt.zeros_like(mu), mu, var
         )
@@ -150,6 +152,7 @@ class LikelihoodOp(Op):
 
     def predict_log_density(self, params, y, mu, var):
         """log E_{q(f)}[p(y|f)]. Default: log-space Gauss-Hermite quadrature."""
+        params = _per_point(params)
         return self._gauss_hermite_logspace(
             lambda f, yy: self._log_prob(f, yy, *params), y, mu, var
         )
@@ -178,6 +181,12 @@ class LikelihoodOp(Op):
         F = mu[:, None] + pt.sqrt(2.0) * sd * gh_points[None, :]
         log_vals = func(F, y[:, None]) + log_weights[None, :]
         return pt.logsumexp(log_vals, axis=1)
+
+
+def _per_point(params):
+    """Add a quadrature-node axis to per-point ``(N,)`` parameters so they broadcast
+    against the ``(N, n_points)`` grid of ``f`` values."""
+    return [p[:, None] if p.ndim == 1 else p for p in params]
 
 
 class GPData(Op):
@@ -233,6 +242,22 @@ def _strip_gp_data(fgraph, node):
     return [node.inputs[0]]
 
 
+def _check_no_free_data(op_cls, params):
+    """Raise if a parameter depends on a free non-scalar input but no ``x`` was given."""
+    for name, p in zip(op_cls.param_names, params):
+        free = [
+            v
+            for v in graph_inputs([p])
+            if isinstance(v, TensorVariable) and v.ndim > 0 and not isinstance(v, Constant)
+        ]
+        if free:
+            raise ValueError(
+                f"Parameter {name!r} depends on the free input {free[0].name or repr(free[0])} "
+                f"but no design matrix was given. Pass the matrix it was built from as x=, "
+                f"so predictions re-root {name!r} onto new inputs."
+            )
+
+
 def build(op_cls, params, x=None, n_points=20, invlink=None):
     """Build a :class:`LikelihoodVariable` from an Op class and ordered params.
 
@@ -243,9 +268,11 @@ def build(op_cls, params, x=None, n_points=20, invlink=None):
     barrier becomes the node's input 0 — the data demarcator. Used by the family
     helpers (:func:`~ptgp.likelihoods.Gaussian`, etc.).
     """
+    params = [pt.as_tensor_variable(p) for p in params]
+    if x is None:
+        _check_no_free_data(op_cls, params)
     has_data = bool(op_cls.param_names) and x is not None
     op = op_cls(n_points=n_points, invlink=invlink, has_data=has_data)
-    params = [pt.as_tensor_variable(p) for p in params]
     if has_data:
         x = pt.as_tensor_variable(x)
         xd = gp_data(x)
@@ -253,14 +280,6 @@ def build(op_cls, params, x=None, n_points=20, invlink=None):
         params = list(graph_replace(params, {x: xd}, strict=False))
         params = [xd, *params]
     return op(*params)
-
-
-# --- Purely functional API ------------------------------------------------
-#
-# Operate on a likelihood node (a :class:`LikelihoodVariable`) and dispatch
-# through ``owner.op``. The variable's methods are thin wrappers over these, so
-# either style works; the free functions are handy when a dummy node's outputs
-# are plain TensorVariables rather than a LikelihoodVariable.
 
 
 def _params_of(node):
@@ -277,11 +296,10 @@ def op_of(lik):
 def param(lik, name):
     """The named parameter input of a likelihood node (e.g. ``"sigma"``)."""
     node = lik.owner
-    off = 1 if node.op.has_data else 0
-    return node.inputs[off + node.op.param_names.index(name)]
+    return _params_of(node)[node.op.param_names.index(name)]
 
 
-def at(lik, X):
+def at(lik: LikelihoodVariable, X) -> LikelihoodVariable:
     """Re-root a likelihood node onto design matrix ``X``.
 
     A no-op for a likelihood with no design matrix (``op.has_data`` is False).
@@ -291,7 +309,7 @@ def at(lik, X):
     node = lik.owner
     if not node.op.has_data:
         return lik
-    return graph_replace([lik], {node.inputs[0]: X}, strict=False)[0]
+    return cast(LikelihoodVariable, graph_replace([lik], {node.inputs[0]: X}, strict=False)[0])
 
 
 def variational_expectation(lik, y, mu, var):

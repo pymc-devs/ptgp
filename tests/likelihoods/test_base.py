@@ -1,4 +1,4 @@
-"""Tests for the likelihood base class — configurable inverse-link behavior."""
+"""Tests for likelihood nodes: inverse links, re-rooting, quadrature, and gradients."""
 
 import numpy as np
 import pymc as pm
@@ -21,8 +21,6 @@ def _hetero(X):
 def _provider(arr, kind):
     if kind == "symbolic":
         return pt.matrix("Xtr", shape=(None, arr.shape[1]))
-    if kind == "baked":
-        return pt.as_tensor_variable(arr)
     return pm.Data("Xtr", arr)
 
 
@@ -62,7 +60,7 @@ class TestConfigurableLink:
         assert np.isfinite(ve).all()
 
 
-class TestCloneReplaceData:
+class TestAt:
     @pytest.mark.parametrize("kind", ["symbolic", "pm_data"])
     def test_reroot_matches_direct_build(self, kind):
         """Re-rooting yields the parameter evaluated at the new inputs, for the
@@ -159,13 +157,12 @@ class TestCloneReplaceData:
         assert out.sigma is lik.sigma  # at did nothing (no design matrix)
         np.testing.assert_allclose(_eval(out.sigma), expected)
 
-    def test_no_x_means_not_rerooted(self):
-        """Omitting ``x=`` is an explicit opt-out: the likelihood carries no
-        design matrix, so ``at`` leaves the parameter untouched."""
-        sigma = 0.1 + pt.sum(pt.matrix("Xtr", shape=(None, 3)) ** 2, axis=1)
-        lik = Gaussian(sigma)
-        out = lik.at(pt.matrix("X_new", shape=(None, 3)))
-        assert out.sigma is lik.sigma
+    @pytest.mark.parametrize("kind", ["symbolic", "pm_data"])
+    def test_data_dependent_parameter_without_x_raises(self, kind):
+        with pm.Model():
+            Xtr = _provider(np.zeros((5, 1)), kind)
+            with pytest.raises(ValueError, match="no design matrix was given"):
+                Gaussian(_hetero(Xtr))
 
     def test_one_dimensional_X_new_is_supported(self):
         """With an explicit, identity-keyed handle there is no parameter/data
@@ -184,24 +181,60 @@ class TestGradientThroughLikelihoodNode:
     to the parameters' hyperparameters — for both homoskedastic (no design
     matrix) and heteroskedastic nodes."""
 
+    Y = np.array([0.5, -0.3])
+    MU = np.array([0.0, 0.2])
+    VAR = np.array([1.0, 0.5])
+
     def _ve_grad(self, lik, wrt, givens):
-        y = pt.as_tensor_variable(np.array([0.5, -0.3]))
-        mu = pt.as_tensor_variable(np.array([0.0, 0.2]))
-        var = pt.as_tensor_variable(np.array([1.0, 0.5]))
-        ve = pt.sum(lik.variational_expectation(y, mu, var))
-        g = pytensor.grad(ve, wrt)
-        return pytensor.function(list(givens), g)
+        args = [pt.as_tensor_variable(a) for a in (self.Y, self.MU, self.VAR)]
+        ve = pt.sum(lik.variational_expectation(*args))
+        return pytensor.function(list(givens), pytensor.grad(ve, wrt))
+
+    def _expected(self, s):
+        """d/dalpha of the Gaussian expected log-likelihood, with ds/dalpha = 1."""
+        return np.sum(-1.0 / s + ((self.Y - self.MU) ** 2 + self.VAR) / s**3)
 
     def test_grad_homoskedastic(self):
         alpha = pt.scalar("alpha")
         lik = Gaussian(alpha)  # node, has_data=False
         val = self._ve_grad(lik, alpha, [alpha])(0.7)
-        assert np.isfinite(val)
+        np.testing.assert_allclose(val, self._expected(0.7))
 
     def test_grad_heteroskedastic(self):
         X = pt.matrix("X", shape=(None, 1))
         alpha = pt.scalar("alpha")
         lik = Gaussian(alpha + 0.05 * X[:, 0] ** 2, x=X)  # node, has_data=True
-        fn = self._ve_grad(lik, alpha, [X, alpha])
-        val = fn(np.array([[0.0], [1.0]]), 0.7)
-        assert np.isfinite(val)
+        Xv = np.array([[0.0], [1.0]])
+        val = self._ve_grad(lik, alpha, [X, alpha])(Xv, 0.7)
+        np.testing.assert_allclose(val, self._expected(0.7 + 0.05 * Xv[:, 0] ** 2))
+
+
+@pytest.mark.parametrize("n", [3, 20], ids=["n_ne_points", "n_eq_points"])
+@pytest.mark.parametrize("family", ["student_t", "negative_binomial"])
+def test_quadrature_with_per_point_parameters(family, n):
+    """Per-point parameters give the same quadrature as building each point separately."""
+    rng = np.random.default_rng(0)
+    y = rng.poisson(2.0, n).astype(float)
+    mu, var = rng.normal(0.5, 0.3, n), rng.uniform(0.1, 0.5, n)
+    p = rng.uniform(1.0, 3.0, n)
+    X = pt.matrix("X", shape=(None, 1))
+    Xv = p[:, None]
+
+    def make(param, x=None):
+        if family == "student_t":
+            return StudentT(nu=3.0 + param, sigma=param, x=x)
+        return NegativeBinomial(alpha=param, x=x)
+
+    def evaluate(lik, args, givens=()):
+        args = [pt.as_tensor_variable(a) for a in args]
+        outs = [
+            lik.variational_expectation(*args),
+            *lik.predict_mean_and_var(*args[1:]),
+            lik.predict_log_density(*args),
+        ]
+        return pytensor.function(list(givens), outs)(*[Xv for _ in givens])
+
+    got = evaluate(make(X[:, 0], x=X), (y, mu, var), givens=[X])
+    want = [evaluate(make(p[i]), (y[i : i + 1], mu[i : i + 1], var[i : i + 1])) for i in range(n)]
+    for k, out in enumerate(got):
+        np.testing.assert_allclose(out, np.concatenate([w[k] for w in want]), rtol=1e-10)

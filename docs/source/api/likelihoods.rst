@@ -26,6 +26,7 @@ Graph types
     LikelihoodVariable
     GPData
     gp_data
+    build
 
 Functional API
 --------------

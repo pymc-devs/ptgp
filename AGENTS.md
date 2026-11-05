@@ -103,7 +103,8 @@ The reference usage example for all three models is
   are the parameters, so likelihoods live in the PyTensor graph. Parameters
   that depend on inputs (heteroskedastic `sigma`) are built against a design
   matrix passed as `x=`; `lik.at(X_new)` re-roots them onto new inputs.
-  Non-Gaussian variants compute `variational_expectation` by quadrature.
+  Non-Gaussian variants compute `variational_expectation` by quadrature,
+  except `Poisson` with the default log link, which is closed form.
 - **Inducing variables** — `ptgp/inducing.py` (`Points`,
   `random_subsample_init`, `kmeans_init`, `greedy_variance_init`),
   `ptgp/inducing_fourier.py` (`FourierFeatures1D` — 1D Matern VFF with

@@ -4,6 +4,7 @@ from ptgp.likelihoods.base import (
     LikelihoodType,
     LikelihoodVariable,
     at,
+    build,
     gp_data,
     op_of,
     param,
@@ -18,19 +19,17 @@ from ptgp.likelihoods.poisson import Poisson
 from ptgp.likelihoods.student_t import StudentT
 
 __all__ = [
-    # Family helpers — build a LikelihoodVariable.
     "Gaussian",
     "Bernoulli",
     "StudentT",
     "Poisson",
     "NegativeBinomial",
-    # Graph types.
     "LikelihoodOp",
     "LikelihoodType",
     "LikelihoodVariable",
     "GPData",
     "gp_data",
-    # Purely functional API — operate on a likelihood node via ``owner.op``.
+    "build",
     "op_of",
     "param",
     "at",

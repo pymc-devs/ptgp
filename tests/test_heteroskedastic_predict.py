@@ -9,7 +9,7 @@ from ptgp.inducing import Points
 from ptgp.kernels import ExpQuad
 from ptgp.likelihoods import Gaussian
 from ptgp.mean import Zero
-from ptgp.objectives import collapsed_elbo
+from ptgp.objectives import collapsed_elbo, elbo
 
 
 def _eval(*tensors):
@@ -29,77 +29,22 @@ def _hetero_sigma(X):
     return 0.1 + 0.05 * X[:, 0] ** 2
 
 
-class TestUnapproximatedHeteroskedastic:
-    def test_incl_lik_adds_pointwise_noise(self):
-        X_train, y_train, X_new = _data()
-        X = pt.matrix("X", shape=(None, 1))
-        gp = Unapproximated(
-            kernel=ExpQuad(input_dim=1, ls=1.0), mean=Zero(), sigma=_hetero_sigma(X), x=X
-        )
-        X_new_t = pt.matrix("X_new", shape=(None, 1))
-        y_t = pt.vector("y", shape=(None,))
-
-        fmean, fvar = gp.predict_marginal(X_new_t, X, y_t)
-        ymean, yvar = gp.predict_marginal(X_new_t, X, y_t, incl_lik=True)
-        fn = pytensor.function([X, X_new_t, y_t], [fmean, fvar, ymean, yvar])
-        m, v, ym, yv = fn(X_train, X_new, y_train)
-
-        np.testing.assert_allclose(ym, m, atol=1e-12)
-        expected_sigma_new = 0.1 + 0.05 * X_new[:, 0] ** 2
-        np.testing.assert_allclose(yv, v + expected_sigma_new**2, atol=1e-10)
+def _k(A, B):
+    """ExpQuad with ls=1 in numpy."""
+    return np.exp(-0.5 * (A[:, 0:1] - B[:, 0:1].T) ** 2)
 
 
-class TestVFEHeteroskedastic:
-    def _build(self, X):
-        Z = np.linspace(-1.5, 1.5, 6)[:, None].astype(np.float64)
-        return VFE(
-            kernel=ExpQuad(input_dim=1, ls=1.0),
-            mean=Zero(),
-            sigma=_hetero_sigma(X),
-            x=X,
-            inducing_variable=Points(pt.as_tensor_variable(Z)),
-        )
-
-    def test_incl_lik_adds_pointwise_noise(self):
-        X_train, y_train, X_new = _data()
-        X = pt.matrix("X", shape=(None, 1))
-        vfe = self._build(X)
-        X_new_t = pt.matrix("X_new", shape=(None, 1))
-        y_t = pt.vector("y", shape=(None,))
-
-        fmean, fvar = vfe.predict_marginal(X_new_t, X, y_t)
-        ymean, yvar = vfe.predict_marginal(X_new_t, X, y_t, incl_lik=True)
-        fn = pytensor.function([X, X_new_t, y_t], [fmean, fvar, ymean, yvar])
-        m, v, ym, yv = fn(X_train, X_new, y_train)
-
-        np.testing.assert_allclose(ym, m, atol=1e-12)
-        expected_sigma_new = 0.1 + 0.05 * X_new[:, 0] ** 2
-        np.testing.assert_allclose(yv, v + expected_sigma_new**2, atol=1e-10)
-
-
-class TestSVGPHeteroskedastic:
-    def test_incl_lik_adds_pointwise_noise(self):
-        X_train, y_train, X_new = _data()
-        M = 6
-        Z = np.linspace(-1.5, 1.5, M)[:, None].astype(np.float64)
-        vp = init_variational_params(M)
-        X = pt.matrix("X", shape=(None, 1))
-        svgp = SVGP(
-            kernel=ExpQuad(input_dim=1, ls=1.0),
-            mean=Zero(),
-            likelihood=Gaussian(_hetero_sigma(X), x=X),
-            inducing_variable=Points(pt.as_tensor_variable(Z)),
-            variational_params=vp,
-        )
-        X_new_t = pt.matrix("X_new", shape=(None, 1))
-
-        _, fvar = svgp.predict_marginal(X_new_t)
-        _, yvar = svgp.predict_marginal(X_new_t, incl_lik=True)
-        fn = pytensor.function([X_new_t, *vp.extra_vars], [fvar, yvar], on_unused_input="ignore")
-        v, yv = fn(X_new, *vp.extra_init)
-
-        expected_sigma_new = 0.1 + 0.05 * X_new[:, 0] ** 2
-        np.testing.assert_allclose(yv - v, expected_sigma_new**2, atol=1e-10)
+def _np_predict(which, X, y, X_new, Z, s2):
+    """Reference posterior f-marginals for the exact GP and VFE with noise variances ``s2``."""
+    Ksf, kss = _k(X_new, X), np.ones(len(X_new))
+    if which == "gp":
+        K = _k(X, X) + np.diag(s2)
+        return Ksf @ np.linalg.solve(K, y), kss - np.sum(Ksf * np.linalg.solve(K, Ksf.T).T, 1)
+    Kuu, Kuf, Kus = _k(Z, Z), _k(Z, X), _k(Z, X_new)
+    Sigma = Kuu + (Kuf / s2) @ Kuf.T
+    m = Kus.T @ np.linalg.solve(Sigma, (Kuf / s2) @ y)
+    q = np.sum(Kus * np.linalg.solve(Kuu, Kus), 0) - np.sum(Kus * np.linalg.solve(Sigma, Kus), 0)
+    return m, kss - q
 
 
 class TestScalarSigmaUnaffected:
@@ -150,13 +95,8 @@ class TestScalarSigmaUnaffected:
         np.testing.assert_allclose(v2 - v, 0.09, atol=1e-10)
 
 
-def test_pm_data_sigma_is_detected_as_data_dependent():
-    """sigma built against a pm.Data SharedVariable must still be re-rooted.
-
-    The design matrix handle is keyed by identity (the ``x=`` argument), so a
-    pm.Data SharedVariable works exactly like a symbolic placeholder — passing
-    it as ``x=`` lets at swap it for the test inputs.
-    """
+def test_pm_data_x_reroots():
+    """A pm.Data design matrix passed as ``x=`` re-roots like a symbolic placeholder."""
     X_train_arr = np.linspace(-1.5, 1.5, 10)[:, None].astype(np.float64)
     X_new_arr = np.linspace(-2.0, 2.0, 5)[:, None].astype(np.float64)
     y_train_arr = np.sin(X_train_arr.ravel()).astype(np.float64)
@@ -208,7 +148,8 @@ def test_compile_predict_heteroskedastic(which):
     X_train, y_train, X_new = _data()
     X = pt.matrix("X", shape=(None, 1))
     sigma = _hetero_sigma(X)
-    Z = Points(pt.as_tensor_variable(np.linspace(-1.5, 1.5, 6)[:, None]))  # cond(Kuu) ~ 2e3
+    Z_np = np.linspace(-1.5, 1.5, 6)[:, None]
+    Z = Points(pt.as_tensor_variable(Z_np))  # cond(Kuu) ~ 2e3
     with pm.Model() as model:
         kernel = ExpQuad(input_dim=1, ls=1.0)
         gp = {
@@ -231,10 +172,45 @@ def test_compile_predict_heteroskedastic(which):
     np.testing.assert_allclose(yv, v + _hetero_sigma(X_new) ** 2, atol=1e-10)
 
     if which != "svgp":
-        y_t = pt.vector("y", shape=(None,))
-        m_sym, _ = gp.predict_marginal(X_new_t, X, y_t)
-        m_ref = pytensor.function([X, X_new_t, y_t], m_sym)(X_train, X_new, y_train)
-        np.testing.assert_allclose(m, m_ref, atol=1e-10)
+        m_ref, v_ref = _np_predict(
+            which, X_train, y_train, X_new, Z_np, _hetero_sigma(X_train) ** 2
+        )
+        np.testing.assert_allclose(m, m_ref, atol=1e-8)
+        np.testing.assert_allclose(v, v_ref, atol=1e-8)
+
+
+def test_minibatch_elbo_heteroskedastic():
+    """``elbo`` evaluates sigma at the minibatch inputs and scales the data term by N / b."""
+    X_train, y_train, _ = _data()
+    N, idx = len(X_train), np.arange(0, 25, 3)
+    M = 6
+    rng = np.random.default_rng(1)
+    Z_np = np.linspace(-1.5, 1.5, M)[:, None]
+    q_mu = rng.normal(0, 0.5, M)
+    q_sqrt = np.tril(rng.normal(0, 0.1, (M, M)), -1) + np.diag(rng.uniform(0.3, 0.8, M))
+    vp = init_variational_params(M, q_mu_init=q_mu, q_sqrt_init=q_sqrt)
+    X = pt.matrix("X", shape=(None, 1))
+    X_mb = pt.matrix("X_mb", shape=(None, 1))
+    y_mb = pt.vector("y_mb", shape=(None,))
+    svgp = SVGP(
+        kernel=ExpQuad(input_dim=1, ls=1.0),
+        likelihood=Gaussian(_hetero_sigma(X), x=X),
+        inducing_variable=Points(pt.as_tensor_variable(Z_np)),
+        variational_params=vp,
+    )
+    terms = elbo(svgp, X_mb, y_mb, n_data=N)
+    fn = pytensor.function([X_mb, y_mb, *vp.extra_vars], list(terms))
+    got_elbo, got_ve, got_kl = fn(X_train[idx], y_train[idx], *vp.extra_init)
+
+    # Whitened SVGP q(f) at the minibatch inputs, in numpy.
+    Xb, yb = X_train[idx], y_train[idx]
+    A = np.linalg.solve(np.linalg.cholesky(_k(Z_np, Z_np) + 1e-6 * np.eye(M)), _k(Z_np, Xb))
+    m = A.T @ q_mu
+    v = 1.0 - np.sum(A**2, 0) + np.sum((A.T @ q_sqrt) ** 2, 1)
+    s2 = _hetero_sigma(Xb) ** 2
+    ve = -0.5 * (np.log(2 * np.pi * s2) + ((yb - m) ** 2 + v) / s2)
+    np.testing.assert_allclose(got_ve, N / len(idx) * ve.sum(), rtol=1e-8)
+    np.testing.assert_allclose(got_elbo, got_ve - got_kl, rtol=1e-10)
 
 
 @pytest.mark.parametrize("which", ["gp", "vfe", "svgp"])
@@ -244,10 +220,11 @@ def test_fit_and_predict_heteroskedastic(which):
 
     X_train, y_train, X_new = _data()
     X = pt.matrix("X", shape=(None, 1))
-    sigma = _hetero_sigma(X)
     Z = Points(pt.as_tensor_variable(np.linspace(-1.5, 1.5, 6)[:, None]))
     with pm.Model():
         ls = pm.InverseGamma("ls", alpha=2.0, beta=1.0)
+        s0 = pm.HalfNormal("s0", sigma=0.5)
+        sigma = s0 + 0.05 * X[:, 0] ** 2
         kernel = ExpQuad(input_dim=1, ls=ls)
         gp = {
             "gp": lambda: Unapproximated(kernel=kernel, sigma=sigma, x=X),
@@ -263,4 +240,5 @@ def test_fit_and_predict_heteroskedastic(which):
     data = {} if which == "svgp" else {"X_train": X_train, "y_train": y_train}
     _, v = pg.predict(gp, X_new, fit, **data)
     _, yv = pg.predict(gp, X_new, fit, incl_lik=True, **data)
-    np.testing.assert_allclose(yv - v, _hetero_sigma(X_new) ** 2, atol=1e-10)
+    expected = (fit.params["s0"] + 0.05 * X_new[:, 0] ** 2) ** 2
+    np.testing.assert_allclose(yv - v, expected, atol=1e-10)

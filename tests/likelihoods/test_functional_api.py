@@ -1,6 +1,5 @@
-"""The likelihood works in a purely functional way: a likelihood node carries
-its Op, design-matrix input, and parameters, so it can be used without the
-stateful holder at all. Everything dispatches through ``owner.op``."""
+"""The functional API: a likelihood node carries its Op, design-matrix input, and
+parameters, and everything dispatches through ``owner.op``."""
 
 import numpy as np
 import pymc as pm
@@ -48,8 +47,8 @@ def test_likelihood_survives_clone_and_reroots_on_the_clone():
     np.testing.assert_allclose(cloned_eval, expected)
 
 
-def test_node_built_without_holder_is_fully_usable():
-    """Build a likelihood node directly from the Op — no holder — and drive it
+def test_node_built_with_functional_api_is_fully_usable():
+    """Build a likelihood node directly from the Op and drive it
     through the functional API: param access, re-rooting, and prediction all
     come from ``owner.op``."""
     X = pt.matrix("X", shape=(None, 1))
@@ -62,21 +61,6 @@ def test_node_built_without_holder_is_fully_usable():
     new = np.array([[0.0], [1.0], [2.0]])
     rerooted = at(lik, pt.as_tensor_variable(new))
     np.testing.assert_allclose(_eval(param(rerooted, "sigma")), 0.1 + 0.05 * new[:, 0] ** 2)
-
-
-def test_functional_matches_holder():
-    """The free functions and the holder methods are the same computation."""
-    X = pt.matrix("X", shape=(None, 1))
-    mu = pt.as_tensor_variable(np.array([0.0, 1.0]))
-    var = pt.as_tensor_variable(np.array([0.5, 0.2]))
-    new = pt.as_tensor_variable(np.array([[0.5], [1.5]]))
-
-    lik = Gaussian(0.1 + 0.05 * X[:, 0] ** 2, x=X)  # a LikelihoodVariable
-
-    hm, hv = lik.at(new).predict_mean_and_var(mu, var)  # method API
-    fm, fv = predict_mean_and_var(at(lik, new), mu, var)  # functional API
-    np.testing.assert_allclose(_eval(hm), _eval(fm))
-    np.testing.assert_allclose(_eval(hv), _eval(fv))
 
 
 def test_functional_variational_expectation_preserves_rv_identity():
@@ -116,8 +100,3 @@ def test_design_matrix_handle_survives_rewrite():
     rewritten = rewrite_graph(sigma, include=("canonicalize",))
     # The barrier blocked the exp(log(x)) -> x cancellation, so X (=log(x)) survives.
     assert X in set(ancestors([rewritten]))
-
-    # And re-rooting the (held) likelihood still reaches the design matrix.
-    X_new = pt.matrix("X_new", shape=(None, 1))
-    got = lik.at(X_new).sigma.eval({X_new: np.array([[2.0], [3.0]])})
-    np.testing.assert_allclose(got, np.exp([2.0, 3.0]))
