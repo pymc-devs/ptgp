@@ -159,9 +159,8 @@ def predict(
 ):
     """Posterior mean and variance at ``X_new``.
 
-    ``X_train`` / ``y_train`` are required when
-    ``gp_model.predict_needs_data`` is True (``Unapproximated``, ``VFE``)
-    and ignored otherwise (``SVGP``).
+    ``X_train`` / ``y_train`` are required by ``Unapproximated`` and ``VFE``
+    and ignored by ``SVGP``.
 
     Parameters
     ----------
@@ -172,7 +171,7 @@ def predict(
     fit_result : FitResult
         Output of :func:`fit`.
     X_train, y_train : ndarray, optional
-        Required when ``gp_model.predict_needs_data`` is True.
+        Training data, for models whose posterior conditions on it.
     incl_lik : bool
         If True, add likelihood noise to the predictive variance.
     compile_kwargs : dict, optional
@@ -190,16 +189,10 @@ def predict(
     D = X_new.shape[1]
     X_new_var = pt.matrix("X_new", shape=(None, D))
 
-    if getattr(gp_model, "predict_needs_data", True):
-        if X_train is None or y_train is None:
-            raise ValueError(
-                f"{type(gp_model).__name__}.predict requires X_train and y_train; "
-                "the conditional posterior needs the training data."
-            )
-        X_train_arg = _as_2d(X_train)
-        y_train_arg = np.asarray(y_train, dtype=pytensor.config.floatX)
-    else:
-        X_train_arg = y_train_arg = None
+    if X_train is not None:
+        X_train = _as_2d(X_train)
+    if y_train is not None:
+        y_train = np.asarray(y_train, dtype=pytensor.config.floatX)
 
     pred = compile_predict(
         gp_model,
@@ -207,9 +200,9 @@ def predict(
         fit_result.model,
         fit_result.shared_params,
         shared_extras=fit_result.shared_extras,
-        X_train=X_train_arg,
-        y_train=y_train_arg,
         incl_lik=incl_lik,
         compile_kwargs=compile_kwargs,
+        X_train=X_train,
+        y_train=y_train,
     )
     return pred(X_new)
