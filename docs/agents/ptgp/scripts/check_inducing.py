@@ -1,11 +1,14 @@
 """Pre-fit health check on a GreedyVarianceDiagnostics pickle.
 
-Importable: ``check_inducing(kernel, X, Z, jitter=1e-6) -> dict``
+Importable: ``check_inducing(kernel, X, Z, jitter=1e-6, eig_threshold=1e-4)
+            -> KernelHealthDiagnostics``
 CLI:        ``python check_inducing.py --diag-pickle <path> [--out <png>]``
 
-CLI mode reads a saved ``GreedyVarianceDiagnostics``, prints repr +
-per-Kuu-field verdicts, and writes the canonical 3-panel inducing PNG
-(trace_curve, fraction-unexplained with 1% threshold, d_final scatter).
+CLI mode reads a saved ``GreedyVarianceDiagnostics`` (or
+``KernelHealthDiagnostics``), prints repr + per-Kuu-field verdicts, and
+writes the canonical 3-panel inducing PNG (trace_curve, fraction-unexplained
+with 1% threshold, d_final scatter). The trace-curve panels need a
+``GreedyVarianceDiagnostics``.
 """
 
 import argparse
@@ -73,7 +76,11 @@ def _verdicts_from_diag(diag) -> list:
             "inducing_collapse", "OK", f"no eigenvalues below {diag.kuu_eig_threshold:.0e}", ""
         )
 
-    pct = 100.0 * (1.0 - diag.trace_curve[-1] / diag.total_variance)
+    if hasattr(diag, "trace_curve"):
+        residual = diag.trace_curve[-1]
+    else:  # KernelHealthDiagnostics
+        residual = diag.nystrom_residual
+    pct = 100.0 * (1.0 - residual / diag.total_variance)
     if pct < 95.0:
         v_M = Verdict(
             "M_too_small",
@@ -101,23 +108,28 @@ def _plot_3panel(diag, out_path):
     import matplotlib.pyplot as plt
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-    M = len(diag.trace_curve)
-    m_axis = np.arange(1, M + 1)
+    if hasattr(diag, "trace_curve"):
+        # trace_curve[m] is the residual after m selected points, m = 0..M
+        m_axis = np.arange(len(diag.trace_curve))
 
-    axes[0].plot(m_axis, diag.trace_curve)
-    axes[0].set_xlabel("M")
-    axes[0].set_ylabel("trace_curve (residual variance)")
-    axes[0].set_title("Residual variance vs M")
-    axes[0].set_yscale("log")
+        axes[0].plot(m_axis, diag.trace_curve)
+        axes[0].set_xlabel("M")
+        axes[0].set_ylabel("trace_curve (residual variance)")
+        axes[0].set_title("Residual variance vs M")
+        axes[0].set_yscale("log")
 
-    frac = diag.trace_curve / diag.total_variance
-    axes[1].plot(m_axis, frac)
-    axes[1].axhline(0.01, color="r", linestyle="--", label="1% threshold")
-    axes[1].set_xlabel("M")
-    axes[1].set_ylabel("fraction unexplained")
-    axes[1].set_title("Fraction unexplained vs M (knee selection)")
-    axes[1].set_yscale("log")
-    axes[1].legend()
+        frac = diag.trace_curve / diag.total_variance
+        axes[1].plot(m_axis, frac)
+        axes[1].axhline(0.01, color="r", linestyle="--", label="1% threshold")
+        axes[1].set_xlabel("M")
+        axes[1].set_ylabel("fraction unexplained")
+        axes[1].set_title("Fraction unexplained vs M (knee selection)")
+        axes[1].set_yscale("log")
+        axes[1].legend()
+    else:
+        for ax in axes[:2]:
+            ax.set_axis_off()
+        axes[0].set_title("trace_curve needs GreedyVarianceDiagnostics")
 
     d = diag.d_final
     axes[2].scatter(np.arange(len(d)), d, s=4, alpha=0.5)

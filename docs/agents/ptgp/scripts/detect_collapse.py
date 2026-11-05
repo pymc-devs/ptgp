@@ -3,8 +3,8 @@
 CLI: ``python detect_collapse.py --history-pickle <path>``
 
 Detection rules operate on the ``history`` list of VFEDiagnostics and
-never on phase_labels, so the same rules work unchanged on Tier B/C
-(`tracked_minimize`) and Tier D (`minimize_staged_vfe`) output.
+never on phase_labels, so the same rules work unchanged on
+`tracked_minimize` and `minimize_staged_vfe` output.
 """
 
 import sys
@@ -27,26 +27,25 @@ def detect(history, phase_labels):
     elbo = _arr(history, "elbo")
     nystrom = _arr(history, "nystrom_residual")
     excess = _arr(history, "excess_fit_per_n")
-    _arr(history, "trace_penalty")
     fit = _arr(history, "fit")
     n = len(history)
     half = max(1, n // 2)
 
     verdicts = []
 
-    # sigma_collapse: sigma drops a lot and ELBO rose while nystrom didn't fall
+    # sigma_collapse: sigma drops a lot once Z covers the data densely enough
+    # that the trace penalty no longer resists it, and the fit keeps improving
     if (
-        sigma[-1] < 1e-3
-        and sigma[-1] < 0.1 * sigma[0]
-        and elbo[-1] > elbo[0]
-        and nystrom[-1] > 0.5 * nystrom[0]
+        sigma[-1] < 0.1 * sigma[0]
+        and nystrom[-1] < 0.01 * sigma[-1] ** 2
+        and excess[-1] > excess[0]
     ):
         verdicts.append(
             _verdict(
                 "sigma_collapse",
                 "CONFIRMED",
-                f"sigma {sigma[0]:.3g} -> {sigma[-1]:.3g}; nystrom_residual flat",
-                "see pitfalls/sigma_collapse.md; escalate to Tier D",
+                f"sigma {sigma[0]:.3g} -> {sigma[-1]:.3g}; nystrom_residual ~0",
+                "check held-out fit; refit the exact GP on a subsample; see pitfalls/sigma_collapse.md",
             )
         )
     elif sigma[-1] < 0.1 * sigma[0] and sigma[-1] < 0.01:
