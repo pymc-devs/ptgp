@@ -19,17 +19,21 @@ class Unapproximated:
         Mean function (default: ``Zero()``).
     sigma : tensor or PyMC random variable
         Observation noise standard deviation.
+    x : tensor, optional
+        The design matrix ``sigma`` was built against, for heteroskedastic
+        noise. Pass it so sigma can be re-rooted onto the test inputs at predict
+        time.
     """
 
     extra_vars = ()
     extra_init = ()
     default_objective = staticmethod(marginal_log_likelihood)
 
-    def __init__(self, kernel, mean=None, sigma=None):
+    def __init__(self, kernel, mean=None, sigma=None, x=None):
         """Store the kernel and mean; build a Gaussian likelihood from sigma."""
         self.kernel = kernel
         self.mean = mean if mean is not None else Zero()
-        self.likelihood = Gaussian(sigma)
+        self.likelihood = Gaussian(sigma, x=x)
 
     def predict_spec(self, X_new, incl_lik=False, X_train=None, y_train=None):
         """Prediction spec for :func:`ptgp.optim.compile_predict`.
@@ -58,7 +62,7 @@ class Unapproximated:
         var : tensor, shape (N*,)
         """
         Knn = self.kernel(X_train)
-        sigma = self.likelihood.sigma
+        sigma = self.likelihood.at(X_train).sigma
         sigma2_train = sigma**2 * pt.ones(X_train.shape[0])  # (N,); scalar broadcasts
         Knn_noisy = Knn + pt.diag(sigma2_train)
         Kns = self.kernel(X_train, X_new)  # (N, N*)
@@ -71,6 +75,5 @@ class Unapproximated:
         fvar = Kss_diag - pt.sum(Kns * (Knn_inv @ Kns), axis=0)
 
         if incl_lik:
-            sigma_new = self.likelihood.sigma_at(X_train, X_new)
-            return fmean, fvar + sigma_new**2
+            return self.likelihood.at(X_new).predict_mean_and_var(fmean, fvar)
         return fmean, fvar
