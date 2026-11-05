@@ -57,11 +57,13 @@ mean, var = pg.predict(svgp, np.linspace(-3, 3, 100)[:, None], fit)
 `pg.fit` picks a default objective from the gp type (`Unapproximated` → `marginal_log_likelihood`, `VFE` → `collapsed_elbo`, `SVGP` → `elbo`) and returns a `FitResult` that `pg.predict` consumes. For stochastic mini-batch training, staged VFE, or per-group learning rates, drop down to `pg.optim.compile_training_step` / `pg.optim.compile_scipy_objective` — see [`notebooks/introduction/introduction.ipynb`](notebooks/introduction/introduction.ipynb):
 
 ```python
+from pytensor_ml.optim import adam
+
 X_var = pt.matrix("X")
 y_var = pt.vector("y")
 
 step, shared_params, shared_extras = pg.optim.compile_training_step(
-    pg.objectives.elbo, svgp, X_var, y_var, model, learning_rate=1e-2
+    pg.objectives.elbo, svgp, X_var, y_var, model, optimizer=adam(1e-2)
 )
 
 for i in range(500):

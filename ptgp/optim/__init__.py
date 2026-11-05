@@ -1,6 +1,4 @@
-from ptgp.optim import schedules
 from ptgp.optim.api import FitResult, fit, predict
-from ptgp.optim.optimizers import adam, sgd
 from ptgp.optim.training import (
     compile_predict,
     compile_scipy_diagnostics,
@@ -13,9 +11,6 @@ from ptgp.optim.training import (
 )
 
 __all__ = [
-    "adam",
-    "sgd",
-    "schedules",
     "compile_training_step",
     "compile_scipy_objective",
     "compile_scipy_diagnostics",

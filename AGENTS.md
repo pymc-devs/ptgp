@@ -79,7 +79,10 @@ The reference usage example for all three models is
 
 - **Models** — `ptgp/gp/`. `Unapproximated`, `VFE`, `SVGP`. Each exposes
   `predict_marginal` / `predict_joint`; `SVGP` adds `predict_f_samples`
-  and `prior_kl`. `VariationalParams` + `init_variational_params(M)` build
+  and `prior_kl`. Each also implements `predict_spec`, returning a
+  `PredictSpec` (compiled inputs, outputs, host-side `prepare`) that
+  `compile_predict` consumes, so prediction needs no per-model code in
+  `ptgp/optim/`. `VariationalParams` + `init_variational_params(M)` build
   the symbolic `q_mu`, `q_sqrt`, plus the underlying trainable
   `extra_vars` / `extra_init` needed by the compile helpers.
 - **Objectives** — `ptgp/objectives.py`. Standalone functions, **not**

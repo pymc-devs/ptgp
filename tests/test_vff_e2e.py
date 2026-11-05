@@ -4,6 +4,8 @@ import numpy as np
 import pymc as pm
 import pytensor.tensor as pt
 
+from pytensor_ml.optim import adam
+
 from ptgp import FourierFeatures1D
 from ptgp.gp.svgp import SVGP, init_variational_params
 from ptgp.kernels.stationary import Matern32
@@ -44,7 +46,7 @@ def test_vff_svgp_trains_and_predicts():
         model=model,
         extra_vars=vp.extra_vars,
         extra_init=vp.extra_init,
-        learning_rate=1e-2,
+        optimizer=adam(1e-2),
     )
     X_new_var = pt.matrix("X_new")
     pred = compile_predict(

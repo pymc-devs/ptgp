@@ -1,3 +1,4 @@
+import pytensor
 import pytensor.tensor as pt
 
 from ptgp.kernels.base import Kernel
@@ -34,7 +35,7 @@ class Overlap(Kernel):
         Xa = pt.cast(X[:, self.active_dims], "int64")
         Ya = pt.cast(Y[:, self.active_dims], "int64")
         eq = pt.eq(Xa[:, None, :], Ya[None, :, :])
-        return pt.mean(pt.cast(eq, "float64"), axis=-1)
+        return pt.mean(pt.cast(eq, pytensor.config.floatX), axis=-1)
 
     def diag(self, X):
         """Diagonal of K(X, X). k(x, x) = 1 since every level matches itself."""

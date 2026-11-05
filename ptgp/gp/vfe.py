@@ -1,5 +1,6 @@
 import pytensor.tensor as pt
 
+from ptgp.gp.base import training_data_predict_spec
 from ptgp.likelihoods import Gaussian
 from ptgp.mean import Zero
 from ptgp.objectives import collapsed_elbo
@@ -25,7 +26,6 @@ class VFE:
     """
 
     default_objective = staticmethod(collapsed_elbo)
-    predict_needs_data = True
 
     def __init__(self, kernel, mean=None, sigma=None, inducing_variable=None):
         """Store the kernel, mean, and inducing variable; build a Gaussian likelihood from sigma."""
@@ -47,6 +47,13 @@ class VFE:
     @property
     def extra_init(self):
         return tuple(self.inducing_variable.extra_init)
+
+    def predict_spec(self, X_new, incl_lik=False, X_train=None, y_train=None):
+        """Prediction spec for :func:`ptgp.optim.compile_predict`.
+
+        ``X_train`` and ``y_train`` are required and embedded as constants.
+        """
+        return training_data_predict_spec(self, X_new, incl_lik, X_train, y_train)
 
     def predict_marginal(self, X_new, X_train, y_train, incl_lik=False):
         """Posterior marginal mean and variance at each point in X_new.
