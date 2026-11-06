@@ -12,6 +12,7 @@ scope of ``ptgp.rewrites`` shrank to three structural rewrites: H
 import numpy as np
 import pytensor.assumptions as pta
 import pytensor.tensor as pt
+import pytest
 
 from pytensor import function
 from pytensor.graph import rewrite_graph
@@ -247,3 +248,34 @@ def test_gp_joint_graph_numerically_correct():
     gl_fd = (fn(sigma_v, ls_v + eps, Xv, yv)[0] - fn(sigma_v, ls_v - eps, Xv, yv)[0]) / (2 * eps)
     np.testing.assert_allclose(got_gs, gs_fd, atol=1e-6)
     np.testing.assert_allclose(got_gl, gl_fd, atol=1e-6)
+
+
+def _np_mll(Xv, yv, sigma_v, ls_v):
+    sqd = (Xv[:, 0:1] - Xv[:, 0:1].T) ** 2
+    K = np.exp(-0.5 * sqd / ls_v**2) + sigma_v**2 * np.eye(len(yv))
+    _, logdet = np.linalg.slogdet(K)
+    return -0.5 * (yv @ np.linalg.solve(K, yv) + logdet + len(yv) * np.log(2 * np.pi))
+
+
+@pytest.mark.parametrize("pre_rewrite", [False, True], ids=["pt_grad", "stabilized_graph"])
+def test_mll_gradient_large_n_small_sigma(pre_rewrite):
+    """MLL gradients stay correct once ``prod(diag(L))`` underflows (pytensor#2468).
+
+    ``stabilized_graph`` differentiates after canonicalize + stabilize, as pytensor-ml's
+    ``compile_train`` does.
+    """
+    inputs, (loss, _, _) = _gp_mll_like_joint()
+    sigma, ls = inputs[:2]
+    if pre_rewrite:
+        loss = rewrite_graph(loss, include=("canonicalize", "stabilize"))
+    fn = function(inputs, pt.grad(loss, [sigma, ls]))
+
+    rng = np.random.default_rng(0)
+    N = 500
+    Xv = np.sort(rng.uniform(0, 10, N))[:, None]
+    yv = np.sin(Xv[:, 0]) + 0.05 * rng.standard_normal(N)
+    sigma_v, ls_v, h = 0.05, 1.0, 1e-6
+
+    fd_sigma = (_np_mll(Xv, yv, sigma_v + h, ls_v) - _np_mll(Xv, yv, sigma_v - h, ls_v)) / (2 * h)
+    fd_ls = (_np_mll(Xv, yv, sigma_v, ls_v + h) - _np_mll(Xv, yv, sigma_v, ls_v - h)) / (2 * h)
+    np.testing.assert_allclose(fn(sigma_v, ls_v, Xv, yv), [fd_sigma, fd_ls], rtol=1e-4)
