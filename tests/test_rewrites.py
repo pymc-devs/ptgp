@@ -4,9 +4,9 @@ Written so that, when the rewrites are upstreamed into PyTensor, the test
 bodies move over unchanged — only the side-effect import that installs the
 rules would shift from ``ptgp`` to ``pytensor``.
 
-After the 2026-05 ablation (see ``audits/rewrites_ablation_plan.md``) the
-scope of ``ptgp.rewrites`` shrank to three structural rewrites: H
-(``Det(L @ L.T)``), I (``diag(A @ A.T)``), and J (``MatrixInverse(PSD A)``).
+``ptgp.rewrites`` holds two structural rewrites, H (``Det(L @ L.T)``) and J
+(``MatrixInverse(PSD A)``). PyTensor's own lift covers ``diag(A @ A.T)``, which the
+tests below still pin.
 """
 
 import numpy as np
@@ -17,11 +17,12 @@ import pytest
 from pytensor import function
 from pytensor.graph import rewrite_graph
 from pytensor.graph.fg import FunctionGraph
-from pytensor.tensor.basic import ExtractDiag
+from pytensor.tensor.blas import Dot22, Dot22Scalar
 from pytensor.tensor.blockwise import Blockwise
 from pytensor.tensor.linalg.decomposition.cholesky import Cholesky
 from pytensor.tensor.linalg.inverse import MatrixInverse
 from pytensor.tensor.linalg.summary import Det
+from pytensor.tensor.math import Dot
 
 # Install the rewrites under test (side-effect import).
 import ptgp.rewrites  # noqa: F401
@@ -72,16 +73,21 @@ def test_det_of_LLT_diag_product_is_numerically_correct():
 
 
 # ---------------------------------------------------------------------------
-# ExtractDiag(A @ A.T) -> sum(A**2, axis=-1) rewrite (Rule I).
+# diag(A @ A.T), lifted by PyTensor.
 # ---------------------------------------------------------------------------
 
 
-def test_diag_of_AAT_to_row_norms_squared_eliminates_dot():
-    """``ExtractDiag(A @ A.T)`` lowers to ``sum(A**2, axis=-1)`` — no ExtractDiag."""
+def _has_pairwise_product(fn):
+    return any(
+        isinstance(node.op, Dot | Dot22 | Dot22Scalar) for node in fn.maker.fgraph.apply_nodes
+    )
+
+
+def test_diag_of_AAT_compiles_without_a_matrix_product():
     A = pt.dmatrix("A")
-    out = pt.diagonal(A @ A.T)
-    rewritten = rewrite_graph(out, include=("fast_run",))
-    assert not _has_op(rewritten, ExtractDiag)
+    fn = function([A], pt.diagonal(A @ A.T))
+
+    assert not _has_pairwise_product(fn)
 
 
 def test_diag_of_AAT_is_numerically_correct():
@@ -94,12 +100,11 @@ def test_diag_of_AAT_is_numerically_correct():
     np.testing.assert_allclose(f(A_val), np.diag(A_val @ A_val.T), atol=1e-12)
 
 
-def test_diag_of_ATA_lowers_to_column_norms():
-    """``ExtractDiag(A.T @ A)`` lowers to ``sum(A**2, axis=-2)`` — no ExtractDiag."""
+def test_diag_of_ATA_compiles_without_a_matrix_product():
     A = pt.dmatrix("A")
-    out = pt.diagonal(A.T @ A)
-    rewritten = rewrite_graph(out, include=("fast_run",))
-    assert not _has_op(rewritten, ExtractDiag)
+    fn = function([A], pt.diagonal(A.T @ A))
+
+    assert not _has_pairwise_product(fn)
 
 
 def test_diag_of_ATA_is_numerically_correct():

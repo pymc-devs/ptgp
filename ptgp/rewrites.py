@@ -4,7 +4,6 @@ from pytensor.assumptions.core import check_assumption
 from pytensor.assumptions.positive_definite import POSITIVE_DEFINITE
 from pytensor.assumptions.triangular import LOWER_TRIANGULAR
 from pytensor.graph.rewriting.basic import copy_stack_trace, node_rewriter
-from pytensor.tensor.basic import ExtractDiag
 from pytensor.tensor.blas import Dot22
 from pytensor.tensor.blockwise import Blockwise
 from pytensor.tensor.elemwise import DimShuffle
@@ -99,42 +98,6 @@ def det_of_LLT_to_diag_product(fgraph, node):
     new_det = (diag_L.prod(axis=-1) ** 2).astype(node.outputs[0].dtype)
     copy_stack_trace(node.outputs[0], new_det)
     return [new_det]
-
-
-@register_specialize
-@node_rewriter([ExtractDiag])
-def diag_of_AAT_to_row_norms_squared(fgraph, node):
-    r"""Lower the diagonal of ``A @ A.T`` or ``A.T @ A`` to elementwise norms.
-
-    .. math::
-
-        (A A^\top)_{ii} = \sum_k A_{ik}^2, \qquad
-        (A^\top A)_{ii} = \sum_k A_{ki}^2
-
-    ``ExtractDiag(A @ A.T)`` lowers to ``sum(A**2, axis=-1)``; ``ExtractDiag(A.T @ A)``
-    lowers to ``sum(A**2, axis=-2)``. No assumption on ``A`` is required.
-    """
-    extract_op = node.op
-    if extract_op.offset != 0:
-        return None
-    [A_AT] = node.inputs
-    ndim = A_AT.type.ndim
-    if ndim is None or ndim < 2:
-        return None
-    # The diag must run along the matrix axes; if ExtractDiag is reading other
-    # axes the AAT pattern does not apply.
-    axis1 = extract_op.axis1 % ndim
-    axis2 = extract_op.axis2 % ndim
-    if {axis1, axis2} != {ndim - 2, ndim - 1}:
-        return None
-    aat = _try_AAT_factor(fgraph, A_AT)
-    if aat is None:
-        return None
-    A, form = aat
-    sum_axis = -1 if form == "AAT" else -2
-    new_diag = pt.sum(pt.sqr(A), axis=sum_axis).astype(node.outputs[0].dtype)
-    copy_stack_trace(node.outputs[0], new_diag)
-    return [new_diag]
 
 
 @register_specialize
