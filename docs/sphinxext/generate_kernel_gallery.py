@@ -123,9 +123,7 @@ KERNEL_RECIPES: list[CoverRecipe] = [
 # kernels added to ``ptgp.kernels`` will still trigger the check until they
 # land in ``KERNEL_RECIPES`` or are added here.
 KERNEL_GALLERY_BLACKLIST: set[str] = {
-    "Kernel",  # abstract base class
-    "SumKernel",  # composition, not a "kernel" on its own
-    "ProductKernel",  # composition
+    "Kernel",  # base class, and the type of every composition
     "Gibbs",  # requires a user-supplied lengthscale function
     "WarpedInput",  # requires a user-supplied warp function
     "Overlap",  # categorical, needs a different render mode

@@ -41,12 +41,3 @@ Categorical
 
     Overlap
     LowRankCategorical
-
-Composition
------------
-
-.. autosummary::
-    :toctree: generated/
-
-    SumKernel
-    ProductKernel
