@@ -349,9 +349,10 @@ def test_gradient_of_kernel_diagonal_builds_no_pairwise_matrix():
 
 
 def test_unit_diagonal_is_exact():
-    X = pt.as_tensor_variable(KERNEL_ROWS)
+    X = pt.matrix("X", shape=(None, 2))
+    fn = function([X], Matern12(input_dim=2, ls=0.7).diag(X))
 
-    np.testing.assert_array_equal(Matern12(input_dim=2, ls=0.7).diag(X).eval(), np.ones(12))
+    np.testing.assert_array_equal(fn(KERNEL_ROWS), np.ones(12))
 
 
 def test_hand_written_diagonal_of_a_kernel_is_still_correct():
