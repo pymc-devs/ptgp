@@ -1,7 +1,27 @@
 import pytensor
 import pytensor.tensor as pt
 
-from ptgp.kernels.base import Kernel
+from ptgp.kernels.base import Kernel, KernelOp, leaf_graph, resolve_active_dims
+
+
+class OverlapOp(KernelOp):
+    """Every level matches itself, so k(x, x) = 1."""
+
+    unit_diagonal = True
+
+    def evaluate(self, left, right):
+        left_levels = pt.cast(left, "int64")
+        right_levels = pt.cast(right, "int64")
+        matches = pt.eq(left_levels[:, None, :], right_levels[None, :, :])
+        return pt.mean(pt.cast(matches, pytensor.config.floatX), axis=-1)
+
+
+class LowRankCategoricalOp(KernelOp):
+    def evaluate(self, left, right, W, kappa):
+        left_levels = pt.cast(left[:, 0], "int64")
+        right_levels = pt.cast(right[:, 0], "int64")
+        B = W @ W.T + pt.diag(kappa)
+        return B[left_levels][:, right_levels]
 
 
 class Overlap(Kernel):
@@ -15,7 +35,7 @@ class Overlap(Kernel):
 
     Values are expected to be non-negative integer level codes stored in a
     float matrix (the library-wide convention). Entries are cast to ``int64``
-    inside ``_eval``; level codes are not range-checked.
+    inside the kernel; level codes are not range-checked.
 
     Parameters
     ----------
@@ -27,19 +47,7 @@ class Overlap(Kernel):
     """
 
     def __init__(self, input_dim, active_dims=None):
-        """Validate dimensions via the base class."""
-        super().__init__(input_dim, active_dims)
-
-    def _eval(self, X, Y):
-        """Mean of elementwise equality across active columns."""
-        Xa = pt.cast(X[:, self.active_dims], "int64")
-        Ya = pt.cast(Y[:, self.active_dims], "int64")
-        eq = pt.eq(Xa[:, None, :], Ya[None, :, :])
-        return pt.mean(pt.cast(eq, pytensor.config.floatX), axis=-1)
-
-    def diag(self, X):
-        """Diagonal of K(X, X). k(x, x) = 1 since every level matches itself."""
-        return pt.ones(X.shape[0])
+        super().__init__(input_dim=input_dim, graph=leaf_graph(OverlapOp, input_dim, active_dims))
 
 
 class LowRankCategorical(Kernel):
@@ -50,7 +58,7 @@ class LowRankCategorical(Kernel):
     Also known as the Coregion / Intrinsic Coregionalization Model (ICM)
     kernel. Operates on a single categorical column. Level codes are expected
     to be non-negative integers stored in a float matrix (the library-wide
-    convention). Codes are cast to ``int64`` inside ``_eval`` and ``diag``;
+    convention). Codes are cast to ``int64`` inside the kernel;
     they are not range-checked; passing a code >= ``num_levels`` is user
     error.
 
@@ -80,23 +88,8 @@ class LowRankCategorical(Kernel):
     """
 
     def __init__(self, input_dim, num_levels, W, kappa, active_dims=None):
-        """Validate dimensions and store the factor loadings."""
-        super().__init__(input_dim, active_dims)
-        if len(self.active_dims) != 1:
+        if len(resolve_active_dims(input_dim, active_dims)) != 1:
             raise ValueError("LowRankCategorical requires active_dims of length 1")
-        self.num_levels = num_levels
-        self.W = W
-        self.kappa = kappa
 
-    def _eval(self, X, Y):
-        """Gather ``B[xi, yi]`` for level codes in the active column."""
-        xi = pt.cast(X[:, self.active_dims[0]], "int64")
-        yi = pt.cast(Y[:, self.active_dims[0]], "int64")
-        B = self.W @ self.W.T + pt.diag(self.kappa)
-        return B[xi][:, yi]
-
-    def diag(self, X):
-        """Diagonal of K(X, X). k(x, x) = ||W[x]||**2 + kappa[x]."""
-        xi = pt.cast(X[:, self.active_dims[0]], "int64")
-        Bdiag = pt.sum(pt.square(self.W), axis=-1) + self.kappa
-        return Bdiag[xi]
+        graph = leaf_graph(LowRankCategoricalOp, input_dim, active_dims, W, kappa)
+        super().__init__(input_dim=input_dim, graph=graph)

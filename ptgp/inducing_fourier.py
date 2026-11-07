@@ -2,9 +2,13 @@ import numpy as np
 import pytensor.assumptions as pta
 import pytensor.tensor as pt
 
+from pytensor.graph.traversal import variable_depends_on
+from pytensor.scalar.basic import Add, Mul
+from pytensor.tensor.elemwise import Elemwise
+
 from ptgp.gp.base import identity_prepare
 from ptgp.inducing import InducingVariables
-from ptgp.kernels.base import Kernel
+from ptgp.kernels.stationary import Matern12Op, Matern32Op, Matern52Op
 
 # Basis ordering for the Fourier features: BLOCK ordering, matching the
 # st--/VFF reference (Hensman, Durrande, Solin 2017). With K = num_frequencies
@@ -15,7 +19,7 @@ from ptgp.kernels.base import Kernel
 # This ordering must be matched by Kuf (Task 13) and any downstream consumer.
 
 
-_R_BY_KERNEL = {"Matern12": 2, "Matern32": 4, "Matern52": 6}
+_R_BY_KERNEL = {"Matern12Op": 2, "Matern32Op": 4, "Matern52Op": 6}
 
 
 def _maybe_wrap_with_domain_check(step_fn, gp_model, *, input_index):
@@ -99,43 +103,45 @@ class FourierFeatures1D(InducingVariables):
         )
 
     def _resolve_scaled_matern(self, kernel):
-        """Recursively unwrap scalar products around a single Matern leaf.
+        """Walk the kernel graph through scalar products to a single Matern ``KernelOp`` node.
 
         FourierFeatures1D follows the raw VFF feature convention
         ``u = P_phi(f)`` used by Hensman, Durrande, and Solin. Scalar kernel
         variance affects ``Kuu`` as ``Kuu / scale`` and does not scale ``Kuf``.
         """
-        from ptgp.kernels.combination import ProductKernel, SumKernel
-        from ptgp.kernels.stationary import Matern12, Matern32, Matern52
+        left, right = kernel.rows
 
-        supported = (Matern12, Matern32, Matern52)
+        def walk(variable):
+            if not variable_depends_on(variable, [left, right]):
+                return variable.squeeze(), None
 
-        def walk(node):
-            if isinstance(node, SumKernel):
-                raise NotImplementedError(
-                    "FourierFeatures1D does not implement additive VFF. "
-                    "Use a single scalar-scaled 1D Matern kernel."
-                )
-            if isinstance(node, ProductKernel):
-                s1, b1 = walk(node.k1)
-                s2, b2 = walk(node.k2)
-                if b1 is not None and b2 is not None:
+            match variable.owner_op:
+                case Elemwise(scalar_op=Add()):
                     raise NotImplementedError(
-                        "FourierFeatures1D does not implement separable/product VFF "
-                        f"({type(b1).__name__} * {type(b2).__name__}). "
+                        "FourierFeatures1D does not implement additive VFF. "
                         "Use a single scalar-scaled 1D Matern kernel."
                     )
-                return s1 * s2, (b1 if b1 is not None else b2)
-            if isinstance(node, Kernel):
-                if not isinstance(node, supported):
-                    raise NotImplementedError(
-                        f"FourierFeatures1D supports Matern12/32/52 only; "
-                        f"got {type(node).__name__}."
-                    )
-                return pt.as_tensor(1.0), node
-            return pt.as_tensor(node), None
+                case Elemwise(scalar_op=Mul()):
+                    scale, base = pt.as_tensor(1.0), None
+                    for factor in variable.owner.inputs:
+                        factor_scale, factor_base = walk(factor)
+                        if base is not None and factor_base is not None:
+                            raise NotImplementedError(
+                                "FourierFeatures1D does not implement separable/product VFF "
+                                f"({base.op} * {factor_base.op}). "
+                                "Use a single scalar-scaled 1D Matern kernel."
+                            )
+                        scale = scale * factor_scale
+                        base = base if factor_base is None else factor_base
+                    return scale, base
+                case Matern12Op() | Matern32Op() | Matern52Op() if variable.owner.inputs[0] is left:
+                    return pt.as_tensor(1.0), variable.owner
 
-        scale, base = walk(kernel)
+            raise NotImplementedError(
+                f"FourierFeatures1D supports Matern12/32/52 only; got {variable.owner_op}."
+            )
+
+        scale, base = walk(kernel.graph)
         if base is None:
             raise NotImplementedError(
                 f"FourierFeatures1D requires a supported Matern leaf; got {kernel!r}."
@@ -159,13 +165,11 @@ class FourierFeatures1D(InducingVariables):
         U : pytensor tensor of shape (M, R), with R = 1, 2, 3 for
             Matern12, Matern32, Matern52 respectively.
         """
-        from ptgp.kernels.stationary import Matern12, Matern32, Matern52
-
         a, b = self.a, self.b
         K = self.num_frequencies
         omegas = 2.0 * np.pi * np.arange(K + 1) / (b - a)  # length K+1
         omegas_sin = omegas[1:]  # drop omega_0 = 0
-        ls = base_kernel.ls
+        ls = base_kernel.inputs[2]
         width = b - a
         n_cos = K + 1
         n_sin = K
@@ -174,7 +178,7 @@ class FourierFeatures1D(InducingVariables):
         zeros_cos_1 = pt.as_tensor(np.zeros((n_cos, 1)))
         zeros_sin_1 = pt.as_tensor(np.zeros((n_sin, 1)))
 
-        if isinstance(base_kernel, Matern12):
+        if isinstance(base_kernel.op, Matern12Op):
             lamb = 1.0 / ls
             two_or_four = np.where(omegas == 0, 2.0, 4.0)
             d_cos = width * (lamb**2 + omegas**2) / lamb / two_or_four
@@ -187,7 +191,7 @@ class FourierFeatures1D(InducingVariables):
             U = pt.concatenate([U_cos, U_sin], axis=0)
             return d, U
 
-        if isinstance(base_kernel, Matern32):
+        if isinstance(base_kernel.op, Matern32Op):
             lamb = np.sqrt(3.0) / ls
             four_or_eight = np.where(omegas == 0, 4.0, 8.0)
             d_cos = width * (lamb**2 + omegas**2) ** 2 / lamb**3 / four_or_eight
@@ -201,7 +205,7 @@ class FourierFeatures1D(InducingVariables):
             U = pt.concatenate([U_cos_col, U_sin_col], axis=0)
             return d, U
 
-        if isinstance(base_kernel, Matern52):
+        if isinstance(base_kernel.op, Matern52Op):
             lamb = np.sqrt(5.0) / ls
             sixteen_or_32 = np.where(omegas == 0, 16.0, 32.0)
             v1 = (3.0 * (omegas / lamb) ** 2 - 1.0) / np.sqrt(8.0)
@@ -237,13 +241,13 @@ class FourierFeatures1D(InducingVariables):
         Validates ``num_inducing > R`` for the unwrapped Matern kernel.
         """
         scale, base = self._resolve_scaled_matern(kernel)
-        R = _R_BY_KERNEL[type(base).__name__]
+        R = _R_BY_KERNEL[type(base.op).__name__]
         if self.num_inducing <= R:
             min_freq = (R + 1) // 2
             raise ValueError(
                 f"FourierFeatures1D requires num_inducing > R "
-                f"(got M={self.num_inducing}, R={R} for {type(base).__name__}). "
-                f"Use num_frequencies >= {min_freq} for {type(base).__name__}."
+                f"(got M={self.num_inducing}, R={R} for {type(base.op).__name__}). "
+                f"Use num_frequencies >= {min_freq} for {type(base.op).__name__}."
             )
         d_base, U_base = self._structured_Kuu_base(base)
         sqrt_scale = pt.sqrt(scale)
@@ -257,22 +261,21 @@ class FourierFeatures1D(InducingVariables):
 
     def _domain_check(self, X_numeric, kernel):
         """Raise when numeric inputs use unsupported out-of-domain VFF behavior."""
-        from ptgp.kernels.stationary import Matern52
 
         _, base = self._resolve_scaled_matern(kernel)
-        if len(base.active_dims) != 1:
+        if len(base.op.active_dims) != 1:
             raise ValueError(
                 f"FourierFeatures1D requires a 1D kernel (len(active_dims)==1); "
-                f"got active_dims={list(base.active_dims)}."
+                f"got active_dims={list(base.op.active_dims)}."
             )
-        col_idx = int(base.active_dims[0])
+        col_idx = int(base.op.active_dims[0])
         X = np.asarray(X_numeric)
         col = X[:, col_idx]
         lo, hi = float(col.min()), float(col.max())
         outside = lo < self.a or hi > self.b
         if not outside:
             return
-        if isinstance(base, Matern52):
+        if isinstance(base.op, Matern52Op):
             raise ValueError(
                 f"FourierFeatures1D does not support Matern52 extrapolation outside "
                 f"domain [{self.a}, {self.b}] (got [{lo}, {hi}]). Reconstruct with "
@@ -288,12 +291,12 @@ class FourierFeatures1D(InducingVariables):
 
     def _get_active_column(self, kernel, X):
         _, base = self._resolve_scaled_matern(kernel)
-        if len(base.active_dims) != 1:
+        if len(base.op.active_dims) != 1:
             raise ValueError(
                 f"FourierFeatures1D requires a 1D kernel (len(active_dims)==1); "
-                f"got active_dims={list(base.active_dims)}."
+                f"got active_dims={list(base.op.active_dims)}."
             )
-        col = int(base.active_dims[0])
+        col = int(base.op.active_dims[0])
         return X[:, col]
 
     def _K_uf_base(self, base_kernel, x):
@@ -304,7 +307,6 @@ class FourierFeatures1D(InducingVariables):
         authors' implementation. Matern52 edge covariances are not implemented
         in the reference and are rejected by the numeric domain wrapper.
         """
-        from ptgp.kernels.stationary import Matern12, Matern32
 
         a, b = self.a, self.b
         K = self.num_frequencies
@@ -318,9 +320,9 @@ class FourierFeatures1D(InducingVariables):
         lt_a = x < a
         gt_b = x > b
 
-        if isinstance(base_kernel, Matern12):
-            left_cos = pt.exp(-pt.abs(x - a) / base_kernel.ls)
-            right_cos = pt.exp(-pt.abs(x - b) / base_kernel.ls)
+        if isinstance(base_kernel.op, Matern12Op):
+            left_cos = pt.exp(-pt.abs(x - a) / base_kernel.inputs[2])
+            right_cos = pt.exp(-pt.abs(x - b) / base_kernel.inputs[2])
             cos_block = pt.switch(lt_a[None, :], left_cos[None, :], cos_block)
             cos_block = pt.switch(gt_b[None, :], right_cos[None, :], cos_block)
             sin_block = pt.switch(
@@ -330,10 +332,10 @@ class FourierFeatures1D(InducingVariables):
             )
             return pt.concatenate([cos_block, sin_block], axis=0)
 
-        if isinstance(base_kernel, Matern32):
+        if isinstance(base_kernel.op, Matern32Op):
             sqrt3 = np.sqrt(3.0)
-            arg_left = sqrt3 * pt.abs(x - a) / base_kernel.ls
-            arg_right = sqrt3 * pt.abs(x - b) / base_kernel.ls
+            arg_left = sqrt3 * pt.abs(x - a) / base_kernel.inputs[2]
+            arg_right = sqrt3 * pt.abs(x - b) / base_kernel.inputs[2]
             left_exp = pt.exp(-arg_left)
             right_exp = pt.exp(-arg_right)
             left_cos = (1.0 + arg_left) * left_exp
