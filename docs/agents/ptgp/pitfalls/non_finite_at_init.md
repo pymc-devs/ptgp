@@ -1,25 +1,22 @@
 ---
 name: non_finite_at_init
 severity: high
-applies_to: [VFE]
+applies_to: [all]
 symptoms:
   - check_init reports NaN or inf in loss or grad at theta0
   - scipy aborts immediately with a non-finite-value error
-  - first history entry has elbo == -inf or NaN
+  - first history entry has a non-finite objective (elbo or mll)
 related_pitfalls: [bad_priors, kuu_ill_conditioned, large_grad_at_init]
 ---
 
 ## Detection
 
 ```python
-diag = pg.utils.check_init(fun, theta0, model=model, ...)
-non_finite = (
-    not np.isfinite(diag["loss"])
-    or not np.all(np.isfinite(diag["grad"]))
-)
+non_finite = not pg.utils.check_init(fun, theta0, X, y, model=model)
 ```
 
-Or directly in history:
+Or directly in a diagnostics history (`history[0].mll` for
+`unapproximated_diagnostics`):
 
 ```python
 not np.isfinite(history[0].elbo)
@@ -34,7 +31,8 @@ mechanisms:
    prior median lengthscale much larger than data spread, making
    `Kff + sigma^2 I` numerically singular. See
    [bad_priors](bad_priors.md).
-2. **Kuu was ill-conditioned at chosen Z**: the initial Cholesky
+2. **For inducing-point models, Kuu was ill-conditioned at the chosen
+   Z**: the initial Cholesky
    underflows or produces non-finite values. See
    [kuu_ill_conditioned](kuu_ill_conditioned.md).
 3. **Bug in the kernel**: `eta = 0` (impossible if eta is positive,
@@ -46,9 +44,11 @@ mechanisms:
 
 ## Fix
 
-1. Run `pg.utils.check_init` with verbose output and read which
-   parameter has a non-finite gradient. That localises the cause.
-2. Compute Kuu eigenvalues at the initial Z and median-prior kernel:
+1. Run `pg.utils.check_init` and read the `top_k` `|grad|` table it
+   logs (raise `top_k=` to see more) to find which parameter has a
+   non-finite gradient. That localises the cause.
+2. For inducing-point models, compute Kuu eigenvalues at the initial Z
+   and median-prior kernel:
 
    ```python
    from ptgp.utils import get_initial_params

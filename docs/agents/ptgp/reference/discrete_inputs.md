@@ -1,18 +1,18 @@
-# Discrete inputs in a VFE model
+# Discrete inputs with inducing points
 
-Most real datasets have a categorical or integer-coded column. VFE's
-defaults assume continuous inputs, so dropping a categorical column
+Most real datasets have a categorical or integer-coded column. The
+inducing-point tools (VFE, SVGP) assume continuous inputs, so dropping a categorical column
 into `X` without thinking causes silent failures.
 
-## Why VFE's defaults assume continuous inputs
+## Why the defaults assume continuous inputs
 
-Two places in VFE handle `X` continuously:
+Two places handle `X` continuously:
 
 1. **`greedy_variance_init`** runs a pivoted Cholesky of `K(X, X)`
    using the *continuous* kernel. It picks `M` rows of `X` whose
    discrete-column values are whatever happened to be in those rows.
-2. **Gradient-based Z optimisation** (Tier C, Tier D phase 2a) moves
-   Z in continuous space. The gradient step lands between integer
+2. **Gradient-based Z optimisation** (trainable Z, including phase 2a of
+   `minimize_staged_vfe`) moves Z in continuous space. The gradient step lands between integer
    categories.
 
 For an integer-coded categorical column, both behaviours are wrong:
@@ -28,26 +28,36 @@ Ordered cleanest to most retrofit-friendly.
 
 ptgp ships two:
 
-- `ptgp.kernels.categorical.Overlap` — delta kernel: `1` if same
-  category, `0` otherwise. ICM-style multitask.
-- `ptgp.kernels.categorical.LowRankCategorical` — learned low-rank
-  similarity matrix between categories.
+- `ptgp.kernels.Overlap(input_dim, active_dims=[j])`: Hamming kernel,
+  the fraction of active categorical columns that match. With one
+  column it is a delta kernel, `1` if same category and `0` otherwise,
+  so a product with a continuous kernel gives independent per-category
+  functions with shared hyperparameters.
+- `ptgp.kernels.LowRankCategorical(input_dim, num_levels, W, kappa,
+  active_dims=[j])`: learned similarity `B = W W^T + diag(kappa)`
+  between the levels of one column. This is the Coregion / ICM kernel.
 
 Combine via product (multiplicative; e.g. shared smooth function
 modulated per category) or sum (additive; per-category offset on top
 of a shared smooth):
 
 ```python
-# Multiplicative (ICM-style)
-k = k_cont(x_cont) * Overlap(x_cat)
+# X has a continuous column 0 and an integer-coded categorical column 1
+k_cont = eta**2 * pg.kernels.Matern52(input_dim=2, ls=ls, active_dims=[0])
 
-# Additive
-k = k_cont + LowRankCategorical(x_cat)
+# Multiplicative (ICM with LowRankCategorical; independent tasks with Overlap)
+k = k_cont * pg.kernels.LowRankCategorical(
+    input_dim=2, num_levels=L, W=W, kappa=kappa, active_dims=[1]
+)
+
+# Additive: per-category offset on top of a shared smooth function
+k = k_cont + pg.kernels.Overlap(input_dim=2, active_dims=[1])
 ```
 
-Z lives in the continuous dims only. The categorical dim of Z is
-**enumerated**: typically one Z block per category, or a learned
-subset. The continuous block is greedy-initialised within each
+Z has all `D` columns, because each kernel slices its own
+`active_dims` from `Z` just as it does from `X`. The categorical column
+of Z is **enumerated**: typically one Z block per category, or a learned
+subset, and greedy selection runs on the continuous columns within each
 category's data.
 
 This is the cleanest design and the one to prefer when you can refactor
@@ -69,8 +79,8 @@ Z = np.vstack(Z_blocks)
 ```
 
 Z's categorical column is filled by category and *never moves*. Freeze
-Z (Tier B) so the gradient never tries to interpolate between
-categories.
+Z (`Points(Z)` with the concrete array) so the gradient never tries to
+interpolate between categories.
 
 ### 3. Snap-to-nearest-category post-hoc
 
@@ -89,8 +99,8 @@ Z[:, cat_dim] = cats[idx, 0]
 ```
 
 Cheap to retrofit but loses the optimality guarantee of greedy and can
-introduce duplicates. Combine with a dedup pass (the same logic as in
-`kmeans_init`, `inducing.py:101`) to drop near-duplicate Z rows.
+introduce duplicates. Combine with a dedup pass (the same logic as the
+near-duplicate removal in `kmeans_init`) to drop near-duplicate Z rows.
 
 ## Ordinal columns
 
@@ -102,7 +112,7 @@ resolution at integer spacing. Otherwise treat as categorical.
 
 Don't gradient-train Z's categorical dim. Two options:
 
-- **Freeze Z entirely** (Tier B with `frozen_vars={Z_var: Z_init}`).
+- **Freeze Z entirely**: `Points(Z)` with the concrete array, or `frozen_vars={Z_var: Z}`.
 - **Split Z** into a trainable continuous block + a frozen categorical
   block. Custom; see how `Z_var` is plumbed in `minimize_staged_vfe` —
   you'd need a similar two-block setup.
