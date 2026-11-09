@@ -1,11 +1,11 @@
 ---
 name: inducing_layout_poor
 severity: medium
-applies_to: [VFE]
+applies_to: [VFE, SVGP]
 symptoms:
   - nystrom_residual stays large at convergence
   - trace_curve has flattened by chosen M (knee passed)
-  - d_final has scattered hot spots — particular data points are poorly covered
+  - some d_final values exceed sigma**2 — particular data points are poorly covered
 related_pitfalls: [M_too_small, sigma_inflation, lengthscale_runaway]
 ---
 
@@ -14,19 +14,22 @@ related_pitfalls: [M_too_small, sigma_inflation, lengthscale_runaway]
 ```python
 nys_large = history[-1].nystrom_residual > 0.05 * history[0].nystrom_residual
 frac_unexpl_at_M = diag.trace_curve[-1] / diag.total_variance
-curve_flat = frac_unexpl_at_M < 0.01
+curve_flat = frac_unexpl_at_M < 0.05
 
-# d_final has hot spots: a small fraction of points has much larger residual variance
-d = diag.d_final
-hot_spots = (d > 10 * np.median(d)).sum() > 0
+# some points have more residual prior variance than the noise explains
+poorly_covered = (diag.d_final > history[-1].sigma ** 2).any()
 
-layout_poor = nys_large and curve_flat and hot_spots
+layout_poor = nys_large and curve_flat and poorly_covered
 ```
 
-Visually: `scripts/check_inducing.py` — middle panel is **below** the
-1% threshold (so `M` is fine), but the right panel (`d_final`
-scatter) shows points whose residual variance is much higher than
-the rest.
+Visually: in the `scripts/check_inducing.py` PNG, the middle panel is
+**below** 5% (so `M` is fine), but the right panel (`d_final` scatter)
+shows points whose residual variance is above `sigma**2`.
+
+For a trained Z that did not come from greedy selection (any
+inducing-point model, including SVGP),
+`compute_inducing_diagnostics(kernel, X, Z)` gives `d_final` and
+`nystrom_residual` for that Z.
 
 ## Diagnosis
 
@@ -43,18 +46,19 @@ within prior bounds, the layout — not the kernel — is the issue.
 
 ## Fix
 
-The "Tier B → re-init Z and retrain" loop:
+Re-run `greedy_variance_init` with the trained kernel hyperparameters,
+freeze the new Z, and retrain:
 
 1. After the current fit, build a numerical kernel using the
    *trained* hyperparameters (use `pg.optim.get_trained_params`
    plus a substitution into the kernel).
 2. Re-run `greedy_variance_init(X, M, trained_kernel)` to get a
    layout matched to the learned scale.
-3. Refit. The second pass should converge faster and to a better
-   point.
+3. Refit with the new Z frozen (`Points(Z0)` with the concrete array).
+   The second pass should converge faster and to a better point.
 
-If the new trace curve also hasn't flattened at the new `M`, escalate
-to [M_too_small](M_too_small.md).
+If the new trace curve also hasn't flattened at the new `M`, see
+[M_too_small](M_too_small.md).
 
 ## See also
 
@@ -62,5 +66,3 @@ to [M_too_small](M_too_small.md).
   trace-curve / d_final dichotomy is described under "When to revisit
   M".
 - [M_too_small](M_too_small.md) — alternative cause.
-- [reference/workflow.md](../reference/workflow.md) — re-init loop in
-  Tier B.
