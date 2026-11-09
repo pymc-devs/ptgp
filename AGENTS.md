@@ -79,7 +79,10 @@ The reference usage example for all three models is
 
 - **Models** — `ptgp/gp/`. `Unapproximated`, `VFE`, `SVGP`. Each exposes
   `predict_marginal` / `predict_joint`; `SVGP` adds `predict_f_samples`
-  and `prior_kl`. `VariationalParams` + `init_variational_params(M)` build
+  and `prior_kl`. Each also implements `predict_spec`, returning a
+  `PredictSpec` (compiled inputs, outputs, host-side `prepare`) that
+  `compile_predict` consumes, so prediction needs no per-model code in
+  `ptgp/optim/`. `VariationalParams` + `init_variational_params(M)` build
   the symbolic `q_mu`, `q_sqrt`, plus the underlying trainable
   `extra_vars` / `extra_init` needed by the compile helpers.
 - **Objectives** — `ptgp/objectives.py`. Standalone functions, **not**
@@ -187,27 +190,30 @@ shims beyond what the task requires.
 
 ## Skill docs (`docs/agents/`)
 
-The repo ships a backend-agnostic agent-skill doc at
-`docs/agents/ptgp-vfe/` covering VFE training diagnosis (pitfalls,
-escalation workflow, interpretation of `VFEDiagnostics` /
-`GreedyVarianceDiagnostics`). `scripts/install_claude_skills.py` is a
-Claude-specific convenience that symlinks it into a Claude Code skill
-directory (`~/.claude/skills/` or a project-local `.claude/skills/`);
-other AI tools can read `docs/agents/` directly.
+The repo ships backend-agnostic agent-skill docs: `docs/agents/ptgp/`
+covers GP fit diagnosis, one page per problem with its cause and fix
+(pages tagged by `applies_to`), and `docs/agents/ptgp-pytensor-ml/` covers
+pytensor-ml optimizers in `compile_training_step`. Skill pages describe
+problems and fixes, not workflows, and stay general to all GP methods.
+`scripts/install_claude_skills.py` is a Claude-specific convenience that
+symlinks them into a Claude Code skill directory (`~/.claude/skills/` or a
+project-local `.claude/skills/`); other AI tools can read `docs/agents/`
+directly.
 
 **When you change any of the following, check whether the skill needs
 updating:**
 
-| File                  | Skill files to scan                                            |
-| --------------------- | -------------------------------------------------------------- |
-| `ptgp/objectives.py`  | `reference/api.md`, `reference/interpretation.md`              |
+| File                     | Skill files to scan (under `docs/agents/ptgp/`)                    |
+| ------------------------ | ------------------------------------------------------------------ |
+| `ptgp/objectives.py`     | `reference/api.md`, `reference/interpretation.md`                  |
 | `ptgp/optim/training.py` | `reference/api.md`, `pitfalls/lbfgsb_abnormal.md`, `pitfalls/slow_convergence.md` |
-| `ptgp/inducing.py`    | `reference/interpretation.md`, `pitfalls/inducing_*.md`        |
-| `ptgp/utils.py`       | `pitfalls/non_finite_at_init.md`, `pitfalls/large_grad_at_init.md` |
+| `ptgp/inducing.py`       | `reference/interpretation.md`, `pitfalls/inducing_*.md`            |
+| `ptgp/utils.py`          | `pitfalls/non_finite_at_init.md`, `pitfalls/large_grad_at_init.md` |
 
-The skill's pitfall pages reference fields on `VFEDiagnostics`,
-`CollapsedELBOTerms`, and `GreedyVarianceDiagnostics` by name — any
-change to those namedtuples needs a sweep through the skill.
+The pitfall pages reference fields on `VFEDiagnostics`,
+`UnapproximatedDiagnostics`, `CollapsedELBOTerms`,
+`GreedyVarianceDiagnostics`, and `KernelHealthDiagnostics` by name; any
+change to those types needs a sweep through the skill.
 
 ## Commits
 

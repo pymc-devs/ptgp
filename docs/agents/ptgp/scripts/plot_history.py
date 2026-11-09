@@ -2,9 +2,10 @@
 
 CLI: ``python plot_history.py --history-pickle <path> [--out <png>]``
 
-Accepts the three pickle shapes documented in `_common.load_history`. Tier
-D output (with non-trivial phase_labels) gets per-phase coloring with
-`tab10`; Tier B/C output (single label "run") renders in one color.
+Accepts the three pickle shapes documented in `_common.load_history`.
+`minimize_staged_vfe` output (with non-trivial phase_labels) gets per-phase
+coloring with `tab10`; `tracked_minimize` output (single label "run")
+renders in one color.
 """
 
 import argparse

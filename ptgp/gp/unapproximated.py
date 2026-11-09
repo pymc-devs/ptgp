@@ -1,5 +1,7 @@
+import pytensor.assumptions as pta
 import pytensor.tensor as pt
 
+from ptgp.gp.base import training_data_predict_spec
 from ptgp.likelihoods import Gaussian
 from ptgp.mean import Zero
 from ptgp.objectives import marginal_log_likelihood
@@ -23,13 +25,19 @@ class Unapproximated:
     extra_vars = ()
     extra_init = ()
     default_objective = staticmethod(marginal_log_likelihood)
-    predict_needs_data = True
 
     def __init__(self, kernel, mean=None, sigma=None):
         """Store the kernel and mean; build a Gaussian likelihood from sigma."""
         self.kernel = kernel
         self.mean = mean if mean is not None else Zero()
         self.likelihood = Gaussian(sigma)
+
+    def predict_spec(self, X_new, incl_lik=False, X_train=None, y_train=None):
+        """Prediction spec for :func:`ptgp.optim.compile_predict`.
+
+        ``X_train`` and ``y_train`` are required and embedded as constants.
+        """
+        return training_data_predict_spec(self, X_new, incl_lik, X_train, y_train)
 
     def predict_marginal(self, X_new, X_train, y_train, incl_lik=False):
         """Posterior marginal mean and variance at each point in X_new.
@@ -53,7 +61,7 @@ class Unapproximated:
         Knn = self.kernel(X_train)
         sigma = self.likelihood.sigma
         sigma2_train = sigma**2 * pt.ones(X_train.shape[0])  # (N,); scalar broadcasts
-        Knn_noisy = Knn + pt.diag(sigma2_train)
+        Knn_noisy = pta.assume(Knn + pt.diag(sigma2_train), positive_definite=True, symmetric=True)
         Kns = self.kernel(X_train, X_new)  # (N, N*)
         Kss_diag = self.kernel.diag(X_new)
 

@@ -119,3 +119,70 @@ def test_svgp_joint_graph_at_cubic_floor():
         f"(Cholesky on Kuu); got {n}. Run scripts/joint_graph_analysis.py "
         f"for the full op breakdown."
     )
+
+
+def _cubic_op_counts(fn) -> dict[str, int]:
+    """Count cubic factorizations in the compiled graph by op type name."""
+    counts = {}
+    for node in fn.maker.fgraph.apply_nodes:
+        op = node.op
+        core = op.core_op if isinstance(op, Blockwise) else op
+        if isinstance(core, CUBIC_OPS):
+            name = type(core).__name__
+            counts[name] = counts.get(name, 0) + 1
+    return counts
+
+
+def test_unapproximated_predict_at_cubic_floor():
+    """Unapproximated prediction compiles to exactly 1 Cholesky and no LU or inverse."""
+    X, X_new = pt.dmatrix("X"), pt.dmatrix("X_new")
+    y = pt.dvector("y")
+    sigma, ls = pt.dscalar("sigma"), pt.dscalar("ls")
+    gp = Unapproximated(kernel=ExpQuad(input_dim=1, ls=ls), mean=Zero(), sigma=sigma)
+    fn = pytensor.function([X_new, X, y, sigma, ls], gp.predict_marginal(X_new, X, y))
+    counts = _cubic_op_counts(fn)
+    assert counts == {
+        "Cholesky": 1
+    }, f"Unapproximated prediction should have 1 Cholesky (on K + σ²I); got {counts}."
+
+
+def test_vfe_predict_at_cubic_floor():
+    """VFE prediction compiles to exactly 2 Choleskys and no LU or inverse."""
+    X, X_new = pt.dmatrix("X"), pt.dmatrix("X_new")
+    y = pt.dvector("y")
+    sigma, ls = pt.dscalar("sigma"), pt.dscalar("ls")
+    Z = pt.dmatrix("Z")
+    vfe = VFE(
+        kernel=ExpQuad(input_dim=1, ls=ls),
+        mean=Zero(),
+        sigma=sigma,
+        inducing_variable=Points(Z),
+    )
+    fn = pytensor.function([X_new, X, y, sigma, ls, Z], vfe.predict_marginal(X_new, X, y))
+    counts = _cubic_op_counts(fn)
+    assert counts == {
+        "Cholesky": 2
+    }, f"VFE prediction should have 2 Choleskys (on Kuu and on Kuu + Kuf Λ⁻¹ Kfu); got {counts}."
+
+
+def test_svgp_predict_at_cubic_floor():
+    """SVGP prediction compiles to exactly 1 Cholesky and no LU or inverse."""
+    X_new = pt.dmatrix("X_new")
+    sigma, ls = pt.dscalar("sigma"), pt.dscalar("ls")
+    Z = pt.dmatrix("Z")
+    vp = init_variational_params(8)
+    svgp = SVGP(
+        kernel=ExpQuad(input_dim=1, ls=ls),
+        mean=Zero(),
+        likelihood=Gaussian(sigma),
+        inducing_variable=Points(Z),
+        variational_params=vp,
+    )
+    fn = pytensor.function(
+        [X_new, ls, Z, vp.q_mu, vp.extra_vars[1]],
+        svgp.predict_marginal(X_new),
+    )
+    counts = _cubic_op_counts(fn)
+    assert counts == {
+        "Cholesky": 1
+    }, f"SVGP prediction should have 1 Cholesky (on Kuu); got {counts}."

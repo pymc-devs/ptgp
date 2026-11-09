@@ -11,7 +11,7 @@ PTGP is for practitioners who need flexible, well-supported GP modeling. The goa
 - **Non-Gaussian likelihoods:** Bernoulli, Poisson, NegativeBinomial, StudentT
 - **PyMC priors:** set priors on any hyperparameter; use PyMC distributions for mean functions and noise models; MAP training by default
 - **Training tools:** L-BFGS-B and Adam optimizers, per-parameter learning rates, staged optimization, frozen variables, inducing point initialization strategies, diagnostic-guided workflows; more are being added, such as carefully monitored training to help diagnose issues early
-- **Agent-readable docs:** `docs/agents/` ships LLM-readable guides for debugging training issues and folk wisdom (VFE training covered). See the [Working with AI coding assistants](#working-with-ai-coding-assistants) section below.
+- **Agent-readable docs:** `docs/agents/` ships LLM-readable guides for debugging training issues and folk wisdom (GP fit diagnosis and pytensor-ml optimizers). See the [Working with AI coding assistants](#working-with-ai-coding-assistants) section below.
 - **More coming:** see the [issues](https://github.com/pymc-devs/ptgp/issues)
 
 Researchers benefit from the underlying design: PTGP is built on PyTensor's symbolic graph and rewrite system, so you write GP math directly (`pt.linalg.inv(K)`, `pt.linalg.slogdet(K)`) and the compiler chooses efficient algorithms based on declared matrix structure. This makes it straightforward to implement new GP approximations and create custom models, and will eventually allow matrix structure like Kronecker, Toeplitz, and sparse to be taken advantage of automatically.
@@ -88,7 +88,7 @@ PTGP tries to distill some of the approaches of existing GP libraries and make t
 PTGP is set up to work nicely with AI coding assistants:
 
 - **[`AGENTS.md`](AGENTS.md)** — project-level instructions for AI coding assistants (architecture, conventions, where things live, how to run tests). Follows the [AGENTS.md](https://agents.md/) cross-tool convention used by Codex, Cursor, Aider, and others.
-- **[`docs/agents/`](docs/agents/)** — backend-agnostic agent-skill docs covering folk wisdom and training-debug recipes. Currently includes [`ptgp-vfe`](docs/agents/ptgp-vfe/) (VFE diagnostic skill: pitfalls, escalation workflow, interpretation of `VFEDiagnostics` and `GreedyVarianceDiagnostics`).
+- **[`docs/agents/`](docs/agents/)** — backend-agnostic agent-skill docs covering folk wisdom and training-debug recipes. Currently includes [`ptgp`](docs/agents/ptgp/) (GP fit diagnosis: one page per problem with its cause and fix, plus interpretation of the diagnostic fields) and [`ptgp-pytensor-ml`](docs/agents/ptgp-pytensor-ml/) (pytensor-ml optimizer transforms in `compile_training_step`).
 
 ### Claude Code users
 

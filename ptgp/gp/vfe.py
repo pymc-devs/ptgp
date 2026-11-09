@@ -1,8 +1,10 @@
+import pytensor.assumptions as pta
 import pytensor.tensor as pt
 
+from ptgp.gp.base import training_data_predict_spec
 from ptgp.likelihoods import Gaussian
 from ptgp.mean import Zero
-from ptgp.objectives import collapsed_elbo
+from ptgp.objectives import _DEFAULT_JITTER, collapsed_elbo
 
 
 class VFE:
@@ -25,7 +27,6 @@ class VFE:
     """
 
     default_objective = staticmethod(collapsed_elbo)
-    predict_needs_data = True
 
     def __init__(self, kernel, mean=None, sigma=None, inducing_variable=None):
         """Store the kernel, mean, and inducing variable; build a Gaussian likelihood from sigma."""
@@ -48,6 +49,13 @@ class VFE:
     def extra_init(self):
         return tuple(self.inducing_variable.extra_init)
 
+    def predict_spec(self, X_new, incl_lik=False, X_train=None, y_train=None):
+        """Prediction spec for :func:`ptgp.optim.compile_predict`.
+
+        ``X_train`` and ``y_train`` are required and embedded as constants.
+        """
+        return training_data_predict_spec(self, X_new, incl_lik, X_train, y_train)
+
     def predict_marginal(self, X_new, X_train, y_train, incl_lik=False):
         """Posterior marginal mean and variance at each point in X_new.
 
@@ -68,23 +76,31 @@ class VFE:
         var : tensor, shape (N*,)
         """
         Z = self.inducing_variable.Z
-        sigma = self.likelihood.sigma
-        sigma2_vec = sigma**2 * pt.ones(X_train.shape[0])  # (N,); scalar broadcasts
+        M = Z.shape[0]
+        sigma_vec = self.likelihood.sigma * pt.ones(X_train.shape[0])  # (N,); scalar broadcasts
 
         Kuu = self.kernel(Z)  # (M, M)
+        Kuu = pta.assume(
+            Kuu + _DEFAULT_JITTER * pt.eye(M, dtype=Kuu.dtype),
+            positive_definite=True,
+            symmetric=True,
+        )
         Kuf = self.kernel(Z, X_train)  # (M, N)
         Kus = self.kernel(Z, X_new)  # (M, N*)
         Kss_diag = self.kernel.diag(X_new)
 
-        diff = y_train - self.mean(X_train)
-        Kuf_laminv = Kuf / sigma2_vec[None, :]  # each column ÷ σᵢ²
-        Sigma = Kuu + Kuf_laminv @ Kuf.T
-        Sigma_inv = pt.linalg.inv(Sigma)
-        alpha = Sigma_inv @ Kuf_laminv @ diff
+        # Same factored form as collapsed_elbo: forming Kuu + Kuf Λ⁻¹ Kfu directly
+        # and differencing inv(Kuu) - inv(Sigma) cancels catastrophically.
+        Lu = pt.linalg.cholesky(Kuu)
+        B = pt.linalg.solve_triangular(Lu, Kuf, lower=True) / sigma_vec[None, :]  # (M, N)
+        Aus = pt.linalg.solve_triangular(Lu, Kus, lower=True)  # (M, N*)
+        inner = pt.eye(M, dtype=Kuu.dtype) + B @ B.T  # eigenvalues ≥ 1
+        inner = pta.assume(inner, positive_definite=True, symmetric=True)
+        inner_inv = pt.linalg.inv(inner)
 
-        fmean = self.mean(X_new) + Kus.T @ alpha
-        Kuu_inv = pt.linalg.inv(Kuu)
-        fvar = Kss_diag - pt.sum(Kus * ((Kuu_inv - Sigma_inv) @ Kus), axis=0)
+        w = (y_train - self.mean(X_train)) / sigma_vec
+        fmean = self.mean(X_new) + Aus.T @ (inner_inv @ (B @ w))
+        fvar = Kss_diag - pt.sum(Aus * Aus, axis=0) + pt.sum(Aus * (inner_inv @ Aus), axis=0)
 
         if incl_lik:
             sigma_new = self.likelihood.sigma_at(X_train, X_new)
