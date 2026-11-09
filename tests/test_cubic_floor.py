@@ -124,8 +124,7 @@ def _cubic_op_counts(fn) -> dict[str, int]:
     """Count cubic factorizations in the compiled graph by op type name."""
     counts = {}
     for node in fn.maker.fgraph.apply_nodes:
-        op = node.op
-        core = op.core_op if isinstance(op, Blockwise) else op
+        core = getattr(node.op, "core_op", node.op)
         if isinstance(core, CUBIC_OPS):
             name = type(core).__name__
             counts[name] = counts.get(name, 0) + 1
