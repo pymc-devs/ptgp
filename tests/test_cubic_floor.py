@@ -22,7 +22,6 @@ prints the full op breakdown and is the right tool for diagnosis.
 import pytensor
 import pytensor.tensor as pt
 
-from pytensor.tensor.blockwise import Blockwise
 from pytensor.tensor.linalg.decomposition.cholesky import Cholesky
 from pytensor.tensor.linalg.decomposition.lu import LUFactor
 from pytensor.tensor.linalg.inverse import MatrixInverse
@@ -43,8 +42,8 @@ def _count_cubic_ops(fn) -> int:
     """Count Apply nodes in the compiled graph whose op is an O(N³) factorization."""
     n = 0
     for node in fn.maker.fgraph.apply_nodes:
-        op = node.op
-        core = op.core_op if isinstance(op, Blockwise) else op
+        # Blockwise, and the BlockwiseWithCoreShape wrapper the Numba backend uses, expose core_op
+        core = getattr(node.op, "core_op", node.op)
         if isinstance(core, CUBIC_OPS):
             n += 1
     return n
@@ -125,8 +124,7 @@ def _cubic_op_counts(fn) -> dict[str, int]:
     """Count cubic factorizations in the compiled graph by op type name."""
     counts = {}
     for node in fn.maker.fgraph.apply_nodes:
-        op = node.op
-        core = op.core_op if isinstance(op, Blockwise) else op
+        core = getattr(node.op, "core_op", node.op)
         if isinstance(core, CUBIC_OPS):
             name = type(core).__name__
             counts[name] = counts.get(name, 0) + 1
