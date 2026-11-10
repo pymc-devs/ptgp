@@ -3,26 +3,26 @@ channels:
     - conda-forge
 dependencies:
     - python>=3.12
+    - numpy
     - pymc>=6.3,<6.4
     - pytensor>=3.3.4,<3.4
     - pytensor-ml>=0.3.0,<0.4.0
+    # PyTensor JIT backends. On Apple silicon also add `mlx` (osx-arm64 only,
+    # so it can't be listed here; the pixi manifest adds it per-platform).
+    - numba
     - jax
     - jaxlib
-    - optax
-    - scipy
-    - pytest
-    - gpjax
-    - ipykernel
-    - ipywidgets
-    - ipympl
-    - matplotlib
-    - seaborn
-    - pandas
-    - scikit-learn
-    - pre-commit
+    # Tests / lint.
     - pytest
     - mypy
     - polars
+    - pre-commit
+    - ruff=0.5.5  # keep in sync with .pre-commit-config.yaml
+    # Notebooks.
+    - jupyterlab
+    - matplotlib
+    - pandas
+    - scikit-learn
     # Docs tooling — kept in sync with conda_envs/environment-docs.yaml so
     # `make html` works in the dev env without an extra install step.
     - sphinx>=7
@@ -34,7 +34,9 @@ dependencies:
     - sphinx-codeautolink
     - sphinx-sitemap
     - sphinx-notfound-page
+    - sphinx-autobuild
     - jupyter-sphinx
-    - sphinxcontrib-bibtex
-    - arviz
+    - pybtex
     - pip
+    - pip:
+        - -e ..

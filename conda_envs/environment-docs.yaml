@@ -4,21 +4,13 @@ channels:
 dependencies:
     - python>=3.12
     # Runtime deps: autodoc imports ptgp, so the full runtime stack has to
-    # be in scope.
-    - jax
-    - jaxlib
-    - optax
+    # be in scope. ptgp itself is installed by .readthedocs.yaml.
     - numpy
-    - scipy
-    - libblas=*=*mkl
-    - mkl-service
     - pymc>=6.3,<6.4
     - pytensor>=3.3.4,<3.4
     - pytensor-ml>=0.3.0,<0.4.0
-    - matplotlib
+    - matplotlib  # docs/sphinxext/generate_kernel_gallery.py
     # Docs build deps.
-    - ipython
-    - jupyter
     - sphinx>=7
     - pydata-sphinx-theme
     - myst-nb
@@ -28,10 +20,5 @@ dependencies:
     - sphinx-codeautolink
     - sphinx-sitemap
     - sphinx-notfound-page
-    - sphinx-autobuild
     - jupyter-sphinx
     - pybtex  # .bib parsing for the simplebib extension (docs/sphinxext/simplebib.py)
-    - pip
-    - pip:
-        # ptgp itself so autodoc resolves the current source tree.
-        - -e ..

@@ -1,22 +1,15 @@
 Contributing
 ============
 
-.. note::
-
-   **WRITEME.** This page is a stub. Cover environment setup, the
-   pre-commit hooks, how to run tests, the GPJax-as-reference testing
-   convention, branching / PR workflow, and where new kernels and
-   likelihoods should live.
-
 Development install
 -------------------
 
 .. code-block:: bash
 
-    git clone https://github.com/bwengals/ptgp.git
+    git clone https://github.com/pymc-devs/ptgp.git
     cd ptgp
-    pip install -e ".[dev]"
-    pre-commit install
+    pixi install
+    pixi run pre-commit install
 
 Running tests
 -------------
@@ -25,8 +18,32 @@ ptgp uses pytest:
 
 .. code-block:: bash
 
-    python -m pytest tests/
+    pixi run test
 
-Many tests compare against GPJax (the reference implementation) at
-``atol=1e-5``. GPJax runs in float32 and ptgp in float64; that tolerance
-is the cross-library cap.
+``tests/test_cubic_floor.py`` (``pixi run cubic-floor``) checks that each
+model's training graph compiles to the minimum number of O(N³)
+factorizations. Run it after touching ``ptgp/rewrites.py``,
+``ptgp/objectives.py``, or kernel evaluation.
+
+Pre-commit hooks
+----------------
+
+``pixi run pre-commit install`` runs these on every commit;
+``pixi run hooks`` runs them on all files. CI runs the same set.
+
+* ``ruff`` (lint, with fixes) and ``ruff-format``, line length 100.
+  Notebooks are excluded from ``ruff-format``.
+* ``no-print-statements`` in ``ptgp/``.
+* ``no-commit-to-branch``: commits directly to ``main`` are rejected.
+* ``check-kernel-gallery``: every kernel exported from ``ptgp.kernels``
+  needs a gallery cover or a blacklist entry. See
+  :ref:`adding-a-gallery-kernel`.
+* Whitespace, end-of-file, merge-conflict, TOML/YAML syntax, and leftover
+  debugger checks.
+
+Branches and pull requests
+--------------------------
+
+Work on a feature branch and open a pull request against ``main``. CI runs
+the test suite, pre-commit, and mypy on every PR. PRs that touch the docs
+also get a Read the Docs preview build.

@@ -7,24 +7,8 @@ dependencies:
     - pymc>=6.3,<6.4
     - pytensor>=3.3.4,<3.4
     - pytensor-ml>=0.3.0,<0.4.0
+    - numba
     - pytest
     - mypy
-    - polars
-    # scipy 1.18.1 renames the fused cython_special symbols pytensor's numba
-    # dispatch looks up (KeyError on psi); hold back until pytensor adapts.
-    - scipy<1.18.1
-    - filelock
-    - numba
-    - setuptools
-    - cons
-    - etuples
-    - logical-unification
-    - minikanren
-    - arviz
-    - cachetools
-    - cloudpickle
-    - pandas
-    - rich
-    - threadpoolctl
-    - typing_extensions
+    - polars  # scripts/run_mypy.py
     - pip
