@@ -152,7 +152,25 @@ html_context = {
     "default_mode": "dark",
 }
 
-html_sidebars = {"**": ["sidebar-nav-bs.html", "searchbox.html"]}
+# Only the API reference keeps the left navigation sidebar. Sphinx warns when a page matches two
+# patterns that both hold a wildcard, so every other page and folder is listed by name rather than
+# through a catch-all "**". A new top-level page or folder needs its own entry, or it falls back to
+# the theme's default sidebar.
+_api_sidebar = ["sidebar-nav-bs.html", "searchbox.html"]
+html_sidebars = {
+    "api": _api_sidebar,
+    "api/**": _api_sidebar,
+    "index": [],
+    "get_started/**": [],
+    "user_guide/**": [],
+    "examples/**": [],
+    "kernels/**": [],
+    "dev/**": [],
+    "release/**": [],
+    "genindex": [],
+    "search": [],
+    "404": [],
+}
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
 
