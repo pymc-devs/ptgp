@@ -2,7 +2,7 @@ Working on the docs
 ===================
 
 This page covers how the documentation system is wired and the workflows
-needed to extend it — adding a new kernel page, a new notebook example, or
+needed to extend it -- adding a new kernel page, a new notebook example, or
 a citation.
 
 Building locally
@@ -64,14 +64,14 @@ commit anything under ``source/kernels/img/``, ``source/_thumbnails/``,
 
 The custom Sphinx extensions live at ``docs/sphinxext/``:
 
-* ``generate_gallery.py`` — discovers notebooks under ``notebooks/``, copies
+* ``generate_gallery.py`` -- discovers notebooks under ``notebooks/``, copies
   them into ``docs/source/examples/<category>/``, extracts thumbnails, and
   emits ``examples/gallery.rst``.
-* ``generate_kernel_gallery.py`` — renders one cover image per entry in
+* ``generate_kernel_gallery.py`` -- renders one cover image per entry in
   ``KERNEL_RECIPES``, emits ``kernels/gallery.rst`` with grid cards. Cards
   link to per-kernel pages when a matching ``kernels/gallery/<slug>.md``
   exists on disk.
-* ``simplebib.py`` — per-page citations. Provides the ``{cite:t}`` /
+* ``simplebib.py`` -- per-page citations. Provides the ``{cite:t}`` /
   ``{cite:p}`` roles and the ``{bibliography}`` directive, parsing
   ``references.bib`` with ``pybtex``. Each page is self-contained: its
   citations render as numbered ``[n]`` footnotes that link down to a numbered
@@ -103,7 +103,7 @@ recipe or blacklist the kernel. To add a cover recipe:
    inside the valid input range.
 
 2. **Write the per-kernel page** at
-   ``docs/source/kernels/gallery/mynewkernel.md`` — the slug must be the
+   ``docs/source/kernels/gallery/mynewkernel.md`` -- the slug must be the
    lowercase recipe name. Use ``docs/source/kernels/gallery/expquad.md`` as
    the template. The standard sections are:
 
@@ -111,10 +111,10 @@ recipe or blacklist the kernel. To add a cover recipe:
    * H1 title and a row of tag chip links.
    * Two paragraphs of prose describing what the kernel is and when to use
      it.
-   * ``## Key properties and parameters`` — table of domain, stationarity,
+   * ``## Key properties and parameters`` -- table of domain, stationarity,
      sample smoothness, variance; one-sentence constructor link to the
      autosummary page.
-   * ``### Covariance function`` — math equation followed by a tab-set with
+   * ``### Covariance function`` -- math equation followed by a tab-set with
      **Kernel decay**, **Prior samples**, **Posterior given 3 observations**,
      **Code** tabs. The first three tabs use the plot helpers in
      ``ptgp.plotting``; sync them on ``:sync: ls`` so clicking a
@@ -124,7 +124,7 @@ recipe or blacklist the kernel. To add a cover recipe:
      ``{bibliography}`` directive filtered by ``docname``.
 
 3. **The gallery extension auto-detects the page**. Cover-card link wiring is
-   automatic — no edits needed elsewhere.
+   automatic -- no edits needed elsewhere.
 
 To **blacklist** a kernel instead (composition kernels, kernels that take a
 user-supplied callable, anything that doesn't have a canonical instance to
@@ -180,15 +180,15 @@ Plot helpers
 
 Helpers used by the per-kernel pages live in ``ptgp.plotting``:
 
-* ``ptgp.plotting.plot_kernel_decay`` — overlaid curves of
+* ``ptgp.plotting.plot_kernel_decay`` -- overlaid curves of
   :math:`k(0, x)` against distance.
-* ``ptgp.plotting.plot_prior_samples`` — side-by-side panels of GP
+* ``ptgp.plotting.plot_prior_samples`` -- side-by-side panels of GP
   prior samples for a list of kernel instances.
-* ``ptgp.plotting.plot_conditional`` — side-by-side panels of GP
+* ``ptgp.plotting.plot_conditional`` -- side-by-side panels of GP
   posterior draws given a few noisy observations, rendered McElreath-style
   (hollow markers with popsicle error bars).
 
-These are public API — users can call them in their own notebooks to
+These are public API -- users can call them in their own notebooks to
 reproduce the gallery style. When adding a new visualization that more than
 one kernel page will use, extend ``ptgp.plotting`` rather than putting the
 helper in a docs-only module.
@@ -196,10 +196,10 @@ helper in a docs-only module.
 Pre-commit checks
 -----------------
 
-* ``check-kernel-gallery`` — fails when a kernel exported from
+* ``check-kernel-gallery`` -- fails when a kernel exported from
   ``ptgp.kernels`` is missing from both ``KERNEL_RECIPES`` and
   ``KERNEL_GALLERY_BLACKLIST``. AST-only; no docs deps required.
-* ``ruff`` / ``ruff-format`` — apply to ``docs/sphinxext/`` and
+* ``ruff`` / ``ruff-format`` -- apply to ``docs/sphinxext/`` and
   ``ptgp.plotting``.
-* ``no-commit-to-branch`` — work on a feature branch, never commit
+* ``no-commit-to-branch`` -- work on a feature branch, never commit
   directly to ``main``.
