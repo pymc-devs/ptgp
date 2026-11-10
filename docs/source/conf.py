@@ -85,9 +85,9 @@ master_doc = "index"
 autosummary_generate = True
 autodoc_typehints = "none"
 autoclass_content = "class"
-# Class method pages live under api/.../classmethods/ — keep them out of the
-# global toctree so they don't pollute the sidebar.
-remove_from_toctrees = ["**/classmethods/*"]
+# Method and attribute pages live under api/.../members/ and stay out of the global toctree so they
+# don't pollute the sidebar.
+remove_from_toctrees = ["**/members/*"]
 
 numpydoc_show_class_members = False
 numpydoc_xref_param_type = True

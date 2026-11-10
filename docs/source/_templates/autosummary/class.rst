@@ -10,7 +10,7 @@
    .. rubric:: Methods
 
    .. autosummary::
-      :toctree: classmethods
+      :toctree: members
 
    {% for item in methods %}
    {%- if item not in inherited_members %}
@@ -25,7 +25,7 @@
    .. rubric:: Attributes
 
    .. autosummary::
-      :toctree: classmethods
+      :toctree: members
    {% for item in attributes %}
    {%- if item not in inherited_members %}
       ~{{ name }}.{{ item }}
