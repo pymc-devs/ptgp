@@ -156,7 +156,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/pymc-base-6.3.2-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pyparsing-3.3.3-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pysocks-1.7.1-pyha55dd90_7.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/pytensor-ml-0.3.0-pyhc364b38_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/pytensor-ml-0.4.0-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pytest-9.2.0-pyhc364b38_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-abi3-3.14-hab9af60_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-dateutil-4.0.0-pyh5ded981_0.conda
@@ -340,8 +340,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pthread-stubs-0.4-hb001647_1004.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pyobjc-core-13.0-py314h9331ae6_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pyobjc-framework-cocoa-13.0-py314h53728ba_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pytensor-3.3.7-py314h18ea286_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pytensor-base-3.3.7-np2py314h38c7fb8_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pytensor-3.3.8-py314h1f4d50d_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pytensor-base-3.3.8-np2py314h38c7fb8_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/python-3.14.10-h0ae1c2c_100_cp314.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/python-librt-0.16.0-py314hd98292b_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pyyaml-6.0.3-py314h26178bb_3.conda
@@ -519,8 +519,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/psutil-7.2.2-py314hfe1a184_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pthread-stubs-0.4-h7cc23a3_1004.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyside6-6.11.3-py314h574d94f_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/pytensor-3.3.7-py314h301425a_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/pytensor-base-3.3.7-np2py314hbf8ec49_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/pytensor-3.3.8-py314h782ea53_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/pytensor-base-3.3.8-np2py314hbf8ec49_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.14.10-hcd007b5_100_cp314.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-librt-0.16.0-py314hfe1a184_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyyaml-6.0.3-py314h19d427c_3.conda
@@ -700,7 +700,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/pymc-base-6.3.2-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pyparsing-3.3.3-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pysocks-1.7.1-pyha55dd90_7.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/pytensor-ml-0.3.0-pyhc364b38_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/pytensor-ml-0.4.0-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pytest-9.2.0-pyhc364b38_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-abi3-3.14-hab9af60_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-dateutil-4.0.0-pyh5ded981_0.conda
@@ -866,7 +866,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/pymc-base-6.3.2-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pyparsing-3.3.3-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pysocks-1.7.1-pyha55dd90_7.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/pytensor-ml-0.3.0-pyhc364b38_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/pytensor-ml-0.4.0-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-abi3-3.14-hab9af60_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-dateutil-4.0.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-fastjsonschema-2.22.3-pyh5ded981_0.conda
@@ -1020,8 +1020,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pixman-0.46.4-h784d473_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/psutil-7.2.2-py314hd98292b_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pthread-stubs-0.4-hb001647_1004.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pytensor-3.3.7-py314h18ea286_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pytensor-base-3.3.7-np2py314h38c7fb8_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pytensor-3.3.8-py314h1f4d50d_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pytensor-base-3.3.8-np2py314h38c7fb8_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/python-3.14.10-h0ae1c2c_100_cp314.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pyyaml-6.0.3-py314h26178bb_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pyzmq-27.2.0-py312hdfb5542_2.conda
@@ -1179,8 +1179,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/psutil-7.2.2-py314hfe1a184_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pthread-stubs-0.4-h7cc23a3_1004.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyside6-6.11.3-py314h574d94f_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/pytensor-3.3.7-py314h301425a_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/pytensor-base-3.3.7-np2py314hbf8ec49_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/pytensor-3.3.8-py314h782ea53_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/pytensor-base-3.3.8-np2py314hbf8ec49_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.14.10-hcd007b5_100_cp314.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyyaml-6.0.3-py314h19d427c_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyzmq-27.2.0-py312h8a5ba0d_2.conda
@@ -1319,7 +1319,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/pymc-base-6.3.2-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pyparsing-3.3.3-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pysocks-1.7.1-pyha55dd90_7.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/pytensor-ml-0.3.0-pyhc364b38_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/pytensor-ml-0.4.0-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-abi3-3.14-hab9af60_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-dateutil-4.0.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-fastjsonschema-2.22.3-pyh5ded981_0.conda
@@ -1462,7 +1462,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/pymc-base-6.3.2-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pyparsing-3.3.3-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pysocks-1.7.1-pyh09c184e_7.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/pytensor-ml-0.3.0-pyhc364b38_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/pytensor-ml-0.4.0-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-abi3-3.14-h0e21d3f_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-dateutil-4.0.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-fastjsonschema-2.22.3-pyh5ded981_0.conda
@@ -1609,8 +1609,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/psutil-7.2.2-py314hc5dbbe4_3.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pthread-stubs-0.4-hfa92662_1004.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pyside6-6.11.3-py314h0c0e1ae_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/win-64/pytensor-3.3.7-py314h16b620b_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/win-64/pytensor-base-3.3.7-np2py314hb7a55bc_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/pytensor-3.3.8-py314ha75332c_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/pytensor-base-3.3.8-np2py314hb7a55bc_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/python-3.14.10-h53f6dd8_100_cp314.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pywin32-312-py314hf700ef7_2.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pyyaml-6.0.3-py314hdf0bfb5_3.conda
@@ -1698,7 +1698,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/pymc-6.3.2-h631e93d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pymc-base-6.3.2-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pyparsing-3.3.3-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/pytensor-ml-0.3.0-pyhc364b38_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/pytensor-ml-0.4.0-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pytest-9.2.0-pyhc364b38_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-dateutil-4.0.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-discovery-1.9.2-pyh5ded981_0.conda
@@ -1819,8 +1819,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/polars-runtime-32-2.1.0-py311hcf7cb79_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/psutil-7.2.2-py314hd98292b_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pthread-stubs-0.4-hb001647_1004.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pytensor-3.3.7-py314h18ea286_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pytensor-base-3.3.7-np2py314h38c7fb8_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pytensor-3.3.8-py314h1f4d50d_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pytensor-base-3.3.8-np2py314h38c7fb8_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/python-3.14.10-h0ae1c2c_100_cp314.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/python-librt-0.16.0-py314hd98292b_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pyyaml-6.0.3-py314h26178bb_3.conda
@@ -1956,8 +1956,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/polars-runtime-32-2.1.0-py311hb519a9e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/psutil-7.2.2-py314hfe1a184_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pthread-stubs-0.4-h7cc23a3_1004.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/pytensor-3.3.7-py314h301425a_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/pytensor-base-3.3.7-np2py314hbf8ec49_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/pytensor-3.3.8-py314h782ea53_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/pytensor-base-3.3.8-np2py314hbf8ec49_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.14.10-hcd007b5_100_cp314.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-librt-0.16.0-py314hfe1a184_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyyaml-6.0.3-py314h19d427c_3.conda
@@ -2036,7 +2036,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/pymc-6.3.2-h631e93d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pymc-base-6.3.2-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pyparsing-3.3.3-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/pytensor-ml-0.3.0-pyhc364b38_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/pytensor-ml-0.4.0-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pytest-9.2.0-pyhc364b38_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-dateutil-4.0.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-discovery-1.9.2-pyh5ded981_0.conda
@@ -2106,7 +2106,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/pymc-6.3.2-h631e93d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pymc-base-6.3.2-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pyparsing-3.3.3-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/pytensor-ml-0.3.0-pyhc364b38_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/pytensor-ml-0.4.0-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pytest-9.2.0-pyhc364b38_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-dateutil-4.0.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-discovery-1.9.2-pyh5ded981_0.conda
@@ -2214,8 +2214,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/polars-runtime-32-2.1.0-py311hb4e3305_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/psutil-7.2.2-py314hc5dbbe4_3.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pthread-stubs-0.4-hfa92662_1004.conda
-      - conda: https://conda.anaconda.org/conda-forge/win-64/pytensor-3.3.7-py314h16b620b_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/win-64/pytensor-base-3.3.7-np2py314hb7a55bc_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/pytensor-3.3.8-py314ha75332c_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/pytensor-base-3.3.8-np2py314hb7a55bc_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/python-3.14.10-h53f6dd8_100_cp314.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/python-librt-0.16.0-py314hc5dbbe4_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pyyaml-6.0.3-py314hdf0bfb5_3.conda
@@ -4772,25 +4772,24 @@ packages:
   run_exports: {}
   size: 13955742
   timestamp: 1793476637511
-- conda: https://conda.anaconda.org/conda-forge/linux-64/pytensor-3.3.7-py314h301425a_0.conda
-  sha256: b511d6a25b49b1176027cde2fdcf8a43cc7cf2d22a250cf21784a3f199bc4f75
-  md5: 26855856481b86d30b3c652ca06f1754
+- conda: https://conda.anaconda.org/conda-forge/linux-64/pytensor-3.3.8-py314h782ea53_0.conda
+  sha256: 4917e1e59cb1d1dc4948dbb64aa48ad3d8ff4656d33cdbe3b743f27e4a2168af
+  md5: b2f638c918f22d117085205817df374d
   depends:
   - python
-  - pytensor-base ==3.3.7 np2py314hbf8ec49_0
+  - pytensor-base ==3.3.8 np2py314hbf8ec49_0
   - gxx
   - blas * mkl
   - mkl-service
   - python_abi 3.14.* *_cp314
   license: BSD-3-Clause
-  license_family: BSD
   purls: []
   run_exports: {}
-  size: 10600
-  timestamp: 1793587121215
-- conda: https://conda.anaconda.org/conda-forge/linux-64/pytensor-base-3.3.7-np2py314hbf8ec49_0.conda
-  sha256: 0677cdbac0406971b12fa26594f36f938104de94cac74e274d528f368b7b51b7
-  md5: 99566ee17455070ca7f778accb46363c
+  size: 10603
+  timestamp: 1794089432263
+- conda: https://conda.anaconda.org/conda-forge/linux-64/pytensor-base-3.3.8-np2py314hbf8ec49_0.conda
+  sha256: 2154fac34107b7762715cc63c34bf85572fba976c42514b9deeff5ea940dee65
+  md5: 26047903975be0777e81805cff4b50c1
   depends:
   - python
   - setuptools >=59.0.0
@@ -4798,18 +4797,17 @@ packages:
   - numpy >=2.0
   - numba >=0.58,<=0.67.0
   - filelock >=3.15
-  - libstdcxx >=15
   - libgcc >=15
   - __glibc >=2.17,<3.0.a0
+  - libstdcxx >=15
   - python_abi 3.14.* *_cp314
   - numpy >=1.25,<3
   license: BSD-3-Clause
-  license_family: BSD
   purls:
   - pkg:pypi/pytensor?source=hash-mapping
   run_exports: {}
-  size: 3423842
-  timestamp: 1793587121215
+  size: 3426357
+  timestamp: 1794089432263
 - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.14.10-hcd007b5_100_cp314.conda
   build_number: 100
   sha256: bb457298c776d0edd30d727d96629e57df63e9a4ba2dd11553019267b61ef5f4
@@ -7374,7 +7372,8 @@ packages:
   - nbconvert-pandoc ==7.17.2 hb164111_0
   license: BSD-3-Clause
   license_family: BSD
-  purls: []
+  purls:
+  - pkg:pypi/nbconvert?source=compressed-mapping
   run_exports: {}
   size: 5364
   timestamp: 1791807053228
@@ -7601,7 +7600,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/pluggy?source=hash-mapping
+  - pkg:pypi/pluggy?source=compressed-mapping
   run_exports: {}
   size: 30111
   timestamp: 1792063298993
@@ -7839,9 +7838,9 @@ packages:
   run_exports: {}
   size: 21085
   timestamp: 1733217331982
-- conda: https://conda.anaconda.org/conda-forge/noarch/pytensor-ml-0.3.0-pyhc364b38_0.conda
-  sha256: d049c2893deafa16e698a6cd3f36c3c2b48713f9a08003869f90daf2f804eb74
-  md5: 97b380f8d4a85c76b617f6a60b953aa7
+- conda: https://conda.anaconda.org/conda-forge/noarch/pytensor-ml-0.4.0-pyhc364b38_0.conda
+  sha256: 32bf2aa3237549a60e2b1f29546738f3bb12f8ca4e2481d77d82296f72a40d9a
+  md5: 43b13c5bde3fa260525a3356a4d65125
   depends:
   - python >=3.12
   - pytensor >=3.2.3,<4.0.0
@@ -7849,12 +7848,11 @@ packages:
   - safetensors
   - python
   license: Apache-2.0
-  license_family: APACHE
   purls:
   - pkg:pypi/pytensor-ml?source=hash-mapping
   run_exports: {}
-  size: 168488
-  timestamp: 1791377948361
+  size: 173908
+  timestamp: 1794168304511
 - conda: https://conda.anaconda.org/conda-forge/noarch/pytest-9.2.0-pyhc364b38_1.conda
   sha256: a9cf3571e80a4e86992502068eb1d29a109e88345c39babf03b10450895056af
   md5: f0cfded84ced11a9dfb3790c4c1c0b63
@@ -7933,7 +7931,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/python-discovery?source=compressed-mapping
+  - pkg:pypi/python-discovery?source=hash-mapping
   run_exports: {}
   size: 43956
   timestamp: 1793701161522
@@ -7983,7 +7981,7 @@ packages:
   license: BSD-2-Clause
   license_family: BSD
   purls:
-  - pkg:pypi/python-json-logger?source=compressed-mapping
+  - pkg:pypi/python-json-logger?source=hash-mapping
   run_exports: {}
   size: 19367
   timestamp: 1786872772907
@@ -8852,7 +8850,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/ast-serialize?source=compressed-mapping
+  - pkg:pypi/ast-serialize?source=hash-mapping
   run_exports: {}
   size: 1114707
   timestamp: 1792226509259
@@ -10873,24 +10871,23 @@ packages:
   run_exports: {}
   size: 422653
   timestamp: 1793375501452
-- conda: https://conda.anaconda.org/conda-forge/osx-arm64/pytensor-3.3.7-py314h18ea286_0.conda
-  sha256: 41500b77ca60e439c678b87c7f493116a612928e85554b9070f7ed093f919e81
-  md5: c55ad82ad1eddf8f055376d08dc00d16
+- conda: https://conda.anaconda.org/conda-forge/osx-arm64/pytensor-3.3.8-py314h1f4d50d_0.conda
+  sha256: ed44821dba6b8ee3cb174f4befa9e05c2f8d28fdfbec15fd90fc382c64cf1e96
+  md5: 7e9b1208812cd2586906e85a4bfdab30
   depends:
   - python
-  - pytensor-base ==3.3.7 np2py314h38c7fb8_0
+  - pytensor-base ==3.3.8 np2py314h38c7fb8_0
   - clangxx
   - blas * *accelerate
   - python_abi 3.14.* *_cp314
   license: BSD-3-Clause
-  license_family: BSD
   purls: []
   run_exports: {}
-  size: 9788
-  timestamp: 1793587160866
-- conda: https://conda.anaconda.org/conda-forge/osx-arm64/pytensor-base-3.3.7-np2py314h38c7fb8_0.conda
-  sha256: 307b716150b13542fd5b5b3c4eb024b54bc4041ab45a68d62d47b485bba45e7a
-  md5: 748905cc39cda05ce7f0989eb39894ea
+  size: 9786
+  timestamp: 1794089480825
+- conda: https://conda.anaconda.org/conda-forge/osx-arm64/pytensor-base-3.3.8-np2py314h38c7fb8_0.conda
+  sha256: e6254cf178c1eeaa9edfbe14d6e4060e77b0aab033222636b82ce7b923e6956c
+  md5: ea7224e3a6966a4c40bfadab6d33408a
   depends:
   - python
   - setuptools >=59.0.0
@@ -10898,17 +10895,16 @@ packages:
   - numpy >=2.0
   - numba >=0.58,<=0.67.0
   - filelock >=3.15
-  - libcxx >=21
   - __osx >=11.0
+  - libcxx >=21
   - numpy >=1.25,<3
   - python_abi 3.14.* *_cp314
   license: BSD-3-Clause
-  license_family: BSD
   purls:
-  - pkg:pypi/pytensor?source=hash-mapping
+  - pkg:pypi/pytensor?source=compressed-mapping
   run_exports: {}
-  size: 3412664
-  timestamp: 1793587160866
+  size: 3414174
+  timestamp: 1794089480825
 - conda: https://conda.anaconda.org/conda-forge/osx-arm64/python-3.14.10-h0ae1c2c_100_cp314.conda
   build_number: 100
   sha256: 484750a2bbf65e2446a90731c6ab65a68dfc6f0e5761321e85bf5e23bfad7401
@@ -11041,7 +11037,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/rpds-py?source=compressed-mapping
+  - pkg:pypi/rpds-py?source=hash-mapping
   run_exports: {}
   size: 286096
   timestamp: 1791202353806
@@ -13134,12 +13130,12 @@ packages:
   run_exports: {}
   size: 11559703
   timestamp: 1793476650258
-- conda: https://conda.anaconda.org/conda-forge/win-64/pytensor-3.3.7-py314h16b620b_0.conda
-  sha256: 7f0de3e4da69c933012a0d4b6eb61e7f04c121ec6e35bccda4a3d83de47eff56
-  md5: 87c82ed268419a7cd4b86e100a783241
+- conda: https://conda.anaconda.org/conda-forge/win-64/pytensor-3.3.8-py314ha75332c_0.conda
+  sha256: 0eed329e82c5722fb5d1469d4fc74a848d4ed319e86eed2b5a2b336e3106df69
+  md5: d5c7fd7f198c1541053b194048e9cf44
   depends:
   - python
-  - pytensor-base ==3.3.7 np2py314hb7a55bc_0
+  - pytensor-base ==3.3.8 np2py314hb7a55bc_0
   - gxx
   - blas * mkl
   - mkl-service
@@ -13147,14 +13143,13 @@ packages:
   constrains:
   - libstdcxx !=15.1.0
   license: BSD-3-Clause
-  license_family: BSD
   purls: []
   run_exports: {}
-  size: 10199
-  timestamp: 1793587124335
-- conda: https://conda.anaconda.org/conda-forge/win-64/pytensor-base-3.3.7-np2py314hb7a55bc_0.conda
-  sha256: 55b6af20f5a21212ec08582709ac62c21c08f225ce5aa11b003b8354085d68a6
-  md5: de1ae6ba9e0d4384431ca937744677ea
+  size: 10211
+  timestamp: 1794089430655
+- conda: https://conda.anaconda.org/conda-forge/win-64/pytensor-base-3.3.8-np2py314hb7a55bc_0.conda
+  sha256: b433bcf0f9b8f7e284a8c22c3b49be40265e3aa589b1df77f9ba69090faab9f5
+  md5: 5a0ca215a916f935c0716ff9160ee5e9
   depends:
   - python
   - setuptools >=59.0.0
@@ -13165,15 +13160,14 @@ packages:
   - vc >=14.3,<15
   - vc14_runtime >=14.44.35208
   - ucrt >=10.0.20348.0
-  - python_abi 3.14.* *_cp314
   - numpy >=1.25,<3
+  - python_abi 3.14.* *_cp314
   license: BSD-3-Clause
-  license_family: BSD
   purls:
-  - pkg:pypi/pytensor?source=hash-mapping
+  - pkg:pypi/pytensor?source=compressed-mapping
   run_exports: {}
-  size: 3428082
-  timestamp: 1793587124335
+  size: 3432890
+  timestamp: 1794089430655
 - conda: https://conda.anaconda.org/conda-forge/win-64/python-3.14.10-h53f6dd8_100_cp314.conda
   build_number: 100
   sha256: c9f74f58f15bcd7571869903e43fa1e1bc3b60d9faf959f71979415f360a8281
@@ -13251,7 +13245,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/pyyaml?source=compressed-mapping
+  - pkg:pypi/pyyaml?source=hash-mapping
   run_exports: {}
   size: 199170
   timestamp: 1793655081906
@@ -13784,8 +13778,8 @@ packages:
   requires_dist:
   - numpy
   - pymc>=6.3,<6.4
-  - pytensor-ml>=0.3.0,<0.4.0
-  - pytensor>=3.3.4,<3.4
+  - pytensor-ml>=0.4.0,<0.5.0
+  - pytensor>=3.3.8,<3.4
   - mypy ; extra == 'dev'
   - polars ; extra == 'dev'
   - pre-commit ; extra == 'dev'

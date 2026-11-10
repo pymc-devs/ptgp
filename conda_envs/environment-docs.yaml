@@ -1,24 +1,25 @@
 name: ptgp-docs
 channels:
-    - conda-forge
+- conda-forge
+- nodefaults
 dependencies:
-    - python>=3.12
-    # Runtime deps: autodoc imports ptgp, so the full runtime stack has to
-    # be in scope. ptgp itself is installed by .readthedocs.yaml.
-    - numpy
-    - pymc>=6.3,<6.4
-    - pytensor>=3.3.4,<3.4
-    - pytensor-ml>=0.3.0,<0.4.0
-    - matplotlib  # docs/sphinxext/generate_kernel_gallery.py
-    # Docs build deps.
-    - sphinx>=7
-    - pydata-sphinx-theme
-    - myst-nb
-    - numpydoc
-    - sphinx-copybutton
-    - sphinx-design
-    - sphinx-codeautolink
-    - sphinx-sitemap
-    - sphinx-notfound-page
-    - jupyter-sphinx
-    - pybtex  # .bib parsing for the simplebib extension (docs/sphinxext/simplebib.py)
+- matplotlib *
+- sphinx >=7
+- pydata-sphinx-theme *
+- myst-nb *
+- numpydoc *
+- sphinx-copybutton *
+- sphinx-design *
+- sphinx-codeautolink *
+- sphinx-sitemap *
+- sphinx-notfound-page *
+- sphinx-autobuild *
+- jupyter-sphinx *
+- pybtex *
+- python >=3.12
+- numpy *
+- pymc >=6.3,<6.4
+- pytensor >=3.3.8,<3.4
+- pytensor-ml >=0.4.0,<0.5.0
+- numba *
+- pip
