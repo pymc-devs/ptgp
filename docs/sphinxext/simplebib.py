@@ -213,11 +213,19 @@ def setup(app):
     app.add_config_value("simplebib_bibfiles", ["references.bib"], "env")
     app.add_domain(CiteDomain)
     app.add_directive("bibliography", BibliographyDirective)
-    # These nodes are always replaced at doctree-resolved; the skip visitors are a safety net for any
-    # builder if one ever survives.
+    # These nodes are always replaced at doctree-resolved; the skip visitors are a safety net for
+    # any builder if one ever survives.
     skip = (_noop, None)
     for node in (cite_ref, bibliography_node):
         app.add_node(node, html=skip, latex=skip, text=skip, man=skip, texinfo=skip)
     app.connect("builder-inited", _init_bib)
     app.connect("doctree-resolved", _resolve_page)
-    return {"version": "0.1", "parallel_read_safe": True, "parallel_write_safe": True}
+    # Sphinx re-reads every page when env_version changes, so bump it whenever the attributes stored
+    # on cite_ref or bibliography_node change. Pages cached under the old shape would otherwise
+    # reach _resolve_page without them.
+    return {
+        "version": "0.1",
+        "env_version": 1,
+        "parallel_read_safe": True,
+        "parallel_write_safe": True,
+    }
