@@ -25,6 +25,7 @@
    .. rubric:: Attributes
 
    .. autosummary::
+      :toctree: classmethods
    {% for item in attributes %}
    {%- if item not in inherited_members %}
       ~{{ name }}.{{ item }}

@@ -1,7 +1,7 @@
 Kernels
 =======
 
-.. currentmodule:: ptgp.kernels
+.. module:: ptgp.kernels
 
 Base
 ----

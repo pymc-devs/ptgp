@@ -1,7 +1,7 @@
 Likelihoods
 ===========
 
-.. currentmodule:: ptgp.likelihoods
+.. module:: ptgp.likelihoods
 
 .. autosummary::
     :toctree: generated/

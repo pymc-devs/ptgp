@@ -1,7 +1,7 @@
 Mean Functions
 ==============
 
-.. currentmodule:: ptgp.mean
+.. module:: ptgp.mean
 
 .. autosummary::
     :toctree: generated/

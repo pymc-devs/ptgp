@@ -1,7 +1,7 @@
 Inducing Points
 ===============
 
-.. currentmodule:: ptgp.inducing
+.. module:: ptgp.inducing
 
 Inducing variables
 ------------------

@@ -1,7 +1,7 @@
 Fourier Features
 ================
 
-.. currentmodule:: ptgp.inducing_fourier
+.. module:: ptgp.inducing_fourier
 
 .. autosummary::
     :toctree: generated/

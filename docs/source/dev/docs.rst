@@ -73,7 +73,7 @@ The custom Sphinx extensions live at ``docs/sphinxext/``:
   exists on disk.
 * ``simplebib.py`` — per-page citations. Provides the ``{cite:t}`` /
   ``{cite:p}`` roles and the ``{bibliography}`` directive, parsing
-  ``references.bib`` with :mod:`pybtex`. Each page is self-contained: its
+  ``references.bib`` with ``pybtex``. Each page is self-contained: its
   citations render as numbered ``[n]`` footnotes that link down to a numbered
   reference list on the same page, so numbering and anchors never collide
   across pages.
@@ -178,13 +178,13 @@ any number of pages without collisions.
 Plot helpers
 ------------
 
-Helpers used by the per-kernel pages live in :mod:`ptgp.plotting`:
+Helpers used by the per-kernel pages live in ``ptgp.plotting``:
 
-* :func:`ptgp.plotting.plot_kernel_decay` — overlaid curves of
+* ``ptgp.plotting.plot_kernel_decay`` — overlaid curves of
   :math:`k(0, x)` against distance.
-* :func:`ptgp.plotting.plot_prior_samples` — side-by-side panels of GP
+* ``ptgp.plotting.plot_prior_samples`` — side-by-side panels of GP
   prior samples for a list of kernel instances.
-* :func:`ptgp.plotting.plot_conditional` — side-by-side panels of GP
+* ``ptgp.plotting.plot_conditional`` — side-by-side panels of GP
   posterior draws given a few noisy observations, rendered McElreath-style
   (hollow markers with popsicle error bars).
 

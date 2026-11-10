@@ -20,7 +20,7 @@ def get_initial_params(model, init="prior_median", rng=None, n_median_samples=50
     model : pm.Model
     init : str
         ``"prior_median"`` (default), ``"prior_draw"``, or
-        ``"unconstrained_zero"``. See :func:`ptgp.optim.training._make_initial_point`
+        ``"unconstrained_zero"``. See ``ptgp.optim.training._make_initial_point``
         for the per-RV fallback behaviour on improper priors.
     rng : int or numpy Generator, optional
     n_median_samples : int
@@ -289,7 +289,7 @@ def load_fit(path, shared_params, shared_extras=(), strict=True):
     you did for the original fit; that gives you a new ``shared_params``
     and ``shared_extras`` initialised from the prior. Pass them here and
     every shared variable is overwritten with its saved value, ready for
-    :func:`compile_predict`.
+    :func:`~ptgp.optim.compile_predict`.
 
     Parameters
     ----------

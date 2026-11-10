@@ -1,7 +1,7 @@
 KL Divergences
 ==============
 
-.. currentmodule:: ptgp.kl
+.. module:: ptgp.kl
 
 .. autosummary::
     :toctree: generated/

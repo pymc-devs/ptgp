@@ -1,7 +1,7 @@
 Optimization
 ============
 
-.. currentmodule:: ptgp.optim
+.. module:: ptgp.optim
 
 High-level API
 --------------

@@ -1,7 +1,7 @@
 GP Models
 =========
 
-.. currentmodule:: ptgp.gp
+.. module:: ptgp.gp
 
 .. autosummary::
     :toctree: generated/
