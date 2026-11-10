@@ -567,8 +567,7 @@ def compile_scipy_objective(
                                 space.  Deterministic given ``init_rng``.
                                 Improper priors (``HalfFlat``, ``Flat``) and
                                 other priors that can't be sampled fall back
-                                per-RV to PyMC's initial point. See
-                                ``_make_initial_point``.
+                                per-RV to PyMC's initial point.
         ``"prior_draw"``        Draw once from each prior and transform to
                                 unconstrained space.  Adds stochasticity; use
                                 ``init_rng`` for reproducibility. Same

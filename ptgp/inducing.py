@@ -684,8 +684,7 @@ def compute_inducing_diagnostics(
     elsewhere. No greedy selection is performed; no ``trace_curve``
     history is available.
 
-    This is a thin wrapper around ``_compute_kernel_health``; the
-    same diagnostic is also exposed by passing ``kernel=`` to
+    The same diagnostic is also exposed by passing ``kernel=`` to
     :func:`random_subsample_init` and :func:`kmeans_init`.
 
     Parameters
