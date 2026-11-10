@@ -17,4 +17,5 @@ API Reference
     api/conditionals
     api/kl
     api/optim
+    api/plotting
     api/utils

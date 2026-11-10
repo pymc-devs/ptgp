@@ -178,13 +178,13 @@ any number of pages without collisions.
 Plot helpers
 ------------
 
-Helpers used by the per-kernel pages live in ``ptgp.plotting``:
+Helpers used by the per-kernel pages live in :mod:`ptgp.plotting`:
 
-* ``ptgp.plotting.plot_kernel_decay`` -- overlaid curves of
+* :func:`ptgp.plotting.plot_kernel_decay` -- overlaid curves of
   :math:`k(0, x)` against distance.
-* ``ptgp.plotting.plot_prior_samples`` -- side-by-side panels of GP
+* :func:`ptgp.plotting.plot_prior_samples` -- side-by-side panels of GP
   prior samples for a list of kernel instances.
-* ``ptgp.plotting.plot_conditional`` -- side-by-side panels of GP
+* :func:`ptgp.plotting.plot_conditional` -- side-by-side panels of GP
   posterior draws given a few noisy observations, rendered McElreath-style
   (hollow markers with popsicle error bars).
 
