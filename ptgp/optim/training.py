@@ -15,6 +15,8 @@ import pytensor.tensor as pt
 from pytensor.graph.replace import graph_replace
 from pytensor_ml.optim import Gradients, Steps, adam, compile_train
 
+from ptgp.gp.base import identity_prepare
+from ptgp.inducing_fourier import _maybe_wrap_with_domain_check
 from ptgp.objectives import vfe_diagnostics
 
 logger = logging.getLogger(__name__)
@@ -193,9 +195,15 @@ def _make_shared_params(
         ``{value_var: shared_var}`` for PyMC value vars.
     shared_extras : list
         Shared variables for extra (non-PyMC) parameters.
-    all_shared : list
-        All shared variables in order: value vars then extras.
     """
+    if frozen_vars:
+        rv_keys = [k for k in frozen_vars if k in model.rvs_to_values]
+        if rv_keys:
+            names = [k.name or repr(k) for k in rv_keys]
+            raise ValueError(
+                f"frozen_vars keys {names} are PyMC random variables, not value variables. "
+                f"Freeze model.rvs_to_values[rv] instead, with a value in its unconstrained space."
+            )
     ip = _make_initial_point(model, init=init, rng=init_rng)
     shared_params = {}
     for vv in model.continuous_value_vars:
@@ -211,8 +219,7 @@ def _make_shared_params(
             init_array = np.asarray(init, dtype=var.dtype)
             shared_extras.append(pytensor.shared(init_array, name=var.name, shape=init_array.shape))
 
-    all_shared = list(shared_params.values()) + shared_extras
-    return shared_params, shared_extras, all_shared
+    return shared_params, shared_extras
 
 
 def _replace_graph(
@@ -250,7 +257,9 @@ def _with_input_downcast(compile_kwargs):
     return {"allow_input_downcast": True, **(compile_kwargs or {})}
 
 
-def _grouped_updates(optimizers, param_groups, shared_params, extra_vars, shared_extras, loss):
+def _grouped_updates(
+    optimizers, param_groups, shared_params, extra_vars, shared_extras, loss, frozen_vars=None
+):
     """Apply each group's transform to its shared variables and merge the updates.
 
     Coverage of every trainable parameter is enforced downstream by
@@ -266,6 +275,11 @@ def _grouped_updates(optimizers, param_groups, shared_params, extra_vars, shared
     for name, group in param_groups.items():
         resolved = []
         for var in group:
+            if frozen_vars is not None and var in frozen_vars:
+                raise ValueError(
+                    f"param_groups[{name!r}] contains frozen variable {var.name or repr(var)}. "
+                    f"Frozen variables are not optimized, so leave them out of every group."
+                )
             if var not in sym_to_shared:
                 raise ValueError(
                     f"param_groups[{name!r}] contains unknown variable {var.name or repr(var)}. "
@@ -420,12 +434,17 @@ def compile_training_step(
                 f"They cannot be both trainable and frozen."
             )
 
-    shared_params, shared_extras, all_shared = _make_shared_params(
+    shared_params, shared_extras = _make_shared_params(
         model,
         extra_vars,
         extra_init,
         frozen_vars=frozen_vars,
     )
+
+    # A frozen PyMC value var keeps its shared slot (so it holds the freeze value) but is replaced
+    # by a constant in the loss, so it has no gradient and must not be passed to the optimizer.
+    frozen = frozen_vars or {}
+    trainable = [sv for vv, sv in shared_params.items() if vv not in frozen] + shared_extras
 
     loss = -_scalar_from_objective(objective_fn(gp_model, X_var, y_var))
     if include_prior:
@@ -447,6 +466,7 @@ def compile_training_step(
             extra_vars,
             shared_extras,
             loss_replaced,
+            frozen_vars=frozen_vars,
         )
     else:
         rule = optimizer
@@ -454,12 +474,10 @@ def compile_training_step(
     train_step = compile_train(
         loss_replaced,
         rule,
-        parameters=all_shared,
+        parameters=trainable,
         inputs=[X_var, y_var],
         compile_kwargs=_with_input_downcast(compile_kwargs),
     )
-    from ptgp.inducing_fourier import _maybe_wrap_with_domain_check
-
     train_step = _maybe_wrap_with_domain_check(train_step, gp_model, input_index=0)
     return train_step, shared_params, shared_extras
 
@@ -595,7 +613,7 @@ def compile_scipy_objective(
     model = pm.modelcontext(model)
     extra_vars, extra_init = _resolve_extras(gp_model, extra_vars, extra_init)
 
-    shared_params, shared_extras, _ = _make_shared_params(
+    shared_params, shared_extras = _make_shared_params(
         model,
         extra_vars,
         extra_init,
@@ -646,8 +664,6 @@ def compile_scipy_objective(
         [loss_replaced, flat_grad],
         **_with_input_downcast(compile_kwargs),
     )
-    from ptgp.inducing_fourier import _maybe_wrap_with_domain_check
-
     fun = _maybe_wrap_with_domain_check(fun, gp_model, input_index=1)
 
     def unpack_to_shared(theta):
@@ -742,7 +758,7 @@ def compile_scipy_diagnostics(
     model = pm.modelcontext(model)
     extra_vars, extra_init = _resolve_extras(gp_model, extra_vars, extra_init)
 
-    shared_params, shared_extras, _ = _make_shared_params(
+    shared_params, shared_extras = _make_shared_params(
         model,
         extra_vars,
         extra_init,
@@ -1257,16 +1273,18 @@ def compile_predict(
     shared_params,
     extra_vars=None,
     shared_extras=None,
-    X_train=None,
-    y_train=None,
     incl_lik=False,
     compile_kwargs=None,
+    **data,
 ):
     """Compile a prediction function that reads trained shared parameters.
 
+    The graph comes from ``gp_model.predict_spec``, which declares the compiled
+    inputs and a host-side ``prepare`` step (see :class:`ptgp.gp.PredictSpec`).
+
     Parameters
     ----------
-    gp_model : GP, VFE, or SVGP
+    gp_model : Unapproximated, VFE, or SVGP
         The same PTGP model object used in training.
     X_new_var : TensorVariable
         Symbolic variable for prediction inputs.
@@ -1278,16 +1296,15 @@ def compile_predict(
         Defaults to ``gp_model.extra_vars`` when omitted.
     shared_extras : list, optional
         Shared variables for ``extra_vars`` (from ``compile_training_step``).
-    X_train : ndarray, optional
-        Training inputs (required for GP and VFE).
-    y_train : ndarray, optional
-        Training targets (required for GP and VFE).
     incl_lik : bool
         If True, include likelihood noise in the predictions.
     compile_kwargs : dict, optional
         Forwarded as ``**compile_kwargs`` to ``pytensor.function``. Use this
         to set ``mode`` (e.g. ``"NUMBA"``, ``"JAX"``), etc. Same pattern as
         ``pm.sample``'s ``compile_kwargs``.
+    **data
+        Forwarded to ``gp_model.predict_spec``. ``Unapproximated`` and ``VFE``
+        require ``X_train`` and ``y_train``.
 
     Returns
     -------
@@ -1296,29 +1313,27 @@ def compile_predict(
     """
     if extra_vars is None:
         extra_vars = tuple(getattr(gp_model, "extra_vars", ()) or ())
-    if X_train is not None:
-        mean, var = gp_model.predict_marginal(
-            X_new_var,
-            pt.as_tensor_variable(X_train),
-            pt.as_tensor_variable(y_train),
-            incl_lik=incl_lik,
-        )
-    else:
-        mean, var = gp_model.predict_marginal(X_new_var, incl_lik=incl_lik)
+    spec = gp_model.predict_spec(X_new_var, incl_lik=incl_lik, **data)
 
-    [mean_s, var_s] = _replace_graph(
-        [mean, var],
+    outputs = _replace_graph(
+        list(spec.outputs),
         model,
         shared_params,
         extra_vars,
         shared_extras,
     )
 
-    predict_fn = pytensor.function(
-        [X_new_var],
-        [mean_s, var_s],
+    compiled = pytensor.function(
+        spec.inputs,
+        outputs,
         **_with_input_downcast(compile_kwargs),
     )
-    from ptgp.inducing_fourier import _maybe_wrap_with_domain_check
 
-    return _maybe_wrap_with_domain_check(predict_fn, gp_model, input_index=0)
+    if spec.prepare is identity_prepare:
+        return compiled
+
+    def predict_fn(*args, **kwargs):
+        return compiled(*spec.prepare(*args), **kwargs)
+
+    predict_fn.__wrapped__ = compiled
+    return predict_fn

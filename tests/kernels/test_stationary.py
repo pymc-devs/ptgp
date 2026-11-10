@@ -10,6 +10,9 @@ import pytensor
 import pytensor.tensor as pt
 import pytest
 
+from pytensor.assumptions import POSITIVE_DEFINITE, SYMMETRIC, FactState
+from pytensor.assumptions.specify import SpecifyAssumptions
+
 from ptgp.kernels import ExpQuad, Matern12, Matern32, Matern52
 
 # All kernels evaluate in float64, so the comparison against the analytic
@@ -97,18 +100,15 @@ class TestExpQuad:
     def test_symmetric_annotation(self, X_1d):
         X_pt = pt.as_tensor_variable(X_1d)
         K = ExpQuad(input_dim=1, ls=1.0)(X_pt)
-        from pytensor.assumptions.core import FactState
-        from pytensor.assumptions.specify import SpecifyAssumptions
 
         assert isinstance(K.owner.op, SpecifyAssumptions)
-        assert ("symmetric", FactState.TRUE) in K.owner.op.assumptions
-        assert ("positive_definite", FactState.TRUE) in K.owner.op.assumptions
+        assert (SYMMETRIC, FactState.TRUE) in K.owner.op.assumptions
+        assert (POSITIVE_DEFINITE, FactState.TRUE) in K.owner.op.assumptions
 
     def test_cross_no_annotation(self, X_1d, X_1d_other):
         X_pt = pt.as_tensor_variable(X_1d)
         Y_pt = pt.as_tensor_variable(X_1d_other)
         K = ExpQuad(input_dim=1, ls=1.0)(X_pt, Y_pt)
-        from pytensor.assumptions.specify import SpecifyAssumptions
 
         assert not isinstance(K.owner.op, SpecifyAssumptions)
 

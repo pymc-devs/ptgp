@@ -2,6 +2,7 @@ import numpy as np
 import pytensor.assumptions as pta
 import pytensor.tensor as pt
 
+from ptgp.gp.base import identity_prepare
 from ptgp.inducing import InducingVariables
 from ptgp.kernels.base import Kernel
 
@@ -23,18 +24,33 @@ def _maybe_wrap_with_domain_check(step_fn, gp_model, *, input_index):
     Returns ``step_fn`` unchanged when the model's inducing variable does not
     expose ``_domain_check`` (i.e. for stock SVGP / VFE).
     """
-    ind = getattr(gp_model, "inducing_variable", None)
-    if ind is None or not hasattr(ind, "_domain_check"):
+    prepare = domain_check_prepare(getattr(gp_model, "inducing_variable", None), gp_model.kernel)
+    if prepare is identity_prepare:
         return step_fn
-    kernel = gp_model.kernel
 
     def wrapped(*args, **kwargs):
         if len(args) > input_index:
-            ind._domain_check(args[input_index], kernel)
+            prepare(args[input_index])
         return step_fn(*args, **kwargs)
 
     wrapped.__wrapped__ = step_fn
     return wrapped
+
+
+def domain_check_prepare(inducing_variable, kernel):
+    """``PredictSpec.prepare`` that validates ``X`` against the inducing variable's domain.
+
+    Returns :func:`ptgp.gp.base.identity_prepare` when the inducing variable
+    does not expose ``_domain_check``.
+    """
+    if not hasattr(inducing_variable, "_domain_check"):
+        return identity_prepare
+
+    def prepare(X, *rest):
+        inducing_variable._domain_check(X, kernel)
+        return (X, *rest)
+
+    return prepare
 
 
 class FourierFeatures1D(InducingVariables):

@@ -33,7 +33,6 @@ import pytensor.tensor as pt
 
 from pytensor.assumptions.core import ASSUMPTION_INFER_REGISTRY
 from pytensor.graph.traversal import ancestors
-from pytensor.tensor.blockwise import Blockwise
 
 import ptgp.rewrites as R
 
@@ -59,7 +58,8 @@ TRACKED_OPS = [
 
 
 def _op_name(op):
-    return type(op.core_op).__name__ if isinstance(op, Blockwise) else type(op).__name__
+    # Blockwise, and the BlockwiseWithCoreShape wrapper the Numba backend uses, expose core_op
+    return type(getattr(op, "core_op", op)).__name__
 
 
 def _count_symbolic(outs):
@@ -119,7 +119,7 @@ def build_unapproximated():
     sigma = pt.dscalar("sigma")
     ls = pt.dscalar("ls")
     gp = Unapproximated(kernel=ExpQuad(input_dim=1, ls=ls), mean=Zero(), sigma=sigma)
-    loss = marginal_log_likelihood(gp, X, y)
+    loss = marginal_log_likelihood(gp, X, y).mll
     g_sigma, g_ls = pt.grad(loss, [sigma, ls])
     return [X, y, sigma, ls], [loss, g_sigma, g_ls]
 
@@ -136,7 +136,7 @@ def build_vfe(M=8):
         sigma=sigma,
         inducing_variable=Points(Z),
     )
-    loss = -collapsed_elbo(vfe, X, y)
+    loss = -collapsed_elbo(vfe, X, y).elbo
     g_sigma, g_ls, g_Z = pt.grad(loss, [sigma, ls, Z])
     return [X, y, sigma, ls, Z], [loss, g_sigma, g_ls, g_Z]
 
@@ -155,7 +155,7 @@ def build_svgp(M=8):
         inducing_variable=Points(Z),
         variational_params=vp,
     )
-    loss = -elbo(svgp, X, y)
+    loss = -elbo(svgp, X, y).elbo
     g_sigma, g_ls, g_Z, g_q_mu, g_q_sqrt = pt.grad(loss, [sigma, ls, Z, vp.q_mu, vp.extra_vars[1]])
     return (
         [X, y, sigma, ls, Z, vp.q_mu, vp.extra_vars[1]],
