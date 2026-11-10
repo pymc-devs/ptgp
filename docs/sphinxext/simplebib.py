@@ -18,11 +18,13 @@ class bibliography_node(nodes.General, nodes.Element):
 
 
 def _cite_role(name, rawtext, text, lineno, inliner, options=None, content=None):
+    # `cite:t` names the authors in the sentence; `cite:p` is the bare marker.
+    textual = name.rpartition(":")[2] == "t"
     result = []
     for i, key in enumerate(k.strip() for k in text.split(",") if k.strip()):
         if i:
             result.append(nodes.Text(", "))
-        node = cite_ref("", key=key)
+        node = cite_ref("", key=key, textual=textual)
         result.append(node)
     return result, []
 
@@ -35,7 +37,15 @@ class CiteDomain(Domain):
     def get_objects(self):
         return []
 
-    def resolve_xref(self, *args):
+    # The domain only registers the roles and stores no data, so there is nothing to clear or merge.
+    # Sphinx still requires both methods before it reads documents in parallel.
+    def clear_doc(self, docname):
+        pass
+
+    def merge_domaindata(self, docnames, otherdata):
+        pass
+
+    def resolve_xref(self, env, fromdocname, builder, typ, target, node, contnode):
         return None
 
 
@@ -65,11 +75,14 @@ def _clean(value):
     return re.sub(r"\s+", " ", value.replace("{", "").replace("}", "")).strip()
 
 
+def _last_name(person):
+    return _clean(" ".join(person.prelast_names + person.last_names))
+
+
 def _format_person(person):
-    last = _clean(" ".join(person.prelast_names + person.last_names))
     given = [_clean(n) for n in person.first_names + person.middle_names]
     initials = " ".join(f"{n[0]}." for n in given if n)
-    return f"{last}, {initials}".rstrip(", ").strip()
+    return f"{_last_name(person)}, {initials}".rstrip(", ").strip()
 
 
 def _format_authors(persons):
@@ -77,6 +90,13 @@ def _format_authors(persons):
     if len(names) <= 1:
         return names[0] if names else ""
     return ", ".join(names[:-1]) + ", & " + names[-1]
+
+
+def _short_authors(persons):
+    names = [_last_name(p) for p in persons]
+    if len(names) > 2:
+        return f"{names[0]} et al."
+    return " and ".join(names)
 
 
 def _format_entry(entry):
@@ -93,6 +113,8 @@ def _format_entry(entry):
         or fields.get("booktitle")
         or fields.get("publisher")
         or fields.get("school")
+        or fields.get("institution")
+        or fields.get("howpublished")
         or ""
     )
     if venue:
@@ -100,11 +122,24 @@ def _format_entry(entry):
         if fields.get("volume"):
             detail += f", {fields['volume']}"
             if fields.get("number"):
-                detail += f"({fields['number']})"
+                detail += f"({_format_range(fields['number'])})"
         if fields.get("pages"):
-            detail += f", {_clean(fields['pages']).replace('--', '–')}"
+            detail += f", {_format_range(fields['pages'])}"
         text += f" {detail}."
     return text
+
+
+def _format_range(value):
+    return _clean(value).replace("--", "\N{EN DASH}")
+
+
+def _doi_link(entry):
+    doi = _clean(entry.fields.get("doi", ""))
+    # Entries copied from publisher pages often carry the resolver URL rather than the bare DOI.
+    doi = re.sub(r"^https?://(dx\.)?doi\.org/", "", doi)
+    if not doi:
+        return None
+    return nodes.reference("", f"doi:{doi}", refuri=f"https://doi.org/{doi}")
 
 
 def _anchor(key):
@@ -117,9 +152,10 @@ def _resolve_page(app, doctree, docname):
     backrefs = {}  # key -> [ids of the in-text markers]
 
     for node in list(doctree.findall(cite_ref)):
-        key = node["key"]
+        # BibTeX keys are case-insensitive, and _load_bib stores them lowercased.
+        key = node["key"].lower()
         if key not in bib:
-            logger.warning(f"unknown citation key {key!r}", location=node, type="simplebib")
+            logger.warning(f"unknown citation key {node['key']!r}", location=node, type="simplebib")
             node.replace_self(nodes.Text("[?]"))
             continue
         number = numbers.setdefault(key, len(numbers) + 1)
@@ -129,19 +165,36 @@ def _resolve_page(app, doctree, docname):
         marker = nodes.reference("", f"[{number}]", internal=True, refid=_anchor(key))
         marker["ids"].append(ref_id)
         marker["classes"].append("simplebib-cite")
-        node.replace_self(marker)
 
-    for node in list(doctree.findall(bibliography_node)):
+        authors = _short_authors(_persons(bib[key])) if node["textual"] else ""
+        node.replace_self([nodes.Text(f"{authors} "), marker] if authors else marker)
+
+    bibliographies = list(doctree.findall(bibliography_node))
+    if numbers and not bibliographies:
+        logger.warning(
+            f"{docname} cites {len(numbers)} reference(s) but has no bibliography, so its "
+            "citation markers link nowhere",
+            location=docname,
+            type="simplebib",
+        )
+
+    for node in bibliographies:
         if not numbers:
             node.replace_self([])
             continue
         listing = nodes.container(classes=["simplebib-references"])
-        for key in sorted(numbers, key=numbers.get):
+        for key in numbers:
             para = nodes.paragraph(ids=[_anchor(key)], classes=["simplebib-reference"])
             para += nodes.Text(f"[{numbers[key]}] {_format_entry(bib[key])}")
+            doi_link = _doi_link(bib[key])
+            if doi_link is not None:
+                para += nodes.Text(" ")
+                para += doi_link
             for ref_id in backrefs[key]:
                 para += nodes.Text(" ")
-                back = nodes.reference("", "↩", internal=True, refid=ref_id)
+                back = nodes.reference(
+                    "", "\N{LEFTWARDS ARROW WITH HOOK}", internal=True, refid=ref_id
+                )
                 back["classes"].append("simplebib-backref")
                 para += back
             listing += para
@@ -160,8 +213,8 @@ def setup(app):
     app.add_config_value("simplebib_bibfiles", ["references.bib"], "env")
     app.add_domain(CiteDomain)
     app.add_directive("bibliography", BibliographyDirective)
-    # These nodes are always replaced at doctree-resolved; the skip visitors
-    # are a safety net for any builder if one ever survives.
+    # These nodes are always replaced at doctree-resolved; the skip visitors are a safety net for any
+    # builder if one ever survives.
     skip = (_noop, None)
     for node in (cite_ref, bibliography_node):
         app.add_node(node, html=skip, latex=skip, text=skip, man=skip, texinfo=skip)
