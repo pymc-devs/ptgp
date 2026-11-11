@@ -1,7 +1,7 @@
 Utilities
 =========
 
-.. currentmodule:: ptgp.utils
+.. module:: ptgp.utils
 
 .. autosummary::
     :toctree: generated/

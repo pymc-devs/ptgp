@@ -9,7 +9,7 @@ __pycache__/
 # Autosummary-generated stubs (one .rst per object, regenerated on build)
 source/api/generated/
 source/api/**/generated/
-source/api/**/classmethods/
+source/api/**/members/
 
 # Notebook gallery artifacts written by docs/sphinxext/generate_gallery.py
 source/examples/gallery.rst

@@ -1,7 +1,7 @@
 Conditionals
 ============
 
-.. currentmodule:: ptgp.conditionals
+.. module:: ptgp.conditionals
 
 Symbolic predictive conditionals used by the variational GP models.
 

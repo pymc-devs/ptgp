@@ -85,9 +85,9 @@ master_doc = "index"
 autosummary_generate = True
 autodoc_typehints = "none"
 autoclass_content = "class"
-# Class method pages live under api/.../classmethods/ — keep them out of the
-# global toctree so they don't pollute the sidebar.
-remove_from_toctrees = ["**/classmethods/*"]
+# Method and attribute pages live under api/.../members/ and stay out of the global toctree so they
+# don't pollute the sidebar.
+remove_from_toctrees = ["**/members/*"]
 
 numpydoc_show_class_members = False
 numpydoc_xref_param_type = True
@@ -118,6 +118,32 @@ numpydoc_xref_ignore = {
     "N",
     "D",
     "K",
+    "S",
+    "shape",
+    "length",
+    "batch_size",
+    "num_levels",
+    "rank",
+    "PyMC",
+    "variable",
+    "shared",
+    "variables",
+    "namedtuples",
+}
+numpydoc_xref_aliases = {
+    "TensorVariable": "pytensor.tensor.TensorVariable",
+    "pm.Model": "pymc.model.core.Model",
+    "scipy.OptimizeResult": "scipy.optimize.OptimizeResult",
+    "Kernel": "ptgp.kernels.Kernel",
+    "Likelihood": "ptgp.likelihoods.Likelihood",
+    "InducingVariables": "ptgp.inducing.InducingVariables",
+    "Unapproximated": "ptgp.gp.Unapproximated",
+    "VFE": "ptgp.gp.VFE",
+    "SVGP": "ptgp.gp.SVGP",
+    "CollapsedELBOTerms": "ptgp.objectives.CollapsedELBOTerms",
+    "FITCTerms": "ptgp.objectives.FITCTerms",
+    "VFEDiagnostics": "ptgp.objectives.VFEDiagnostics",
+    "Transform": "pytensor_ml.optim.base.Transform",
 }
 
 # -- HTML output -------------------------------------------------------------
@@ -152,7 +178,25 @@ html_context = {
     "default_mode": "dark",
 }
 
-html_sidebars = {"**": ["sidebar-nav-bs.html", "searchbox.html"]}
+# Only the API reference keeps the left navigation sidebar. Sphinx warns when a page matches two
+# patterns that both hold a wildcard, so every other page and folder is listed by name rather than
+# through a catch-all "**". A new top-level page or folder needs its own entry, or it falls back to
+# the theme's default sidebar.
+_api_sidebar = ["sidebar-nav-bs.html", "searchbox.html"]
+html_sidebars = {
+    "api": _api_sidebar,
+    "api/**": _api_sidebar,
+    "index": [],
+    "get_started/**": [],
+    "user_guide/**": [],
+    "examples/**": [],
+    "kernels/**": [],
+    "dev/**": [],
+    "release/**": [],
+    "genindex": [],
+    "search": [],
+    "404": [],
+}
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
 
@@ -179,6 +223,7 @@ intersphinx_mapping = {
     "jax": ("https://jax.readthedocs.io/en/latest/", None),
     "pytensor": ("https://pytensor.readthedocs.io/en/latest/", None),
     "pymc": ("https://www.pymc.io/projects/docs/en/stable/", None),
+    "pytensor_ml": ("https://pytensor-ml.readthedocs.io/en/latest/", None),
     "arviz": ("https://python.arviz.org/en/latest/", None),
     "myst": ("https://myst-parser.readthedocs.io/en/latest/", None),
     "myst-nb": ("https://myst-nb.readthedocs.io/en/latest/", None),

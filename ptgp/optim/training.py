@@ -325,7 +325,7 @@ def compile_training_step(
     objective_fn : callable
         ``(gp_model, X_var, y_var) -> scalar | namedtuple``. If a namedtuple
         is returned, the first field is taken as the scalar to maximize.
-    gp_model : GP, VFE, or SVGP
+    gp_model : Unapproximated, VFE, or SVGP
         PTGP model whose hyperparameters are PyMC RVs.
     X_var : TensorVariable
         Symbolic input placeholder.
@@ -525,7 +525,7 @@ def compile_scipy_objective(
         ``(gp_model, X_var, y_var) -> scalar | namedtuple``. If a namedtuple
         is returned, the first field is taken as the scalar to maximize.
         The returned scalar is negated internally so scipy minimizes.
-    gp_model : GP, VFE, or SVGP
+    gp_model : Unapproximated, VFE, or SVGP
         PTGP model whose hyperparameters are PyMC RVs.
     X_var : TensorVariable
         Symbolic input placeholder. ``X`` is passed to the compiled
@@ -567,8 +567,7 @@ def compile_scipy_objective(
                                 space.  Deterministic given ``init_rng``.
                                 Improper priors (``HalfFlat``, ``Flat``) and
                                 other priors that can't be sampled fall back
-                                per-RV to PyMC's initial point. See
-                                :func:`_make_initial_point`.
+                                per-RV to PyMC's initial point.
         ``"prior_draw"``        Draw once from each prior and transform to
                                 unconstrained space.  Adds stochasticity; use
                                 ``init_rng`` for reproducibility. Same
@@ -705,7 +704,7 @@ def compile_scipy_diagnostics(
         ``(gp_model, X_var, y_var) -> namedtuple of TensorVariables``.
         Typically one of the PTGP objectives (``collapsed_elbo``, ``elbo``,
         ``marginal_log_likelihood``) called without the ``.field`` accessor.
-    gp_model : GP, VFE, or SVGP
+    gp_model : Unapproximated, VFE, or SVGP
     X_var : TensorVariable
     y_var : TensorVariable
     model : pm.Model, optional

@@ -24,7 +24,7 @@ def marginal_log_likelihood(gp, X, y):
 
     Parameters
     ----------
-    gp : GP
+    gp : Unapproximated
         Exact GP model with kernel, mean function, and likelihood.
     X : tensor, shape (N, D)
     y : tensor, shape (N,)
