@@ -24,8 +24,8 @@ dynamic = ["version"]
 dependencies = [
   "numpy",
   "pymc>=6.3,<6.4",
-  "pytensor>=3.3.4,<3.4",
-  "pytensor-ml>=0.3.0,<0.4.0"
+  "pytensor>=3.3.8,<3.4",
+  "pytensor-ml>=0.4.0,<0.5.0"
 ]
 
 [project.optional-dependencies]
@@ -122,10 +122,13 @@ files = ["ptgp"]
 # -- pixi --------------------------------------------------------------------
 # `pixi install` builds the full dev env (runtime + tests + notebooks + docs);
 # `pixi run test` / `pixi run lint` / `pixi run docs` etc. run the tasks below.
-# conda_envs/*.yaml are the conda equivalents (dev / CI / Read the Docs); keep the
-# pins here in sync with them.
+# The pixi-export-envs pre-commit hook renders the default / test / docs
+# environments to conda_envs/*.yaml (dev / CI / Read the Docs).
 
 [tool.pixi.workspace]
+# The pre-commit export hook compares pixi's output byte for byte, so local pixi has to match the
+# pixi-version pinned in .github/workflows/test.yml. Change both together.
+requires-pixi = ">=0.81.0,<0.82"
 channels = ["conda-forge"]
 # mlx (PyTensor's MLX backend, Apple silicon only) needs macOS >= 14.5.
 platforms = [
@@ -140,8 +143,8 @@ platforms = [
 python = ">=3.12"
 numpy = "*"
 pymc = ">=6.3,<6.4"
-pytensor = ">=3.3.4,<3.4"
-pytensor-ml = ">=0.3.0,<0.4.0"
+pytensor = ">=3.3.8,<3.4"
+pytensor-ml = ">=0.4.0,<0.5.0"
 numba = "*"
 
 [tool.pixi.target.osx-arm64.dependencies]
@@ -175,7 +178,7 @@ scikit-learn = "*"
 jax = "*"
 jaxlib = "*"
 
-# Sphinx build, kept in sync with conda_envs/environment-docs.yaml.
+# Sphinx build, exported to conda_envs/environment-docs.yaml.
 [tool.pixi.feature.docs.dependencies]
 matplotlib = "*"  # docs/sphinxext/generate_kernel_gallery.py
 sphinx = ">=7"

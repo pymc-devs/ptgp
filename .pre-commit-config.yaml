@@ -30,6 +30,22 @@ repos:
 
 - repo: local
   hooks:
+    - id: pixi-lock-check
+      name: pixi.lock is in sync with pyproject.toml
+      entry: pixi lock --check
+      language: system
+      files: ^(pyproject\.toml|pixi\.lock)$
+      pass_filenames: false
+
+    - id: pixi-export-envs
+      name: conda_envs/*.yaml are exported from the pixi environments
+      # The script calls pixi directly rather than through a pixi task so the hook reads the manifest only; `pixi run`
+      # would re-solve the lock file and install the environment first.
+      entry: python scripts/export_conda_envs.py
+      language: python
+      files: ^(pyproject\.toml|pixi\.lock|conda_envs/.*\.yaml|scripts/export_conda_envs\.py)$
+      pass_filenames: false
+
     - id: check-kernel-gallery
       name: check covariance gallery covers every public kernel
       entry: python scripts/check_kernel_gallery.py

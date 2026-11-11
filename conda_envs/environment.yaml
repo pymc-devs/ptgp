@@ -1,42 +1,37 @@
 name: ptgp
 channels:
-    - conda-forge
+- conda-forge
+- nodefaults
 dependencies:
-    - python>=3.12
-    - numpy
-    - pymc>=6.3,<6.4
-    - pytensor>=3.3.4,<3.4
-    - pytensor-ml>=0.3.0,<0.4.0
-    # PyTensor JIT backends. On Apple silicon also add `mlx` (osx-arm64 only,
-    # so it can't be listed here; the pixi manifest adds it per-platform).
-    - numba
-    - jax
-    - jaxlib
-    # Tests / lint.
-    - pytest
-    - mypy
-    - polars
-    - pre-commit
-    - ruff=0.5.5  # keep in sync with .pre-commit-config.yaml
-    # Notebooks.
-    - jupyterlab
-    - matplotlib
-    - pandas
-    - scikit-learn
-    # Docs tooling — kept in sync with conda_envs/environment-docs.yaml so
-    # `make html` works in the dev env without an extra install step.
-    - sphinx>=7
-    - pydata-sphinx-theme
-    - myst-nb
-    - numpydoc
-    - sphinx-copybutton
-    - sphinx-design
-    - sphinx-codeautolink
-    - sphinx-sitemap
-    - sphinx-notfound-page
-    - sphinx-autobuild
-    - jupyter-sphinx
-    - pybtex
-    - pip
-    - pip:
-        - -e ..
+- pytest *
+- mypy *
+- polars *
+- pre-commit *
+- jupyterlab *
+- matplotlib *
+- pandas *
+- scikit-learn *
+- jax *
+- jaxlib *
+- sphinx >=7
+- pydata-sphinx-theme *
+- myst-nb *
+- numpydoc *
+- sphinx-copybutton *
+- sphinx-design *
+- sphinx-codeautolink *
+- sphinx-sitemap *
+- sphinx-notfound-page *
+- sphinx-autobuild *
+- jupyter-sphinx *
+- pybtex *
+- python >=3.12
+- numpy *
+- pymc >=6.3,<6.4
+- pytensor >=3.3.8,<3.4
+- pytensor-ml >=0.4.0,<0.5.0
+- numba *
+- pip
+- pip:
+  - ruff==0.5.5
+  - -e ..

@@ -1,14 +1,18 @@
 name: ptgp-test
 channels:
-    - conda-forge
+- conda-forge
+- nodefaults
 dependencies:
-    - python>=3.12
-    - numpy
-    - pymc>=6.3,<6.4
-    - pytensor>=3.3.4,<3.4
-    - pytensor-ml>=0.3.0,<0.4.0
-    - numba
-    - pytest
-    - mypy
-    - polars  # scripts/run_mypy.py
-    - pip
+- pytest *
+- mypy *
+- polars *
+- pre-commit *
+- python >=3.12
+- numpy *
+- pymc >=6.3,<6.4
+- pytensor >=3.3.8,<3.4
+- pytensor-ml >=0.4.0,<0.5.0
+- numba *
+- pip
+- pip:
+  - ruff==0.5.5

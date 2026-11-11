@@ -47,8 +47,8 @@ defined under `[tool.pixi.*]` in `pyproject.toml` (locked in `pixi.lock`).
 `pixi` isn't on PATH, ask the user rather than guessing at another env.
 `conda_envs/environment.yaml` is the equivalent conda dev env for people
 who prefer conda; `environment-test.yaml` (CI) and `environment-docs.yaml`
-(Read the Docs) are the slimmer variants. Keep all three in sync with the
-pixi manifest.
+(Read the Docs) are the slimmer variants. The `pixi-export-envs` pre-commit
+hook generates all three from the pixi manifest, so don't edit them by hand.
 
 ```bash
 # tests (pyproject sets -v and --doctest-modules, so docstrings run too)
