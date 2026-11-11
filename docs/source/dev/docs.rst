@@ -19,8 +19,9 @@ at the repo root):
     pixi run -e docs make -C docs clean   # wipe build/ and all generated source
 
 Read the Docs builds from ``conda_envs/environment-docs.yaml`` and
-``docs/source/conf.py`` (see ``.readthedocs.yaml``); keep that env file's
-pins in sync with the pixi ``docs`` feature in ``pyproject.toml``.
+``docs/source/conf.py`` (see ``.readthedocs.yaml``). The ``pixi-export-envs``
+pre-commit hook generates that env file from the pixi ``docs`` environment in
+``pyproject.toml``.
 
 Layout
 ------

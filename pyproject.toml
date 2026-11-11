@@ -175,7 +175,7 @@ scikit-learn = "*"
 jax = "*"
 jaxlib = "*"
 
-# Sphinx build, kept in sync with conda_envs/environment-docs.yaml.
+# Sphinx build, exported to conda_envs/environment-docs.yaml.
 [tool.pixi.feature.docs.dependencies]
 matplotlib = "*"  # docs/sphinxext/generate_kernel_gallery.py
 sphinx = ">=7"
