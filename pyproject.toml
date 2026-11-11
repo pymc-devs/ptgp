@@ -126,6 +126,9 @@ files = ["ptgp"]
 # environments to conda_envs/*.yaml (dev / CI / Read the Docs).
 
 [tool.pixi.workspace]
+# The pre-commit export hook compares pixi's output byte for byte, so local pixi has to match the
+# pixi-version pinned in .github/workflows/test.yml. Change both together.
+requires-pixi = ">=0.81.0,<0.82"
 channels = ["conda-forge"]
 # mlx (PyTensor's MLX backend, Apple silicon only) needs macOS >= 14.5.
 platforms = [
