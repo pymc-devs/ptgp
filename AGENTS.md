@@ -103,12 +103,17 @@ The reference usage example for all three models is
   `ELBOTerms`, `collapsed_elbo` → `CollapsedELBOTerms`,
   `fitc_log_marginal_likelihood` → `FITCTerms`, plus `vfe_diagnostics`
   and `dpp_regularizer`.
-- **Kernels** — `ptgp/kernels/`. `Kernel` base class; subclasses
-  implement `_eval(X, Y)` and (optionally) `diag(X)`. Stationary
-  (`ExpQuad`, `Matern12/32/52`), nonstationary (`Gibbs`, `RandomWalk`,
-  `WarpedInput`), categorical (`Overlap`, `LowRankCategorical`),
-  combination (`SumKernel`, `ProductKernel`, via `+` / `*`). `active_dims`
-  selects input columns.
+- **Kernels** — `ptgp/kernels/`. A `Kernel` is a graph on the row
+  placeholders of its `input_dim`, and it stores nothing else. The leaves
+  are typed `KernelOp` nodes with the parameters as explicit inputs, and
+  `+` / `*` are ordinary graph arithmetic on them. To add a kernel, subclass
+  `KernelOp`, implement `evaluate(left, right, *parameters)`, set
+  `unit_diagonal = True` when `k(x, x) = 1`, and build the graph with
+  `leaf_graph`. Never store graph objects on an Op. `Kernel.diag` is
+  `pt.diagonal(self(X))`, and a rewrite lowers it. Stationary (`ExpQuad`,
+  `Matern12/32/52`), nonstationary (`Linear`, `Gibbs`, `RandomWalk`,
+  `WarpedInput`), categorical (`Overlap`, `LowRankCategorical`).
+  `active_dims` selects input columns.
 - **Likelihoods** — `ptgp/likelihoods/`. `Gaussian`, `Bernoulli`,
   `Poisson`, `NegativeBinomial`, `StudentT`. Non-Gaussian variants
   implement `variational_expectation` for SVGP.
@@ -141,7 +146,8 @@ The reference usage example for all three models is
   check at initialisation — call this before training), `get_initial_params`
   (prior-median / prior-draw / unconstrained-zero), `save_fit` / `load_fit`.
 - **Rewrites** — `ptgp/rewrites.py`. The cubic-floor enablers; see the
-  mental-model section.
+  mental-model section. Kernel-targeted rewrites match on `KernelOp`, and
+  `late_inline_kernel` exposes each body at specialize, after they have run.
 - **High-level API** — `ptgp/optim/api.py` (`fit`, `predict`,
   `FitResult`, re-exported at top level) wraps the compile helpers for
   the common case; `ptgp/idata.py` (`to_idata`) packages a fit as an

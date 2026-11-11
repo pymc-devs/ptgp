@@ -1,9 +1,14 @@
+import pytensor.assumptions as pta
 import pytensor.tensor as pt
 
-from pytensor.assumptions.core import check_assumption
+from pytensor.assumptions.core import check_assumption, register_assumption, true_if
 from pytensor.assumptions.positive_definite import POSITIVE_DEFINITE
+from pytensor.assumptions.symmetric import SYMMETRIC
 from pytensor.assumptions.triangular import LOWER_TRIANGULAR
+from pytensor.graph.fg import FunctionGraph
+from pytensor.graph.replace import graph_replace, vectorize_graph
 from pytensor.graph.rewriting.basic import copy_stack_trace, node_rewriter
+from pytensor.graph.rewriting.utils import rewrite_graph
 from pytensor.tensor.basic import ExtractDiag
 from pytensor.tensor.blas import Dot22
 from pytensor.tensor.blockwise import Blockwise
@@ -14,8 +19,10 @@ from pytensor.tensor.linalg.solvers.psd import cho_solve
 from pytensor.tensor.linalg.solvers.triangular import solve_triangular
 from pytensor.tensor.linalg.summary import Det
 from pytensor.tensor.math import Dot
-from pytensor.tensor.rewriting.basic import register_specialize
+from pytensor.tensor.rewriting.basic import register_specialize, register_stabilize
 from pytensor.tensor.rewriting.blockwise import blockwise_of
+
+from ptgp.kernels.base import KernelOp
 
 
 def _try_AAT_factor(fgraph, M, lower_only=False):
@@ -102,42 +109,6 @@ def det_of_LLT_to_diag_product(fgraph, node):
 
 
 @register_specialize
-@node_rewriter([ExtractDiag])
-def diag_of_AAT_to_row_norms_squared(fgraph, node):
-    r"""Lower the diagonal of ``A @ A.T`` or ``A.T @ A`` to elementwise norms.
-
-    .. math::
-
-        (A A^\top)_{ii} = \sum_k A_{ik}^2, \qquad
-        (A^\top A)_{ii} = \sum_k A_{ki}^2
-
-    ``ExtractDiag(A @ A.T)`` lowers to ``sum(A**2, axis=-1)``; ``ExtractDiag(A.T @ A)``
-    lowers to ``sum(A**2, axis=-2)``. No assumption on ``A`` is required.
-    """
-    extract_op = node.op
-    if extract_op.offset != 0:
-        return None
-    [A_AT] = node.inputs
-    ndim = A_AT.type.ndim
-    if ndim is None or ndim < 2:
-        return None
-    # The diag must run along the matrix axes; if ExtractDiag is reading other
-    # axes the AAT pattern does not apply.
-    axis1 = extract_op.axis1 % ndim
-    axis2 = extract_op.axis2 % ndim
-    if {axis1, axis2} != {ndim - 2, ndim - 1}:
-        return None
-    aat = _try_AAT_factor(fgraph, A_AT)
-    if aat is None:
-        return None
-    A, form = aat
-    sum_axis = -1 if form == "AAT" else -2
-    new_diag = pt.sum(pt.sqr(A), axis=sum_axis).astype(node.outputs[0].dtype)
-    copy_stack_trace(node.outputs[0], new_diag)
-    return [new_diag]
-
-
-@register_specialize
 @node_rewriter([blockwise_of(MatrixInverse)])
 def matrix_inverse_specialize(fgraph, node):
     r"""Lower ``MatrixInverse(A)`` when ``A`` has a known structure.
@@ -170,3 +141,77 @@ def matrix_inverse_specialize(fgraph, node):
 
     copy_stack_trace(node.outputs[0], inv_A)
     return [inv_A]
+
+
+def _kernel_rows_match(key, op, feature, fgraph, node, input_states):
+    """``K(X, X)`` is symmetric and positive definite when both row inputs are one node."""
+    return true_if(node.inputs[0] is node.inputs[1])
+
+
+register_assumption(SYMMETRIC, KernelOp)(_kernel_rows_match)
+register_assumption(POSITIVE_DEFINITE, KernelOp)(_kernel_rows_match)
+
+
+def _normalized_kernel_body(node):
+    """Kernel body on ``node.inputs``, after the passes it missed inside the Op.
+
+    The pullback body has been through canonicalize and stabilize since grad time, so a body
+    exposed without them neither merges with it nor gets the stabilized forms.
+    """
+    frozen_body = node.op.fgraph
+    body_inputs = [variable.type() for variable in node.inputs]
+    body_outputs = frozen_body.bind(dict(zip(frozen_body.inputs, body_inputs)))
+
+    body_graph = FunctionGraph(body_inputs, body_outputs, clone=False)
+    rewrite_graph(body_graph, include=("ShapeOpt", "canonicalize", "stabilize"))
+
+    [body] = graph_replace(
+        body_graph.outputs,
+        replace=dict(zip(body_inputs, node.inputs)),
+        strict=False,
+    )
+    copy_stack_trace(frozen_body.outputs, body)
+    return body
+
+
+@register_specialize("inline_ofg")
+@node_rewriter([KernelOp])
+def late_inline_kernel(fgraph, node):
+    """Expose the kernel body once every kernel-targeted rewrite has had its turn.
+
+    The body carries no annotation, so what the Op proved about ``K(X, X)`` moves onto it.
+    """
+    body = _normalized_kernel_body(node)
+    left, right, *_ = node.inputs
+    if left is right:
+        return [pta.assume(body, symmetric=True, positive_definite=True)]
+    return [body]
+
+
+def _kernel_diagonal(kernel_op, rows, parameters, dtype):
+    """Diagonal of ``K(rows, rows)``, from the Op's declaration or its body on paired rows."""
+    if kernel_op.unit_diagonal:
+        return pt.ones(rows.shape[0], dtype=dtype)
+
+    body_left, body_right = rows.type(), rows.type()
+    [body] = kernel_op.build_inner_graph(body_left, body_right, *parameters)
+
+    paired_rows = rows[:, None, :]
+    vectorized = vectorize_graph(body, replace={body_left: paired_rows, body_right: paired_rows})
+    return vectorized[:, 0, 0]
+
+
+@register_stabilize
+@register_specialize
+@node_rewriter([ExtractDiag])
+def diagonal_of_kernel_to_kernel_diagonal(fgraph, node):
+    """Lower ``diag(K(X, X))`` without building ``K``."""
+    if node.op.offset != 0:
+        return None
+
+    match node.inputs[0].owner_op_and_inputs:
+        case (KernelOp() as kernel_op, left, right, *parameters) if left is right:
+            new_output = _kernel_diagonal(kernel_op, left, parameters, node.outputs[0].dtype)
+            copy_stack_trace(node.outputs[0], new_output)
+            return [new_output]
+    return None

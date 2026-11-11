@@ -4,12 +4,13 @@ Written so that, when the rewrites are upstreamed into PyTensor, the test
 bodies move over unchanged — only the side-effect import that installs the
 rules would shift from ``ptgp`` to ``pytensor``.
 
-After the 2026-05 ablation (see ``audits/rewrites_ablation_plan.md``) the
-scope of ``ptgp.rewrites`` shrank to three structural rewrites: H
-(``Det(L @ L.T)``), I (``diag(A @ A.T)``), and J (``MatrixInverse(PSD A)``).
+``ptgp.rewrites`` holds two structural rewrites, H (``Det(L @ L.T)``) and J
+(``MatrixInverse(PSD A)``), plus the lowering of ``KernelOp``. PyTensor's own lift
+covers ``diag(A @ A.T)``, which the tests below still pin.
 """
 
 import numpy as np
+import pytensor
 import pytensor.assumptions as pta
 import pytensor.tensor as pt
 import pytest
@@ -17,14 +18,18 @@ import pytest
 from pytensor import function
 from pytensor.graph import rewrite_graph
 from pytensor.graph.fg import FunctionGraph
-from pytensor.tensor.basic import ExtractDiag
+from pytensor.tensor.blas import Dot22, Dot22Scalar
 from pytensor.tensor.blockwise import Blockwise
 from pytensor.tensor.linalg.decomposition.cholesky import Cholesky
 from pytensor.tensor.linalg.inverse import MatrixInverse
 from pytensor.tensor.linalg.summary import Det
+from pytensor.tensor.math import Dot
 
 # Install the rewrites under test (side-effect import).
 import ptgp.rewrites  # noqa: F401
+
+from ptgp.kernels import ExpQuad, Linear, Matern12, Matern52, WarpedInput
+from ptgp.kernels.base import KernelOp, WarpedRowsOp
 
 # ---------------------------------------------------------------------------
 # Helpers for the structural rewrites below.
@@ -72,16 +77,15 @@ def test_det_of_LLT_diag_product_is_numerically_correct():
 
 
 # ---------------------------------------------------------------------------
-# ExtractDiag(A @ A.T) -> sum(A**2, axis=-1) rewrite (Rule I).
+# diag(A @ A.T), lifted by PyTensor.
 # ---------------------------------------------------------------------------
 
 
-def test_diag_of_AAT_to_row_norms_squared_eliminates_dot():
-    """``ExtractDiag(A @ A.T)`` lowers to ``sum(A**2, axis=-1)`` — no ExtractDiag."""
+def test_diag_of_AAT_compiles_without_a_matrix_product():
     A = pt.dmatrix("A")
-    out = pt.diagonal(A @ A.T)
-    rewritten = rewrite_graph(out, include=("fast_run",))
-    assert not _has_op(rewritten, ExtractDiag)
+    fn = function([A], pt.diagonal(A @ A.T))
+
+    assert not _has_pairwise_product(fn)
 
 
 def test_diag_of_AAT_is_numerically_correct():
@@ -94,12 +98,11 @@ def test_diag_of_AAT_is_numerically_correct():
     np.testing.assert_allclose(f(A_val), np.diag(A_val @ A_val.T), atol=1e-12)
 
 
-def test_diag_of_ATA_lowers_to_column_norms():
-    """``ExtractDiag(A.T @ A)`` lowers to ``sum(A**2, axis=-2)`` — no ExtractDiag."""
+def test_diag_of_ATA_compiles_without_a_matrix_product():
     A = pt.dmatrix("A")
-    out = pt.diagonal(A.T @ A)
-    rewritten = rewrite_graph(out, include=("fast_run",))
-    assert not _has_op(rewritten, ExtractDiag)
+    fn = function([A], pt.diagonal(A.T @ A))
+
+    assert not _has_pairwise_product(fn)
 
 
 def test_diag_of_ATA_is_numerically_correct():
@@ -279,3 +282,125 @@ def test_mll_gradient_large_n_small_sigma(pre_rewrite):
     fd_sigma = (_np_mll(Xv, yv, sigma_v + h, ls_v) - _np_mll(Xv, yv, sigma_v - h, ls_v)) / (2 * h)
     fd_ls = (_np_mll(Xv, yv, sigma_v, ls_v + h) - _np_mll(Xv, yv, sigma_v, ls_v - h)) / (2 * h)
     np.testing.assert_allclose(fn(sigma_v, ls_v, Xv, yv), [fd_sigma, fd_ls], rtol=1e-4)
+
+
+# ---------------------------------------------------------------------------
+# KernelOp lowering and the gradient of a kernel diagonal.
+# ---------------------------------------------------------------------------
+KERNEL_ROWS = np.random.default_rng(0).normal(size=(12, 2))
+
+
+def _composite_kernel(ls):
+    return pt.as_tensor_variable(1.2) ** 2 * Matern52(input_dim=2, ls=ls) + ExpQuad(
+        input_dim=2, ls=2.0 * ls
+    )
+
+
+def _has_pairwise_product(fn):
+    return any(
+        isinstance(node.op, Dot | Dot22 | Dot22Scalar) for node in fn.maker.fgraph.apply_nodes
+    )
+
+
+@pytest.mark.parametrize(
+    "make_kernel",
+    [
+        lambda ls, eta: eta**2 * Matern52(input_dim=2, ls=ls),
+        lambda ls, eta: eta**2 * Matern52(input_dim=2, ls=ls) + ExpQuad(input_dim=2, ls=ls),
+    ],
+    ids=["scaled", "sum"],
+)
+def test_inverse_of_composite_kernel_uses_cholesky(make_kernel):
+    X = pt.matrix("X", shape=(None, 2))
+    ls, eta = pt.scalar("ls"), pt.scalar("eta")
+
+    fn = function([X, ls, eta], pt.linalg.inv(make_kernel(ls, eta)(X)))
+
+    assert any(isinstance(node.op, Cholesky) for node in fn.maker.fgraph.apply_nodes)
+    assert not any(isinstance(node.op, MatrixInverse) for node in fn.maker.fgraph.apply_nodes)
+
+
+def test_kernel_diagonal_never_builds_the_kernel():
+    X = pt.matrix("X", shape=(None, 2))
+    fn = function([X], _composite_kernel(pt.as_tensor_variable(0.7)).diag(X))
+
+    assert not _has_pairwise_product(fn)
+    np.testing.assert_allclose(fn(KERNEL_ROWS), np.full(12, 1.2**2 + 1.0))
+
+
+def test_kernel_op_is_inlined_at_compile_time():
+    X = pt.matrix("X", shape=(None, 2))
+    fn = function([X], _composite_kernel(pt.as_tensor_variable(0.7))(X))
+
+    assert not any(isinstance(node.op, KernelOp) for node in fn.maker.fgraph.apply_nodes)
+
+
+def test_gradient_of_kernel_diagonal_builds_no_pairwise_matrix():
+    X = pt.matrix("X", shape=(None, 2))
+    ls = pt.scalar("ls")
+    weights = pt.as_tensor_variable(np.arange(1.0, 13.0))
+    objective = pt.sum(weights * Linear(input_dim=2, c=ls).diag(X))
+
+    fn = function([X, ls], pytensor.grad(objective, ls))
+
+    assert not _has_pairwise_product(fn)
+    expected = -2.0 * np.sum(np.arange(1.0, 13.0) * (KERNEL_ROWS - 0.7).sum(axis=1))
+    np.testing.assert_allclose(fn(KERNEL_ROWS, 0.7), expected)
+
+
+def test_unit_diagonal_is_exact():
+    X = pt.matrix("X", shape=(None, 2))
+    fn = function([X], Matern12(input_dim=2, ls=0.7).diag(X))
+
+    np.testing.assert_array_equal(fn(KERNEL_ROWS), np.ones(12))
+
+
+def test_hand_written_diagonal_of_a_kernel_is_still_correct():
+    X = pt.matrix("X", shape=(None, 2))
+    c = pt.scalar("c")
+    objective = pt.sum(pt.diagonal(Linear(input_dim=2, c=c)(X)))
+
+    gradient = function([X, c], pytensor.grad(objective, c))(KERNEL_ROWS, 0.7)
+
+    np.testing.assert_allclose(gradient, -2.0 * (KERNEL_ROWS - 0.7).sum())
+
+
+def test_gradient_of_off_main_kernel_diagonal():
+    X = pt.matrix("X", shape=(None, 2))
+    ls = pt.scalar("ls")
+    weights = pt.as_tensor_variable(np.arange(1.0, 12.0))
+    objective = pt.sum(weights * pt.diagonal(_composite_kernel(ls)(X), offset=1))
+
+    gradient = function([X, ls], pytensor.grad(objective, ls))(KERNEL_ROWS, 0.7)
+
+    value = function([X, ls], objective)
+    step = 1e-6
+    numeric = (value(KERNEL_ROWS, 0.7 + step) - value(KERNEL_ROWS, 0.7 - step)) / (2 * step)
+    np.testing.assert_allclose(gradient, numeric, rtol=1e-6)
+
+
+def test_gradient_of_scaled_composite_diagonal_builds_no_pairwise_matrix():
+    X = pt.matrix("X", shape=(None, 2))
+    c = pt.scalar("c")
+    kernel = c**2 * Linear(input_dim=2, c=c) + Matern52(input_dim=2, ls=0.7)
+    objective = pt.sum(kernel.diag(X))
+
+    fn = function([X, c], pytensor.grad(objective, c))
+
+    assert not _has_pairwise_product(fn)
+
+    value = function([X, c], objective)
+    step = 1e-6
+    numeric = (value(KERNEL_ROWS, 0.7 + step) - value(KERNEL_ROWS, 0.7 - step)) / (2 * step)
+    np.testing.assert_allclose(fn(KERNEL_ROWS, 0.7), numeric, rtol=1e-6)
+
+
+def test_warped_rows_are_inlined_at_compile_time():
+    X = pt.matrix("X", shape=(None, 2))
+    kernel = WarpedInput(
+        input_dim=2, kernel_func=Matern52(input_dim=2, ls=0.7), warp_func=lambda x: 2.0 * x
+    )
+
+    fn = function([X], kernel(X))
+
+    assert not any(isinstance(node.op, WarpedRowsOp) for node in fn.maker.fgraph.apply_nodes)

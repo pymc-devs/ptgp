@@ -1,7 +1,7 @@
 import pytensor
 import pytensor.tensor as pt
 
-from ptgp.kernels.base import Kernel
+from ptgp.kernels.base import Kernel, KernelOp, leaf_graph
 
 
 def _squared_distance(X, Y):
@@ -30,6 +30,37 @@ def _euclidean_distance(X, Y):
     return pt.sqrt(pt.maximum(_squared_distance(X, Y), 1e-36))
 
 
+class StationaryOp(KernelOp):
+    """Stationary kernel k(x, y) = f(||x - y|| / ls), so k(x, x) = 1 for every lengthscale."""
+
+    unit_diagonal = True
+
+
+class ExpQuadOp(StationaryOp):
+    def evaluate(self, left, right, ls):
+        return pt.exp(-0.5 * _squared_distance(left / ls, right / ls))
+
+
+class Matern52Op(StationaryOp):
+    def evaluate(self, left, right, ls):
+        tau = _euclidean_distance(left / ls, right / ls)
+        sqrt5 = pt.constant(5.0**0.5, dtype=pytensor.config.floatX)
+        five_thirds = pt.constant(5.0 / 3.0, dtype=pytensor.config.floatX)
+        return (1.0 + sqrt5 * tau + five_thirds * pt.square(tau)) * pt.exp(-sqrt5 * tau)
+
+
+class Matern32Op(StationaryOp):
+    def evaluate(self, left, right, ls):
+        tau = _euclidean_distance(left / ls, right / ls)
+        sqrt3 = pt.constant(3.0**0.5, dtype=pytensor.config.floatX)
+        return (1.0 + sqrt3 * tau) * pt.exp(-sqrt3 * tau)
+
+
+class Matern12Op(StationaryOp):
+    def evaluate(self, left, right, ls):
+        return pt.exp(-_euclidean_distance(left / ls, right / ls))
+
+
 class Stationary(Kernel):
     """Base class for stationary kernels k(x, y) = f(||x - y|| / ls).
 
@@ -44,27 +75,11 @@ class Stationary(Kernel):
         Columns of ``X`` this kernel operates on. Defaults to all columns.
     """
 
+    op_type: type[StationaryOp]
+
     def __init__(self, input_dim, ls, active_dims=None):
-        """Validate dimensions via the base class and store ``ls``."""
-        super().__init__(input_dim, active_dims)
-        self.ls = ls
-
-    def _slice_input(self, X):
-        return X[:, self.active_dims]
-
-    def _scaled_sq_dist(self, X, Y):
-        X = self._slice_input(X) / self.ls
-        Y = self._slice_input(Y) / self.ls
-        return _squared_distance(X, Y)
-
-    def _scaled_euclid_dist(self, X, Y):
-        X = self._slice_input(X) / self.ls
-        Y = self._slice_input(Y) / self.ls
-        return _euclidean_distance(X, Y)
-
-    def diag(self, X):
-        """Diagonal of K(X, X). For any stationary kernel this is ones."""
-        return pt.ones(X.shape[0])
+        graph = leaf_graph(self.op_type, input_dim, active_dims, ls)
+        super().__init__(input_dim=input_dim, graph=graph)
 
 
 class ExpQuad(Stationary):
@@ -75,8 +90,7 @@ class ExpQuad(Stationary):
     Scale with multiplication: eta**2 * ExpQuad(input_dim=..., ls=ls)
     """
 
-    def _eval(self, X, Y):
-        return pt.exp(-0.5 * self._scaled_sq_dist(X, Y))
+    op_type = ExpQuadOp
 
 
 class Matern52(Stationary):
@@ -86,11 +100,7 @@ class Matern52(Stationary):
     where r = ||x - y|| / ls
     """
 
-    def _eval(self, X, Y):
-        tau = self._scaled_euclid_dist(X, Y)
-        sqrt5 = pt.constant(5.0**0.5, dtype=pytensor.config.floatX)
-        five_thirds = pt.constant(5.0 / 3.0, dtype=pytensor.config.floatX)
-        return (1.0 + sqrt5 * tau + five_thirds * pt.square(tau)) * pt.exp(-sqrt5 * tau)
+    op_type = Matern52Op
 
 
 class Matern32(Stationary):
@@ -100,10 +110,7 @@ class Matern32(Stationary):
     where r = ||x - y|| / ls
     """
 
-    def _eval(self, X, Y):
-        tau = self._scaled_euclid_dist(X, Y)
-        sqrt3 = pt.constant(3.0**0.5, dtype=pytensor.config.floatX)
-        return (1.0 + sqrt3 * tau) * pt.exp(-sqrt3 * tau)
+    op_type = Matern32Op
 
 
 class Matern12(Stationary):
@@ -113,6 +120,4 @@ class Matern12(Stationary):
     where r = ||x - y|| / ls
     """
 
-    def _eval(self, X, Y):
-        tau = self._scaled_euclid_dist(X, Y)
-        return pt.exp(-tau)
+    op_type = Matern12Op
