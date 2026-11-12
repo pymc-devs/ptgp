@@ -1,7 +1,40 @@
 import pytensor.tensor as pt
 
-from ptgp.kernels.base import Kernel
+from pytensor.graph.replace import graph_replace
+
+from ptgp.kernels.base import (
+    Kernel,
+    KernelOp,
+    WarpedRowsOp,
+    leaf_graph,
+    resolve_active_dims,
+    row_placeholders,
+)
 from ptgp.kernels.stationary import _squared_distance
+
+
+class LinearOp(KernelOp):
+    def evaluate(self, left, right, c):
+        return (left - c) @ (right - c).T
+
+
+class RandomWalkOp(KernelOp):
+    def evaluate(self, left, right):
+        return pt.minimum(left, right.T)
+
+
+class GibbsOp(KernelOp):
+    """``left_ls`` and ``right_ls`` are per-row lengthscales, computed in the outer graph."""
+
+    unit_diagonal = True
+
+    def evaluate(self, left, right, left_ls, right_ls):
+        squared_distance = _squared_distance(left, right)
+        denominator = pt.reshape(pt.square(left_ls), (-1, 1)) + pt.reshape(
+            pt.square(right_ls), (1, -1)
+        )
+        amplitude = pt.sqrt(2.0 * pt.outer(left_ls, right_ls) / denominator)
+        return amplitude * pt.exp(-squared_distance / denominator)
 
 
 class Linear(Kernel):
@@ -18,33 +51,22 @@ class Linear(Kernel):
     input_dim : int
         Number of columns of ``X`` the kernel expects.
     c : scalar or 1-D tensor, default 0.0
-        Center subtracted from the inputs. Scalar applies to every active
-        column; a length-``len(active_dims)`` vector applies per-column.
+        Center subtracted from the inputs. A scalar applies to every active
+        column, and a length-``len(active_dims)`` vector applies per-column.
     active_dims : sequence of int, optional
         Columns of ``X`` this kernel operates on. Defaults to all columns.
     """
 
     def __init__(self, input_dim, c=0.0, active_dims=None):
-        """Validate dimensions via the base class and store ``c``."""
-        super().__init__(input_dim, active_dims)
-        self.c = c
-
-    def _eval(self, X, Y):
-        """Centered dot product: ``(X - c) @ (Y - c).T``."""
-        Xc = X[:, self.active_dims] - self.c
-        Yc = Y[:, self.active_dims] - self.c
-        return Xc @ Yc.T
-
-    def diag(self, X):
-        """Diagonal of K(X, X). k(x, x) = ||x - c||^2."""
-        Xc = X[:, self.active_dims] - self.c
-        return pt.sum(pt.square(Xc), axis=-1)
+        graph = leaf_graph(LinearOp, input_dim, active_dims, c)
+        super().__init__(input_dim=input_dim, graph=graph)
 
 
 class RandomWalk(Kernel):
-    """Random walk (Brownian motion / Wiener process) kernel.
+    r"""Random walk (Brownian motion / Wiener process) kernel.
 
-    k(x, y) = min(x, y)
+    .. math::
+       k(x, y) = \min(x, y)
 
     Defined for positive inputs. Operates on a single input column.
     Scale with multiplication: eta**2 * RandomWalk()
@@ -55,35 +77,25 @@ class RandomWalk(Kernel):
         Number of columns of ``X`` the kernel expects.
     active_dims : sequence of int, optional
         Column of ``X`` to operate on. Must have length 1. Required when
-        ``input_dim > 1``; defaults to ``[0]`` when ``input_dim == 1``.
+        ``input_dim > 1``. Defaults to ``[0]`` when ``input_dim == 1``.
     """
 
     def __init__(self, input_dim=1, active_dims=None):
-        """Require a single active column; any ``input_dim`` is allowed."""
-        if active_dims is None and input_dim == 1:
-            active_dims = [0]
-        super().__init__(input_dim=input_dim, active_dims=active_dims)
-        if len(self.active_dims) != 1:
+        if len(resolve_active_dims(input_dim, active_dims)) != 1:
             raise ValueError(
                 "RandomWalk kernel requires active_dims of length 1 when input_dim > 1."
             )
 
-    def _eval(self, X, Y):
-        """Pairwise min over the active dim."""
-        Xa = X[:, self.active_dims]
-        Ya = Y[:, self.active_dims]
-        return pt.minimum(Xa, Ya.T)
-
-    def diag(self, X):
-        """Diagonal of K(X, X). min(x, x) = x."""
-        return X[:, self.active_dims[0]]
+        graph = leaf_graph(RandomWalkOp, input_dim, active_dims)
+        super().__init__(input_dim=input_dim, graph=graph)
 
 
 class Gibbs(Kernel):
-    """Gibbs kernel with a location-dependent lengthscale function.
+    r"""Gibbs kernel with a location-dependent lengthscale function.
 
-    k(x, y) = sqrt(2 * l(x) * l(y) / (l(x)^2 + l(y)^2))
-             * exp(-(x - y)^2 / (l(x)^2 + l(y)^2))
+    .. math::
+       k(x, y) = \sqrt{\frac{2 \ell(x) \ell(y)}{\ell(x)^2 + \ell(y)^2}}
+                 \exp\left(-\frac{(x - y)^2}{\ell(x)^2 + \ell(y)^2}\right)
 
     Operates on a single input column.
 
@@ -100,43 +112,34 @@ class Gibbs(Kernel):
     """
 
     def __init__(self, lengthscale_func, input_dim=1, active_dims=None):
-        """Require a single active column; any ``input_dim`` is allowed."""
-        if active_dims is None and input_dim == 1:
-            active_dims = [0]
-        super().__init__(input_dim=input_dim, active_dims=active_dims)
-        if len(self.active_dims) != 1:
+        columns = list(resolve_active_dims(input_dim, active_dims))
+        if len(columns) != 1:
             raise ValueError("Gibbs kernel requires active_dims of length 1 when input_dim > 1.")
         if not callable(lengthscale_func):
             raise TypeError("lengthscale_func must be callable")
-        self.lengthscale_func = lengthscale_func
 
-    def _eval(self, X, Y):
-        """Evaluate the Gibbs kernel with per-point lengthscales."""
-        Xa = X[:, self.active_dims]
-        Ya = Y[:, self.active_dims]
-        rx = self.lengthscale_func(Xa)
-        ry = self.lengthscale_func(Ya)
-        r2 = _squared_distance(Xa, Ya)
-        rx2 = pt.reshape(pt.square(rx), (-1, 1))
-        ry2 = pt.reshape(pt.square(ry), (1, -1))
-        denom = rx2 + ry2
-        return pt.sqrt(2.0 * pt.outer(rx, ry) / denom) * pt.exp(-r2 / denom)
-
-    def diag(self, X):
-        """Diagonal of K(X, X). k(x, x) = 1 for any lengthscale function."""
-        return pt.ones(X.shape[0])
+        left, right = row_placeholders(input_dim)
+        graph = leaf_graph(
+            GibbsOp,
+            input_dim,
+            active_dims,
+            lengthscale_func(left[:, columns]),
+            lengthscale_func(right[:, columns]),
+        )
+        super().__init__(input_dim=input_dim, graph=graph)
 
 
 class WarpedInput(Kernel):
-    """Warp the inputs of another kernel with an arbitrary function.
+    r"""Warp the inputs of another kernel with an arbitrary function.
 
-    k(x, y) = k_inner(w(x), w(y))
+    .. math::
+       k(x, y) = k_{\mathrm{inner}}(w(x), w(y))
 
     Parameters
     ----------
     input_dim : int
         Number of columns of ``X`` this kernel expects. May differ from
-        ``kernel_func.input_dim``; the warp may change dimensionality.
+        ``kernel_func.input_dim``, because the warp may change dimensionality.
     kernel_func : Kernel
         Inner kernel applied to the warped inputs.
     warp_func : callable
@@ -146,21 +149,22 @@ class WarpedInput(Kernel):
     """
 
     def __init__(self, input_dim, kernel_func, warp_func, active_dims=None):
-        """Validate dimensions via the base class and store the inner kernel and warp."""
-        super().__init__(input_dim, active_dims)
         if not isinstance(kernel_func, Kernel):
             raise TypeError("kernel_func must be a Kernel")
         if not callable(warp_func):
             raise TypeError("warp_func must be callable")
-        self.kernel_func = kernel_func
-        self.warp_func = warp_func
 
-    def _eval(self, X, Y):
-        """Warp both inputs, then delegate to the inner kernel."""
-        Xw = self.warp_func(X[:, self.active_dims])
-        Yw = self.warp_func(Y[:, self.active_dims])
-        return self.kernel_func(Xw, Yw)
+        columns = list(resolve_active_dims(input_dim, active_dims))
+        left, right = row_placeholders(input_dim)
+        inner_left, inner_right = kernel_func.rows
+        warped_left = pt.cast(warp_func(left[:, columns]), inner_left.dtype)
+        warped_right = pt.cast(warp_func(right[:, columns]), inner_right.dtype)
 
-    def diag(self, X):
-        """Diagonal of K(X, X): warp the inputs, then delegate to inner kernel."""
-        return self.kernel_func.diag(self.warp_func(X[:, self.active_dims]))
+        graph = graph_replace(
+            kernel_func.graph,
+            replace={
+                inner_left: WarpedRowsOp()(warped_left, left),
+                inner_right: WarpedRowsOp()(warped_right, right),
+            },
+        )
+        super().__init__(input_dim=input_dim, graph=graph)

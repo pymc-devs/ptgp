@@ -1,10 +1,12 @@
 import numpy as np
+import pytensor
 import pytensor.tensor as pt
 import pytest
 
 from ptgp.gp.svgp import SVGP, VariationalParams
 from ptgp.inducing_fourier import FourierFeatures1D
-from ptgp.kernels.stationary import ExpQuad, Matern12, Matern32, Matern52
+from ptgp.kernels.nonstationary import WarpedInput
+from ptgp.kernels.stationary import ExpQuad, Matern12, Matern32, Matern32Op, Matern52
 from ptgp.likelihoods.gaussian import Gaussian
 from tests._fixtures.vff_kuu_oracle import (
     oracle_kuf_no_edges,
@@ -48,7 +50,7 @@ def _scale_eval(s):
 def test_resolve_bare_matern():
     f = FourierFeatures1D(0, 1, num_frequencies=4)
     s, base = f._resolve_scaled_matern(Matern32(input_dim=1, ls=1.0))
-    assert isinstance(base, Matern32)
+    assert isinstance(base.op, Matern32Op)
     assert _scale_eval(s) == 1.0
 
 
@@ -56,7 +58,7 @@ def test_resolve_canonical_eta_squared():
     f = FourierFeatures1D(0, 1, num_frequencies=4)
     eta = pt.as_tensor(2.0)
     s, base = f._resolve_scaled_matern(eta**2 * Matern32(input_dim=1, ls=1.0))
-    assert isinstance(base, Matern32)
+    assert isinstance(base.op, Matern32Op)
     np.testing.assert_allclose(_scale_eval(s), 4.0, atol=1e-12)
 
 
@@ -64,7 +66,7 @@ def test_resolve_nested_product_chain():
     f = FourierFeatures1D(0, 1, num_frequencies=4)
     eta = pt.as_tensor(2.0)
     s, base = f._resolve_scaled_matern((eta**2 * 1.5) * Matern32(input_dim=1, ls=1.0))
-    assert isinstance(base, Matern32)
+    assert isinstance(base.op, Matern32Op)
     np.testing.assert_allclose(_scale_eval(s), 6.0, atol=1e-12)
 
 
@@ -92,7 +94,7 @@ def test_structured_kuu_base_shapes():
     for cls, expected_R in [(Matern12, 1), (Matern32, 2), (Matern52, 3)]:
         f = FourierFeatures1D(0, 1, num_frequencies=5)
         k = cls(input_dim=1, ls=0.5)
-        d, U = f._structured_Kuu_base(k)
+        d, U = f._structured_Kuu_base(f._resolve_scaled_matern(k)[1])
         d_v, U_v = d.eval(), U.eval()
         assert d_v.shape == (11,)
         assert U_v.shape == (11, expected_R)
@@ -101,7 +103,7 @@ def test_structured_kuu_base_shapes():
 def test_structured_kuu_base_matches_oracle_matern12():
     f = FourierFeatures1D(a=-0.5, b=1.5, num_frequencies=10)
     k = Matern12(input_dim=1, ls=0.3)
-    d, U = (t.eval() for t in f._structured_Kuu_base(k))
+    d, U = (t.eval() for t in f._structured_Kuu_base(f._resolve_scaled_matern(k)[1]))
     Kuu_struct = np.diag(d) + U @ U.T
     Kuu_oracle = oracle_kuu_matern12(a=-0.5, b=1.5, ms=np.arange(11), ls=0.3)
     np.testing.assert_allclose(Kuu_struct, Kuu_oracle, atol=1e-10)
@@ -110,7 +112,7 @@ def test_structured_kuu_base_matches_oracle_matern12():
 def test_structured_kuu_base_matches_oracle_matern32():
     f = FourierFeatures1D(a=-0.5, b=1.5, num_frequencies=10)
     k = Matern32(input_dim=1, ls=0.3)
-    d, U = (t.eval() for t in f._structured_Kuu_base(k))
+    d, U = (t.eval() for t in f._structured_Kuu_base(f._resolve_scaled_matern(k)[1]))
     Kuu_struct = np.diag(d) + U @ U.T
     Kuu_oracle = oracle_kuu_matern32(a=-0.5, b=1.5, ms=np.arange(11), ls=0.3)
     np.testing.assert_allclose(Kuu_struct, Kuu_oracle, atol=1e-10)
@@ -119,7 +121,7 @@ def test_structured_kuu_base_matches_oracle_matern32():
 def test_structured_kuu_base_matches_oracle_matern52():
     f = FourierFeatures1D(a=-0.5, b=1.5, num_frequencies=10)
     k = Matern52(input_dim=1, ls=0.3)
-    d, U = (t.eval() for t in f._structured_Kuu_base(k))
+    d, U = (t.eval() for t in f._structured_Kuu_base(f._resolve_scaled_matern(k)[1]))
     Kuu_struct = np.diag(d) + U @ U.T
     Kuu_oracle = oracle_kuu_matern52(a=-0.5, b=1.5, ms=np.arange(11), ls=0.3)
     np.testing.assert_allclose(Kuu_struct, Kuu_oracle, atol=1e-10)
@@ -407,3 +409,25 @@ def test_vff_converges_to_exact_gp_sanity():
     fmean, fvar = (t.eval() for t in svgp.predict_marginal(pt.as_tensor(X)))
     assert np.all(np.isfinite(fmean))
     assert np.all(fvar >= 0)
+
+
+def test_resolve_outlives_a_change_of_floatx():
+    f = FourierFeatures1D(0, 1, num_frequencies=5)
+    kernel = Matern32(input_dim=1, ls=1.0)
+
+    with pytensor.config.change_flags(floatX="float32"):
+        _, base = f._resolve_scaled_matern(kernel)
+
+    assert isinstance(base.op, Matern32Op)
+
+
+def test_warped_matern_is_not_mistaken_for_a_plain_matern():
+    f = FourierFeatures1D(0, 1, num_frequencies=5)
+    kernel = WarpedInput(
+        input_dim=1,
+        kernel_func=Matern32(input_dim=1, ls=1.0),
+        warp_func=lambda inputs: inputs**2,
+    )
+
+    with pytest.raises(NotImplementedError, match="Matern12/32/52 only"):
+        f._resolve_scaled_matern(kernel)
